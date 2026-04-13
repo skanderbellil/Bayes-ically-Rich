@@ -154,6 +154,55 @@ def precompute_bocpd(
     return np.array(cp), np.array(rl)
 
 
+def precompute_bocpd_multi(
+    returns_df,
+    assets: list,
+    hazard: float = 1 / 252,
+    weights: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Run BOCPD independently on multiple assets and return weighted aggregate signals.
+
+    Motivation: SPY-only BOCPD misses regime breaks originating in other
+    asset classes (e.g. the 2022 bond crash, gold flight-to-safety surges).
+    Running on SPY + TLT + GLD gives a fuller picture of cross-asset stress.
+
+    Aggregation
+    -----------
+    cp_agg  = Σ wᵢ · cp_i            (weighted avg changepoint probability)
+    erl_agg = Σ wᵢ · erl_i           (weighted avg expected run length)
+
+    Parameters
+    ----------
+    assets  : column names to run BOCPD on (skipped if not in returns_df)
+    weights : per-asset weights (default: equal)
+
+    Returns
+    -------
+    cp_agg  : (T,) aggregated changepoint probability
+    erl_agg : (T,) aggregated expected run length
+    """
+    available = [a for a in assets if a in returns_df.columns]
+    if not available:
+        raise ValueError(f"None of {assets} found in returns_df columns")
+
+    if weights is None:
+        w = np.ones(len(available)) / len(available)
+    else:
+        w = np.array(weights[: len(available)], dtype=float)
+        w /= w.sum()
+
+    all_cp, all_erl = [], []
+    for asset in available:
+        cp_i, erl_i = precompute_bocpd(returns_df[asset].values, hazard=hazard)
+        all_cp.append(cp_i)
+        all_erl.append(erl_i)
+
+    cp_agg  = sum(w[i] * all_cp[i]  for i in range(len(all_cp)))
+    erl_agg = sum(w[i] * all_erl[i] for i in range(len(all_erl)))
+    return np.array(cp_agg), np.array(erl_agg)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3-state HMM
 # ─────────────────────────────────────────────────────────────────────────────

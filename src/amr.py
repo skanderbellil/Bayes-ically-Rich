@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 _EPS = 1e-8
 _ANN = 252
 
-AMR_STRATEGIES = ("amr", "inv_vol", "amr_no_vt", "bocpd_amr", "hmm3_amr")
+AMR_STRATEGIES = ("amr", "inv_vol", "amr_no_vt", "bocpd_amr", "bocpd_amr_v2", "hmm3_amr")
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +82,72 @@ def amr_weights(
     return w0
 
 
+def amr_cvar_weights(
+    returns: np.ndarray,
+    lam: float = 0.50,
+    max_weight: float = 0.35,
+    l2_reg: float = 0.001,
+    alpha: float = 0.05,
+    low_vol_penalty: float = 0.0,
+) -> np.ndarray:
+    """
+    AMR with CVaR (Expected Shortfall) instead of semi-deviation, plus an
+    optional cross-sectional low-volatility tilt (min-variance anomaly).
+
+    Objective
+    ---------
+        CVaR_α(rₚ) − λ · mean(max(rₚ, 0))
+        + low_vol_penalty · wᵀ · vol_rank
+        + l2_reg · ‖w − 1/N‖²
+
+    CVaR_α  = mean loss in the worst α fraction of days (α=5% by default).
+              Captures fat tails better than semi-deviation; a $-20 day counts
+              far more than ten $-2 days.
+
+    vol_rank  = per-asset percentile rank of 1-year realized vol (0=lowest vol,
+                1=highest vol). Penalising high-rank assets tilts toward lower-
+                vol holdings — exploiting the low-volatility anomaly.
+
+    low_vol_penalty  = 0.0  → pure CVaR-AMR (no tilt)
+                     = 0.30 → strong low-vol bias (use during regime stress)
+    """
+    N    = returns.shape[1]
+    w0   = np.ones(N) / N
+
+    # Annualised individual vols → percentile ranks (0=lowest, 1=highest)
+    indiv_vols = returns.std(axis=0) * np.sqrt(_ANN)
+    if N > 1:
+        vol_ranks = np.argsort(np.argsort(indiv_vols)) / (N - 1)
+    else:
+        vol_ranks = np.zeros(N)
+
+    n_tail = max(1, int(np.ceil(alpha * len(returns))))
+
+    def objective(w: np.ndarray) -> float:
+        r_p   = returns @ w
+        # CVaR: mean of the worst n_tail daily returns
+        cvar  = -float(np.mean(np.sort(r_p)[:n_tail]))          # positive = bad
+        up    = float(np.mean(np.maximum(r_p, 0.0)))
+        vtilt = float(low_vol_penalty * np.dot(w, vol_ranks))    # penalise high-vol assets
+        reg   = float(l2_reg * np.sum((w - w0) ** 2))
+        return cvar - lam * up + vtilt + reg
+
+    res = minimize(
+        objective, w0,
+        method="SLSQP",
+        bounds=[(0.0, max_weight)] * N,
+        constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1.0}],
+        options={"ftol": 1e-10, "maxiter": 3000},
+    )
+
+    if res.success and np.all(np.isfinite(res.x)):
+        w = np.clip(res.x, 0.0, max_weight)
+        return w / w.sum()
+
+    logger.debug("AMR-CVaR optimisation failed — equal weights fallback")
+    return w0
+
+
 def inverse_vol_weights(
     returns: np.ndarray,
     max_weight: float = 0.35,
@@ -115,6 +181,45 @@ def vol_target_scale(
     if sigma_est < _EPS:
         return 1.0
     return float(np.clip(target_vol / sigma_est, 0.0, leverage_cap))
+
+
+def vol_target_scale_adaptive(
+    weights: np.ndarray,
+    recent_returns: np.ndarray,
+    target_vol: float = 0.10,
+    base_cap: float = 1.50,
+    cp_signal: float = 0.0,
+    erl_signal: float = 126.0,
+) -> float:
+    """
+    Regime-adaptive vol-targeting scale factor.
+
+    The leverage cap adjusts based on BOCPD signals:
+      • Stable regime (high erl, low cp) → slightly higher cap (more confidence)
+      • Regime transition (high cp)       → reduced cap (protect against unknown)
+
+    Adaptive cap formula
+    --------------------
+        stability  = clip(erl / 126, 0, 1)   # 0=recent change, 1=6+ months stable
+        cp_penalty = clip(cp × 20,   0, 1)   # 0=stable,        1=strong changepoint
+        cap = base_cap + 0.25 × stability − 0.50 × cp_penalty
+        cap = clip(cap, 0.75, base_cap + 0.25)
+
+    Net effect:
+      • Fully stable (erl≥126, cp≈0) → cap rises to base_cap + 0.25
+      • Strong changepoint (cp≥0.05)  → cap drops to base_cap − 0.25 (min 0.75)
+    """
+    port_rets = recent_returns @ weights
+    sigma_est = port_rets.std() * np.sqrt(_ANN)
+    if sigma_est < _EPS:
+        return 1.0
+
+    stability  = float(np.clip(erl_signal / 126.0, 0.0, 1.0))
+    cp_penalty = float(np.clip(cp_signal  * 20.0,  0.0, 1.0))
+    adaptive_cap = base_cap + 0.25 * stability - 0.50 * cp_penalty
+    adaptive_cap = float(np.clip(adaptive_cap, 0.75, base_cap + 0.25))
+
+    return float(np.clip(target_vol / sigma_est, 0.0, adaptive_cap))
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +291,22 @@ def run_amr_backtest(
         bocpd_cp  = pd.Series(_cp,  index=returns.index)
         bocpd_erl = pd.Series(_erl, index=returns.index)
 
+    if strategy == "bocpd_amr_v2":
+        # Multi-asset BOCPD: SPY captures equity regime, TLT captures rate regime,
+        # GLD captures flight-to-safety / inflation regime.
+        # Weights: SPY 50%, TLT 30%, GLD 20% — equity regime is most predictive
+        # for portfolio performance, bonds/gold add early warning of stress.
+        from src.regime_models import precompute_bocpd_multi
+        _bocpd_assets  = ["SPY", "TLT", "GLD"]
+        _bocpd_weights = np.array([0.50, 0.30, 0.20])
+        logger.info(f"  Pre-computing multi-asset BOCPD on {_bocpd_assets} …")
+        _cp, _erl = precompute_bocpd_multi(
+            returns, assets=_bocpd_assets,
+            hazard=bocpd_hazard, weights=_bocpd_weights,
+        )
+        bocpd_cp  = pd.Series(_cp,  index=returns.index)
+        bocpd_erl = pd.Series(_erl, index=returns.index)
+
     # ── HMM3 state (refitted periodically) ────────────────────────────────
     hmm3_model      = None
     hmm3_refit_ctr  = 0
@@ -241,6 +362,32 @@ def run_amr_backtest(
             weights = amr_weights(opt_arr, lam=lam_adaptive,
                                   max_weight=max_weight, l2_reg=l2_reg)
 
+        elif strategy == "bocpd_amr_v2":
+            # ── BOCPD-AMR v2 — four statistical improvements ─────────────
+            # Signals from multi-asset BOCPD (SPY+TLT+GLD aggregate)
+            cp  = float(bocpd_cp.loc[:rebal_t].iloc[-1])
+            erl = float(bocpd_erl.loc[:rebal_t].iloc[-1])
+
+            # 1. Adaptive lookback (same logic as v1)
+            adaptive_lb = int(np.clip(erl * 1.5, 42, lookback))
+            opt_arr     = hist.values[-adaptive_lb:]
+
+            # 2. Adaptive λ (same decay as v1)
+            lam_adaptive = 0.55 - 0.30 * float(np.clip(cp * 30, 0, 1))
+
+            # 3. Dynamic low-vol tilt (min-var anomaly):
+            #    In calm regimes: small tilt (0.05) — let CVaR-AMR run freely
+            #    During transitions: stronger tilt (up to 0.35) — flee to lower-vol assets
+            #    This exploits the cross-sectional low-vol anomaly where it's strongest
+            low_vol_penalty = 0.05 + 0.30 * float(np.clip(cp * 30, 0, 1))
+
+            # 4. CVaR objective (5% Expected Shortfall) instead of semi-deviation
+            weights = amr_cvar_weights(
+                opt_arr, lam=lam_adaptive,
+                max_weight=max_weight, l2_reg=l2_reg,
+                alpha=0.05, low_vol_penalty=low_vol_penalty,
+            )
+
         elif strategy == "hmm3_amr":
             # ── 3-state HMM + AMR ────────────────────────────────────────
             from src.regime_models import HMM3
@@ -288,7 +435,16 @@ def run_amr_backtest(
 
         # ── Volatility targeting ──────────────────────────────────────────
         if use_vol_target and strategy != "amr_no_vt":
-            scale = vol_target_scale(weights, recent_arr, target_vol, leverage_cap)
+            if strategy == "bocpd_amr_v2":
+                # Use regime-adaptive cap: tighten during transitions, loosen when stable
+                _cp_sig  = float(bocpd_cp.loc[:rebal_t].iloc[-1])
+                _erl_sig = float(bocpd_erl.loc[:rebal_t].iloc[-1])
+                scale = vol_target_scale_adaptive(
+                    weights, recent_arr, target_vol, leverage_cap,
+                    cp_signal=_cp_sig, erl_signal=_erl_sig,
+                )
+            else:
+                scale = vol_target_scale(weights, recent_arr, target_vol, leverage_cap)
         else:
             scale = 1.0
 
