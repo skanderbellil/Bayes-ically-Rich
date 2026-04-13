@@ -14,7 +14,9 @@ Strategies in this module
 --------------------------
   amr          — core AMR with vol targeting
   inv_vol      — inverse-volatility baseline (also with vol targeting)
-  amr_baseline — AMR without vol targeting (to isolate its contribution)
+  amr_no_vt    — AMR without vol targeting (isolates overlay contribution)
+  bocpd_amr    — BOCPD drives adaptive lookback + λ; AMR optimises
+  hmm3_amr     — 3-state HMM blends regime-specific AMR portfolios + vol targeting
 """
 import logging
 from dataclasses import dataclass
@@ -30,7 +32,7 @@ logger = logging.getLogger(__name__)
 _EPS = 1e-8
 _ANN = 252
 
-AMR_STRATEGIES = ("amr", "inv_vol", "amr_no_vt")
+AMR_STRATEGIES = ("amr", "inv_vol", "amr_no_vt", "bocpd_amr", "hmm3_amr")
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +149,7 @@ def run_amr_backtest(
     l2_reg: float = 0.001,
     tc: float = 0.0005,          # 5 bps per unit of turnover
     use_vol_target: bool = True,
+    bocpd_hazard: float = 1 / 252,
 ) -> AMRResult:
     """
     Weekly-rebalanced backtest with optional volatility targeting overlay.
@@ -155,13 +158,40 @@ def run_amr_backtest(
     Lookback window : 252 trading days for optimisation.
     Vol window      : 21 trading days for volatility estimation.
     Transaction cost: applied to *effective* (scaled) weight turnover.
+
+    Extra strategies
+    ----------------
+    bocpd_amr  : BOCPD pre-computed on SPY. At each rebalance the expected
+                 run length sets the AMR lookback (recent regime data only)
+                 and the changepoint probability reduces λ (be defensive
+                 during transitions).
+    hmm3_amr   : 3-state HMM (bull/sideways/bear). Each regime gets its own
+                 AMR portfolio with a regime-appropriate λ. Final weights are
+                 blended by forward-filtered regime probabilities + vol target.
     """
-    from src.bayesian import estimate_moments, min_variance_weights  # avoid circular import
+    from src.bayesian import min_variance_weights  # avoid circular import
 
     tickers  = returns.columns.tolist()
     n_assets = len(tickers)
 
-    # Weekly rebalance dates — last available trading day per week
+    # ── Pre-compute BOCPD signals (O(T), done once before loop) ───────────
+    bocpd_cp  = None
+    bocpd_erl = None
+    if strategy == "bocpd_amr":
+        from src.regime_models import precompute_bocpd
+        spy_col = "SPY" if "SPY" in tickers else tickers[0]
+        spy_idx = tickers.index(spy_col)
+        logger.info(f"  Pre-computing BOCPD on {spy_col} …")
+        _cp, _erl = precompute_bocpd(returns.values[:, spy_idx], hazard=bocpd_hazard)
+        bocpd_cp  = pd.Series(_cp,  index=returns.index)
+        bocpd_erl = pd.Series(_erl, index=returns.index)
+
+    # ── HMM3 state (refitted periodically) ────────────────────────────────
+    hmm3_model      = None
+    hmm3_refit_ctr  = 0
+    HMM3_REFIT_EVERY = 8   # every 8 weekly rebalances ≈ 2 months
+
+    # Weekly rebalance dates
     try:
         rebal_dates = returns.resample("W-FRI").last().index
     except Exception:
@@ -181,15 +211,78 @@ def run_amr_backtest(
         if len(hist) < lookback + vol_window:
             continue
 
-        window_arr = hist.values[-lookback:]   # optimisation window
+        window_arr = hist.values[-lookback:]   # standard optimisation window
         recent_arr = hist.values[-vol_window:] # vol estimation window
 
         # ── Core weights ──────────────────────────────────────────────────
-        if strategy == "amr" or strategy == "amr_no_vt":
+        if strategy in ("amr", "amr_no_vt"):
             weights = amr_weights(window_arr, lam=lam,
                                   max_weight=max_weight, l2_reg=l2_reg)
+
         elif strategy == "inv_vol":
             weights = inverse_vol_weights(window_arr, max_weight=max_weight)
+
+        elif strategy == "bocpd_amr":
+            # ── BOCPD-AMR ────────────────────────────────────────────────
+            # Signals at current rebalance date
+            cp  = float(bocpd_cp.loc[:rebal_t].iloc[-1])
+            erl = float(bocpd_erl.loc[:rebal_t].iloc[-1])
+
+            # Adaptive lookback: use data since last likely change point
+            # Short ERL → recent regime shift → use less history
+            # Long  ERL → stable regime       → use full lookback
+            adaptive_lb = int(np.clip(erl * 1.5, 42, lookback))
+            opt_arr     = hist.values[-adaptive_lb:]
+
+            # Adaptive λ: reduce upside participation during transitions
+            # cp near 0 → stable → λ = 0.55  |  cp near 1 → transition → λ = 0.25
+            lam_adaptive = 0.55 - 0.30 * float(np.clip(cp * 30, 0, 1))
+
+            weights = amr_weights(opt_arr, lam=lam_adaptive,
+                                  max_weight=max_weight, l2_reg=l2_reg)
+
+        elif strategy == "hmm3_amr":
+            # ── 3-state HMM + AMR ────────────────────────────────────────
+            from src.regime_models import HMM3
+
+            if hmm3_model is None or hmm3_refit_ctr >= HMM3_REFIT_EVERY:
+                hmm3_model    = HMM3().fit(window_arr)
+                hmm3_refit_ctr = 0
+            else:
+                hmm3_refit_ctr += 1
+
+            p_bull, p_side, p_bear = hmm3_model.regime_probs(window_arr)
+            bull_m, side_m, bear_m = hmm3_model.regime_masks(window_arr)
+
+            min_samples = max(n_assets + 5, 40)
+
+            # Per-regime AMR with regime-appropriate λ
+            # Bull → λ=0.65 (lean into upside); Bear → λ=0.25 (protect downside)
+            def _amr_regime(mask, lam_r):
+                arr = window_arr[mask]
+                if len(arr) >= min_samples:
+                    return amr_weights(arr, lam=lam_r,
+                                       max_weight=max_weight, l2_reg=l2_reg)
+                return amr_weights(window_arr, lam=lam_r,
+                                   max_weight=max_weight, l2_reg=l2_reg)
+
+            w_bull = _amr_regime(bull_m, 0.65)
+            w_side = _amr_regime(side_m, 0.50)
+            w_bear = _amr_regime(bear_m, 0.25)
+
+            # Blend by regime probabilities
+            w_blend = p_bull * w_bull + p_side * w_side + p_bear * w_bear
+            w_blend = np.clip(w_blend, 0.0, max_weight)
+            weights = w_blend / w_blend.sum()
+
+            # Uncertainty penalisation: hedge toward equal when ambiguous
+            # Ambiguity = 1 − max(p_bull, p_side, p_bear)  (0=certain, ~0.67=uniform)
+            ambiguity   = 1.0 - max(p_bull, p_side, p_bear)
+            safety      = np.clip(ambiguity * 0.4, 0.0, 0.25)
+            weights     = (1 - safety) * weights + safety * np.ones(n_assets) / n_assets
+            weights     = np.clip(weights, 0.0, max_weight)
+            weights    /= weights.sum()
+
         else:
             weights = np.ones(n_assets) / n_assets
 
