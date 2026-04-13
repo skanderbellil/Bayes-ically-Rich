@@ -101,11 +101,19 @@ class RegimeHMM:
             return 0.5
 
     def state_sequence(self, returns: np.ndarray) -> np.ndarray:
-        """Most-likely state at each timestep via Viterbi decoding."""
+        """
+        Most-likely state at each timestep via forward-filtered argmax.
+
+        Uses the forward pass only (no backward smoothing), so the state
+        assigned to day t depends only on data up to day t — zero lookahead bias.
+        Previously used Viterbi (model.predict) which runs a backward pass and
+        assigns states with full hindsight over the window.
+        """
         if not self.is_fitted:
             return np.zeros(len(returns), dtype=int)
         try:
-            return self._model.predict(returns)
+            _, posteriors = self._model.score_samples(returns)
+            return np.argmax(posteriors, axis=1).astype(int)
         except Exception:
             return np.zeros(len(returns), dtype=int)
 
