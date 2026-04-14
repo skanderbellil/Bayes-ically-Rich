@@ -32,7 +32,88 @@ logger = logging.getLogger(__name__)
 _EPS = 1e-8
 _ANN = 252
 
-AMR_STRATEGIES = ("amr", "inv_vol", "amr_no_vt", "bocpd_amr", "bocpd_amr_v2", "hmm3_amr")
+AMR_STRATEGIES = ("amr", "inv_vol", "amr_no_vt", "bocpd_amr", "bocpd_amr_v2", "bocpd_amr_v3", "hmm3_amr")
+
+
+# ---------------------------------------------------------------------------
+# Continuous λ calibration
+# ---------------------------------------------------------------------------
+
+def compute_continuous_lam(
+    window_arr: np.ndarray,
+    cp: float,
+    spy_idx: int = 0,
+    rf_daily: float = 0.04 / 252,
+    lam_min: float = 0.10,
+    lam_max: float = 0.80,
+    amplify: float = 2.5,
+) -> float:
+    """
+    Data-derived continuous λ via the Omega ratio + BOCPD credibility discount.
+
+    λ controls the upside/downside tradeoff in the AMR objective.  Rather than
+    presetting λ with hand-tuned constants, we read it directly from the return
+    distribution of the equity/market-proxy asset (SPY by default).
+
+    Why SPY not the equal-weight portfolio?
+    The equal-weight portfolio of 5 diversified ETFs has very stable Omega
+    (diversification dampens swings, Omega stays near 1.5 almost always).
+    SPY alone shows meaningful variation — deep negative Omega in 2018/2020/2022
+    bear legs, strong positive Omega in bull runs — giving λ the dynamic range
+    needed to meaningfully adjust AMR behaviour.
+
+    Omega ratio  →  Ω(τ) = E[max(r − τ, 0)] / E[max(τ − r, 0)]
+    τ = rf_daily  →  measures *excess* upside vs downside.
+
+    Amplified sigmoid mapping
+    -------------------------
+        λ_omega = σ( amplify × log(Ω) )   where σ(x) = 1 / (1 + e^−x)
+
+    vs the flat mapping λ = Ω / (1 + Ω)  which is σ(log Ω) with amplify=1.
+
+    With amplify=2.5:
+        Ω = 3.0  (strong bull)  →  log Ω = 1.10  →  λ ≈ 0.94 → capped at lam_max
+        Ω = 1.0  (neutral)      →  log Ω = 0.00  →  λ = 0.50
+        Ω = 0.3  (bear market)  →  log Ω = −1.20 →  λ ≈ 0.05 → capped at lam_min
+
+    BOCPD credibility discount
+    --------------------------
+    When cp is high, the Omega estimate was computed on data from the *old* regime.
+    We shrink toward λ = 0.5 (maximum uncertainty) proportionally to cp:
+
+        certainty = 1 − clip(cp × 20, 0, 1)
+        λ = certainty × λ_omega + (1 − certainty) × 0.5
+
+    Parameters
+    ----------
+    window_arr : (T, N) return window for Omega estimation
+    cp         : BOCPD changepoint probability at current rebalance date
+    spy_idx    : column index of the equity/market proxy asset (SPY)
+    rf_daily   : daily risk-free rate (Omega threshold)
+    lam_min    : hard floor on λ
+    lam_max    : hard ceiling on λ
+    amplify    : steepness of the sigmoid mapping (1 = flat, 2.5 = responsive)
+    """
+    # Use equity proxy for Omega — more dynamic than diversified portfolio
+    r = window_arr[:, spy_idx]
+
+    gains  = float(np.mean(np.maximum(r - rf_daily, 0.0)))
+    losses = float(np.mean(np.maximum(rf_daily - r, 0.0)))
+
+    if losses < _EPS:
+        log_omega = 3.0   # strong bull — push toward lam_max
+    else:
+        log_omega = float(np.log(np.clip(gains / losses, 1e-6, 1e6)))
+
+    # Amplified sigmoid: more responsive than flat Omega/(1+Omega)
+    lam_omega = float(1.0 / (1.0 + np.exp(-amplify * log_omega)))
+    lam_omega = float(np.clip(lam_omega, lam_min, lam_max))
+
+    # BOCPD credibility discount: high cp → shrink toward 0.5 (regime unknown)
+    certainty = float(np.clip(1.0 - cp * 20.0, 0.0, 1.0))
+    lam = certainty * lam_omega + (1.0 - certainty) * 0.5
+
+    return float(np.clip(lam, lam_min, lam_max))
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +372,7 @@ def run_amr_backtest(
         bocpd_cp  = pd.Series(_cp,  index=returns.index)
         bocpd_erl = pd.Series(_erl, index=returns.index)
 
-    if strategy == "bocpd_amr_v2":
+    if strategy in ("bocpd_amr_v2", "bocpd_amr_v3"):
         # Multi-asset BOCPD: SPY captures equity regime, TLT captures rate regime,
         # GLD captures flight-to-safety / inflation regime.
         # Weights: SPY 50%, TLT 30%, GLD 20% — equity regime is most predictive
@@ -388,6 +469,43 @@ def run_amr_backtest(
                 alpha=0.05, low_vol_penalty=low_vol_penalty,
             )
 
+        elif strategy == "bocpd_amr_v3":
+            # ── BOCPD-AMR v3 — continuously-calibrated λ ─────────────────
+            # Builds on all v2 improvements but replaces the hard-coded
+            # λ formula with a data-derived continuous calibration.
+            #
+            # v2 used:  lam = 0.55 − 0.30 × clip(cp × 30, 0, 1)
+            #           → three arbitrary constants, clips hard at cp > 0.033
+            #
+            # v3 uses:  lam = f(Omega ratio, cp)
+            #           → Omega measures empirical upside/downside from data
+            #           → cp applies a credibility discount (shrink toward 0.5)
+            #           → no preset constants except optional floor/ceiling
+            cp  = float(bocpd_cp.loc[:rebal_t].iloc[-1])
+            erl = float(bocpd_erl.loc[:rebal_t].iloc[-1])
+
+            # Adaptive lookback (same as v1/v2)
+            adaptive_lb = int(np.clip(erl * 1.5, 42, lookback))
+            opt_arr     = hist.values[-adaptive_lb:]
+
+            # Continuous λ: SPY Omega ratio → amplified sigmoid → BOCPD discount
+            _spy_idx = tickers.index("SPY") if "SPY" in tickers else 0
+            lam_continuous = compute_continuous_lam(
+                window_arr,           # full 252-day window for stable Omega
+                cp=cp,
+                spy_idx=_spy_idx,
+                rf_daily=0.04 / _ANN,
+            )
+
+            # Use semi-deviation objective (not CVaR) so λ has real leverage.
+            # CVaR at 5% = only 12 worst days dominate → same corner solution
+            # regardless of λ.  Semi-deviation uses all negative days so the
+            # upside term lam × E[max(r,0)] meaningfully shifts the portfolio.
+            weights = amr_weights(
+                opt_arr, lam=lam_continuous,
+                max_weight=max_weight, l2_reg=l2_reg,
+            )
+
         elif strategy == "hmm3_amr":
             # ── 3-state HMM + AMR ────────────────────────────────────────
             from src.regime_models import HMM3
@@ -435,7 +553,7 @@ def run_amr_backtest(
 
         # ── Volatility targeting ──────────────────────────────────────────
         if use_vol_target and strategy != "amr_no_vt":
-            if strategy == "bocpd_amr_v2":
+            if strategy in ("bocpd_amr_v2", "bocpd_amr_v3"):
                 # Use regime-adaptive cap: tighten during transitions, loosen when stable
                 _cp_sig  = float(bocpd_cp.loc[:rebal_t].iloc[-1])
                 _erl_sig = float(bocpd_erl.loc[:rebal_t].iloc[-1])
