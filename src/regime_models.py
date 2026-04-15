@@ -161,26 +161,22 @@ def precompute_bocpd_multi(
     weights: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Run BOCPD independently on multiple assets and return weighted aggregate signals.
+    Run BOCPD independently on multiple assets and return aggregated signals.
 
-    Motivation: SPY-only BOCPD misses regime breaks originating in other
-    asset classes (e.g. the 2022 bond crash, gold flight-to-safety surges).
-    Running on SPY + TLT + GLD gives a fuller picture of cross-asset stress.
+    cp aggregation  →  MAX across assets
+    erl aggregation →  weighted average
 
-    Aggregation
-    -----------
-    cp_agg  = Σ wᵢ · cp_i            (weighted avg changepoint probability)
-    erl_agg = Σ wᵢ · erl_i           (weighted avg expected run length)
+    Why max for cp?
+    Weighted averaging washes out individual asset spikes — the result ends up
+    pinned to the hazard rate (≈0.004) at all times, making the signal useless.
+    Taking the MAX preserves any asset's changepoint signal: if TLT fires during
+    a rate shock but SPY hasn't reacted yet, max-cp catches it early.
 
-    Parameters
-    ----------
-    assets  : column names to run BOCPD on (skipped if not in returns_df)
-    weights : per-asset weights (default: equal)
-
-    Returns
-    -------
-    cp_agg  : (T,) aggregated changepoint probability
-    erl_agg : (T,) aggregated expected run length
+    Why weighted avg for erl?
+    ERL measures "how long has this regime been running" — a weighted average
+    gives a stable estimate of cross-asset regime age.  We give SPY the most
+    weight since its ERL most directly reflects the equity regime we're
+    allocating into.
     """
     available = [a for a in assets if a in returns_df.columns]
     if not available:
@@ -198,7 +194,8 @@ def precompute_bocpd_multi(
         all_cp.append(cp_i)
         all_erl.append(erl_i)
 
-    cp_agg  = sum(w[i] * all_cp[i]  for i in range(len(all_cp)))
+    # MAX preserves spike sensitivity; weighted avg provides stable regime-age estimate
+    cp_agg  = np.max(np.stack(all_cp,  axis=1), axis=1)
     erl_agg = sum(w[i] * all_erl[i] for i in range(len(all_erl)))
     return np.array(cp_agg), np.array(erl_agg)
 
