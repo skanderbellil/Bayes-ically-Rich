@@ -201,6 +201,13 @@ avg_by_k = pos_df.groupby("k")["ret"].mean()
 spy_pos_df   = build_day_position_df(spy_bt.reindex(strats["WML Full"].index).dropna())
 spy_avg_by_k = spy_pos_df.groupby("k")["ret"].mean()
 
+# ── SPY + WML Window overlay ───────────────────────────────────────────────────
+# WML is market-neutral (long-short); adding it on top of SPY B&H captures any
+# alpha while keeping full equity market exposure.
+spy_wml = (spy_bt.reindex(strats["WML Window"].index)
+                 .add(strats["WML Window"], fill_value=0)
+                 .dropna())
+
 
 # ── Console output ─────────────────────────────────────────────────────────────
 print(f"\n{'='*68}")
@@ -252,26 +259,34 @@ print(tabulate(
     tablefmt="simple",
 ))
 
-METRIC_KEYS = ["CAGR", "Volatility", "Sharpe", "Sortino", "Max DD", "Calmar"]
+METRIC_KEYS  = ["CAGR", "Volatility", "Sharpe", "Sortino", "Max DD", "Calmar"]
+EXTRA_KEYS   = ["Alpha", "Beta", "Info Ratio"]
 
 def fmt(v, k):
-    return f"{v:.2%}" if k in ("CAGR", "Max DD", "Volatility") else f"{v:.2f}"
-
-print(f"\n{'='*68}")
-print("  STRATEGY PERFORMANCE METRICS")
-print(f"{'='*68}")
+    if k in ("CAGR", "Max DD", "Volatility", "Alpha"):
+        return f"{v:.2%}"
+    return f"{v:.2f}"
 
 perf_map = {
-    "WML Window":  (strats["WML Window"],  f"WML Window (T-{WINDOW_START}→T-{WINDOW_END})"),
-    "WML Outside": (strats["WML Outside"], "WML Outside window"),
-    "WML Full":    (strats["WML Full"],    "WML Full month"),
-    "SPY B&H":     (spy_bt,               "SPY Buy & Hold"),
+    "WML Window":    (strats["WML Window"],  f"WML Window (T-{WINDOW_START}→T-{WINDOW_END})"),
+    "WML Outside":   (strats["WML Outside"], "WML Outside window"),
+    "WML Full":      (strats["WML Full"],    "WML Full month"),
+    "SPY+WML Win":   (spy_wml,              "SPY + WML Window overlay"),
+    "SPY B&H":       (spy_bt,               "SPY Buy & Hold"),
 }
 
-perf_rows, perf_metrics = [], {}
+perf_metrics = {}
+for key, (ret, _) in perf_map.items():
+    perf_metrics[key] = compute_metrics(ret, benchmark=spy_bt, rf=RF)
+
+# ── Main metrics table ────────────────────────────────────────────────────────
+print(f"\n{'='*78}")
+print("  PERFORMANCE METRICS  (benchmark = SPY Buy & Hold)")
+print(f"{'='*78}")
+
+perf_rows = []
 for key, (ret, label) in perf_map.items():
-    m = compute_metrics(ret, benchmark=spy_bt, rf=RF)
-    perf_metrics[key] = m
+    m = perf_metrics[key]
     perf_rows.append([label] + [fmt(m.get(k, 0.0), k) for k in METRIC_KEYS])
 
 print(tabulate(
@@ -280,10 +295,60 @@ print(tabulate(
     tablefmt="rounded_grid",
 ))
 
-print("\n── Cumulative growth of $1 ──")
+# ── Alpha / Beta / Info Ratio ─────────────────────────────────────────────────
+print(f"\n{'='*78}")
+print("  BENCHMARK-RELATIVE METRICS  (vs SPY Buy & Hold)")
+print(f"{'='*78}")
+
+rel_rows = []
 for key, (ret, label) in perf_map.items():
-    cum = (1 + ret).prod()
-    print(f"  {label:38s}  ${cum:.2f}")
+    if key == "SPY B&H":
+        continue
+    m = perf_metrics[key]
+    rel_rows.append([
+        label,
+        fmt(m.get("Alpha", 0.0), "Alpha"),
+        f"{m.get('Beta', 0.0):.2f}",
+        f"{m.get('Info Ratio', 0.0):.2f}",
+    ])
+
+print(tabulate(
+    rel_rows,
+    headers=["Strategy", "Alpha (ann.)", "Beta", "Info Ratio"],
+    tablefmt="rounded_grid",
+))
+
+# ── Delta vs SPY ──────────────────────────────────────────────────────────────
+print(f"\n{'='*78}")
+print("  DELTA vs SPY BUY & HOLD")
+print(f"{'='*78}")
+
+spy_m     = perf_metrics["SPY B&H"]
+delta_rows = []
+for key, (ret, label) in perf_map.items():
+    if key == "SPY B&H":
+        continue
+    m = perf_metrics[key]
+    row = [label]
+    for k in METRIC_KEYS:
+        d  = m.get(k, 0.0) - spy_m.get(k, 0.0)
+        s  = "+" if d >= 0 else ""
+        row.append(f"{s}{d:.2%}" if k in ("CAGR", "Max DD", "Volatility") else f"{s}{d:.2f}")
+    delta_rows.append(row)
+
+print(tabulate(
+    delta_rows,
+    headers=["Strategy"] + [f"Δ {k}" for k in METRIC_KEYS],
+    tablefmt="rounded_grid",
+))
+
+print(f"\n{'='*78}")
+print("  CUMULATIVE GROWTH OF $1")
+print(f"{'='*78}")
+for key, (ret, label) in perf_map.items():
+    cum    = (1 + ret).prod()
+    marker = "  ◀ best" if cum == max((1 + r).prod() for r, _ in perf_map.values()) else ""
+    print(f"  {label:42s}  ${cum:.2f}{marker}")
 
 
 # ── Plots ──────────────────────────────────────────────────────────────────────
@@ -291,6 +356,7 @@ COLORS = {
     "WML Window":  "#1A237E",
     "WML Outside": "#B71C1C",
     "WML Full":    "#1B5E20",
+    "SPY+WML Win": "#6A1B9A",
     "SPY B&H":     "#37474F",
 }
 
@@ -316,9 +382,11 @@ _DOLLAR = mticker.FuncFormatter(lambda x, _: f"${x:.2f}")
 # ── 1. Cumulative wealth ──────────────────────────────────────────────────────
 for key, (ret, label) in perf_map.items():
     cum = (1 + ret).cumprod()
+    is_spy_bnh = key == "SPY B&H"
     ax_cum.plot(cum.index, cum.values, label=label,
-                color=COLORS[key], lw=2.5 if "SPY" not in key else 1.5,
-                ls="--" if "SPY" in key else "-")
+                color=COLORS[key],
+                lw=1.5 if is_spy_bnh else 2.5,
+                ls="--" if is_spy_bnh else "-")
 ax_cum.set_yscale("log")
 ax_cum.yaxis.set_major_formatter(_DOLLAR)
 ax_cum.set_title("Cumulative Wealth  (log scale)", fontweight="bold")
@@ -330,7 +398,7 @@ for key, (ret, label) in perf_map.items():
     cum = (1 + ret).cumprod()
     dd  = (cum - cum.cummax()) / (cum.cummax() + 1e-9)
     ax_dd.plot(dd.index, dd.values, color=COLORS[key], lw=1.5, label=label,
-               ls="--" if "SPY" in key else "-")
+               ls="--" if key == "SPY B&H" else "-")
 ax_dd.yaxis.set_major_formatter(_PCT)
 ax_dd.set_title("Drawdown", fontweight="bold")
 ax_dd.legend(fontsize=7)
@@ -341,7 +409,7 @@ for key, (ret, label) in perf_map.items():
     exc = ret - RF / 252
     rs  = exc.rolling(126).mean() / (exc.rolling(126).std() + 1e-9) * 252**0.5
     ax_sr.plot(rs.index, rs.values, color=COLORS[key], lw=1.5, label=label,
-               ls="--" if "SPY" in key else "-")
+               ls="--" if key == "SPY B&H" else "-")
 ax_sr.axhline(0, color="black", lw=0.6, ls="--")
 ax_sr.axhline(1, color="green", lw=0.5, ls=":", alpha=0.6)
 ax_sr.set_title("Rolling 6-Month Sharpe", fontweight="bold")
@@ -428,10 +496,11 @@ logger.info("Saved: results/intramonth_momentum.png")
 
 # ── Save returns CSV ───────────────────────────────────────────────────────────
 out_df = pd.DataFrame({
-    "WML_Window":  strats["WML Window"],
-    "WML_Outside": strats["WML Outside"],
-    "WML_Full":    strats["WML Full"],
-    "SPY_BnH":     spy_bt,
+    "WML_Window":    strats["WML Window"],
+    "WML_Outside":   strats["WML Outside"],
+    "WML_Full":      strats["WML Full"],
+    "SPY_WML_Window": spy_wml,
+    "SPY_BnH":        spy_bt,
 })
 out_df.to_csv(RESULTS_DIR / "intramonth_momentum_returns.csv")
 logger.info("Saved: results/intramonth_momentum_returns.csv")
