@@ -116,10 +116,14 @@ _cp_arr, _erl_arr = precompute_bocpd(spy.values, hazard=1 / 252)
 bocpd_erl = pd.Series(_erl_arr, index=spy.index)
 bocpd_cp  = pd.Series(_cp_arr,  index=spy.index)
 
-# ── Pre-compute 200d SMA trend signal on SPY prices ────────────────────────
-spy_price  = df["SPY"].reindex(spy.index).ffill()
-spy_sma    = spy_price.rolling(TREND_WIN, min_periods=TREND_WIN).mean()
-trend_on   = (spy_price > spy_sma).astype(float)   # 1.0 when price above SMA
+# ── Pre-compute trend signals on SPY prices ────────────────────────────────
+spy_price    = df["SPY"].reindex(spy.index).ffill()
+spy_sma50    = spy_price.rolling(50,        min_periods=50       ).mean()
+spy_sma200   = spy_price.rolling(TREND_WIN, min_periods=TREND_WIN).mean()
+trend50_on   = (spy_price > spy_sma50).astype(float)    # price above 50d SMA
+trend200_on  = (spy_price > spy_sma200).astype(float)   # price above 200d SMA
+golden_cross = (spy_sma50 > spy_sma200).astype(float)   # 50d SMA above 200d SMA
+trend_on     = trend200_on                              # alias kept for continuity
 
 # ── Rebalance grid ─────────────────────────────────────────────────────────
 try:
@@ -148,14 +152,23 @@ def regime_scaler(erl: float) -> float:
 
 # ── Unified backtest loop ──────────────────────────────────────────────────
 
+def _safe_float(x, default=0.0):
+    v = float(x) if pd.notna(x) else default
+    return v if np.isfinite(v) else default
+
+
 def run_strategy(weight_fn, label):
     """
-    weight_fn(lam_fixed, lam_continuous, erl, recent, trend) -> float in [0, leverage_cap].
-    Returns daily return Series and a diagnostic DataFrame keyed by rebal date.
+    weight_fn(lam_fix, lam_cont, erl, recent, sig, state) -> float in [0, lev_cap]
+
+    `sig`   dict of pre-computed per-date signals (trend50, trend200, golden)
+    `state` per-strategy mutable dict, survives across rebalances (for memory
+            / hysteresis / persistence variants)
     """
     port_rets, ret_dates = [], []
     diag = []
     prev_w = None
+    state: dict = {}
 
     for i, rebal_t in enumerate(rebal_dates):
         hist = spy.loc[:rebal_t]
@@ -165,9 +178,12 @@ def run_strategy(weight_fn, label):
         window = hist.values[-LOOKBACK:].reshape(-1, 1)   # (T, 1) for compute_continuous_lam
         recent = hist.values[-VOL_WIN:]
         erl    = float(bocpd_erl.loc[:rebal_t].iloc[-1])
-        trend  = float(trend_on.loc[:rebal_t].iloc[-1])    # 0.0 or 1.0 (NaN-safe below)
-        if not np.isfinite(trend):
-            trend = 0.0
+        sig = {
+            "trend50":  _safe_float(trend50_on.loc[:rebal_t].iloc[-1]),
+            "trend200": _safe_float(trend200_on.loc[:rebal_t].iloc[-1]),
+            "golden":   _safe_float(golden_cross.loc[:rebal_t].iloc[-1]),
+        }
+        trend = sig["trend200"]   # legacy binding for old weight_fns below
 
         # Fixed-halflife λ  — the Bayesian binary gate signal
         lam_fixed = compute_continuous_lam(
@@ -175,10 +191,9 @@ def run_strategy(weight_fn, label):
             spy_idx=0, rf_daily=RF / _ANN,
             ewma_halflife=FIXED_HL,
         )
-        # Continuous λ retained for the legacy "compounded" comparison
-        lam_cont = lam_fixed   # same call; separate name for clarity at callsite
+        lam_cont = lam_fixed   # separate name preserved for callsite clarity
 
-        w = float(np.clip(weight_fn(lam_fixed, lam_cont, erl, recent, trend),
+        w = float(np.clip(weight_fn(lam_fixed, lam_cont, erl, recent, sig, state),
                           0.0, LEVERAGE_CAP))
 
         # Transaction cost on effective weight change
@@ -198,12 +213,14 @@ def run_strategy(weight_fn, label):
         port_rets.extend(pf.tolist())
         ret_dates.extend(period.index.tolist())
         diag.append((rebal_t, w, lam_fixed, erl,
-                     vt_scaler(recent), regime_scaler(erl), trend))
+                     vt_scaler(recent), regime_scaler(erl),
+                     sig["trend50"], sig["trend200"], sig["golden"]))
 
         prev_w = w
 
     ret_s   = pd.Series(port_rets, index=ret_dates, name=label)
-    diag_df = pd.DataFrame(diag, columns=["date","weight","lam","erl","vt","regime","trend"])
+    diag_df = pd.DataFrame(diag, columns=["date","weight","lam","erl","vt","regime",
+                                           "trend50","trend200","golden"])
     diag_df = diag_df.set_index("date")
     return ret_s, diag_df
 
@@ -216,30 +233,76 @@ def run_strategy(weight_fn, label):
 def _gate(lam):              return 1.0 if lam > 0.5 else 0.0
 def _gate_or(lam, trend):    return 1.0 if (lam > 0.5 or trend > 0.5) else 0.0
 
-def w_bayes_only(lam_fix, lam_c, erl, recent, trend):
+# -- original variants ------------------------------------------------------
+def w_bayes_only(lam_fix, lam_c, erl, recent, sig, state):
     return _gate(lam_fix)
 
-def w_gate_vt(lam_fix, lam_c, erl, recent, trend):
+def w_gate_vt(lam_fix, lam_c, erl, recent, sig, state):
     return _gate(lam_fix) * vt_scaler(recent)
 
-def w_gate_regime(lam_fix, lam_c, erl, recent, trend):
+def w_gate_regime(lam_fix, lam_c, erl, recent, sig, state):
     return _gate(lam_fix) * regime_scaler(erl)
 
-def w_gate_both(lam_fix, lam_c, erl, recent, trend):
+def w_gate_both(lam_fix, lam_c, erl, recent, sig, state):
     return _gate(lam_fix) * vt_scaler(recent) * regime_scaler(erl)
 
-def w_compounded(lam_fix, lam_c, erl, recent, trend):
+def w_compounded(lam_fix, lam_c, erl, recent, sig, state):
     # Old multi-lever design: continuous λ ∈ [0.1, 0.8] treated as allocation,
     # multiplied by VT and regime. All three can shrink size simultaneously.
     return lam_c * vt_scaler(recent) * regime_scaler(erl)
 
-def w_bayes_trend(lam_fix, lam_c, erl, recent, trend):
+def w_bayes_trend(lam_fix, lam_c, erl, recent, sig, state):
     # Ensemble OR-gate: Bayesian λ OR 200d trend — no levers.
-    return _gate_or(lam_fix, trend)
+    return _gate_or(lam_fix, sig["trend200"])
 
-def w_bayes_trend_vt(lam_fix, lam_c, erl, recent, trend):
+def w_bayes_trend_vt(lam_fix, lam_c, erl, recent, sig, state):
     # Ensemble OR-gate × VT × regime.
-    return _gate_or(lam_fix, trend) * vt_scaler(recent) * regime_scaler(erl)
+    return _gate_or(lam_fix, sig["trend200"]) * vt_scaler(recent) * regime_scaler(erl)
+
+
+# -- creative variants ─────────────────────────────────────────────────────
+# 1. AND-gate — defensive: both Bayes and 200d trend must agree.
+def w_and_trend200(lam_fix, lam_c, erl, recent, sig, state):
+    return 1.0 if (lam_fix > 0.5 and sig["trend200"] > 0.5) else 0.0
+
+# 2. Triple-OR — add a fast 50d trend filter to catch early rebounds.
+def w_triple_or(lam_fix, lam_c, erl, recent, sig, state):
+    on = (lam_fix > 0.5) or (sig["trend50"] > 0.5) or (sig["trend200"] > 0.5)
+    return 1.0 if on else 0.0
+
+# 3. Majority-vote (≥2 of 3) — Condorcet-style ensemble, low-variance classifier.
+def w_majority_3(lam_fix, lam_c, erl, recent, sig, state):
+    votes = int(lam_fix > 0.5) + int(sig["trend50"] > 0.5) + int(sig["trend200"] > 0.5)
+    return 1.0 if votes >= 2 else 0.0
+
+# 4. Golden-cross OR — trend-of-trend (SMA50 > SMA200) in place of price>SMA.
+#    Slower than price-vs-SMA, less whippy, classic quant-momentum primitive.
+def w_golden_or(lam_fix, lam_c, erl, recent, sig, state):
+    return 1.0 if (lam_fix > 0.5 or sig["golden"] > 0.5) else 0.0
+
+# 5. Asymmetric persistence — enter OR-style, exit only after 2 consecutive
+#    weeks where BOTH signals are off. Resists single-week false "exit" flips
+#    (Lo & MacKinlay 1988-style specification to reduce whipsaw cost).
+def w_asym_persist(lam_fix, lam_c, erl, recent, sig, state):
+    raw_on = (lam_fix > 0.5) or (sig["trend200"] > 0.5)
+    if raw_on:
+        state["off_streak"] = 0
+        state["gate"]       = 1.0
+    else:
+        state["off_streak"] = state.get("off_streak", 0) + 1
+        if state["off_streak"] >= 2:
+            state["gate"] = 0.0
+        # else keep previous gate value (default to 1.0 on first call)
+        state.setdefault("gate", 1.0)
+    return state["gate"]
+
+# 6. ERL-kill switch — Bayes∪Trend200, but force OFF when BOCPD just detected
+#    a regime break (ERL < 15). Uses the Bayesian change-point signal directly
+#    as an early-warning downturn detector.
+def w_erl_kill(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    return 1.0 if (lam_fix > 0.5 or sig["trend200"] > 0.5) else 0.0
 
 
 logger.info("bayes_only  — binary gate, no levers")
@@ -263,6 +326,25 @@ ret_btrend, info_btrend = run_strategy(w_bayes_trend, "bayes_trend")
 logger.info("bayes_trend_vt — ensemble OR-gate × VT × regime")
 ret_btrend_vt, info_btrend_vt = run_strategy(w_bayes_trend_vt, "bayes_trend_vt")
 
+# ── Creative variants ─────────────────────────────────────────────────────
+logger.info("and_trend200  — AND-gate (Bayes ∧ 200d)")
+ret_and, info_and     = run_strategy(w_and_trend200, "and_trend200")
+
+logger.info("triple_or     — Bayes ∨ 50d ∨ 200d")
+ret_trio, info_trio   = run_strategy(w_triple_or, "triple_or")
+
+logger.info("majority_3    — majority vote of {Bayes, 50d, 200d}")
+ret_maj, info_maj     = run_strategy(w_majority_3, "majority_3")
+
+logger.info("golden_or     — Bayes ∨ (SMA50 > SMA200)")
+ret_gold, info_gold   = run_strategy(w_golden_or, "golden_or")
+
+logger.info("asym_persist  — OR-enter, 2-week persistence on exit")
+ret_asym, info_asym   = run_strategy(w_asym_persist, "asym_persist")
+
+logger.info("erl_kill      — Bayes∪Trend200 with ERL<15 kill switch")
+ret_erl, info_erl     = run_strategy(w_erl_kill, "erl_kill")
+
 # ── Metrics ────────────────────────────────────────────────────────────────
 COL_KEYS = ["CAGR", "Sharpe", "Sortino", "Max DD", "Calmar", "Volatility"]
 
@@ -276,8 +358,15 @@ strategies = {
     "gate_regime":    (ret_greg,      "Gate × Regime"),
     "gate_both":      (ret_both,      "Gate × VT × Regime"),
     "compounded":     (ret_comp,      "λ × VT × Regime  (old)"),
-    "bayes_trend":    (ret_btrend,    "Bayes∪Trend  (ensemble gate)"),
-    "bayes_trend_vt": (ret_btrend_vt, "Bayes∪Trend × VT × Regime"),
+    "bayes_trend":    (ret_btrend,    "Bayes∪Trend200  (OR baseline)"),
+    "bayes_trend_vt": (ret_btrend_vt, "Bayes∪Trend200 × VT × Regime"),
+    # creative variants
+    "and_trend200":   (ret_and,       "Bayes∩Trend200  (AND-gate)"),
+    "triple_or":      (ret_trio,      "Bayes∪Trend50∪Trend200  (triple-OR)"),
+    "majority_3":     (ret_maj,       "Majority-of-3  (Bayes,50d,200d)"),
+    "golden_or":      (ret_gold,      "Bayes∪GoldenCross"),
+    "asym_persist":   (ret_asym,      "Bayes∪Trend200 + 2wk exit-persist"),
+    "erl_kill":       (ret_erl,       "Bayes∪Trend200 + ERL-kill"),
 }
 
 spy_m = compute_metrics(spy_bt, rf=RF)
@@ -303,6 +392,12 @@ INFOS = {
     "compounded":     info_comp,
     "bayes_trend":    info_btrend,
     "bayes_trend_vt": info_btrend_vt,
+    "and_trend200":   info_and,
+    "triple_or":      info_trio,
+    "majority_3":     info_maj,
+    "golden_or":      info_gold,
+    "asym_persist":   info_asym,
+    "erl_kill":       info_erl,
 }
 for key in INFOS:
     info = INFOS[key]
@@ -327,14 +422,14 @@ print(f"  λ (fixed 42d)  mean={diag_ref['lam'].mean():.2f}  "
       f"max={diag_ref['lam'].max():.2f}")
 
 # ── Delta vs Bayes-only ────────────────────────────────────────────────────
-print("\n── Marginal effect of each lever / ensemble (vs Bayes-only gate) ──")
-bayes_m = all_m["bayes_only"]
+print("\n── Delta vs Bayes∪Trend200 (OR baseline) ──")
+base_m = all_m["bayes_trend"]
 delta_rows = []
-for key in ("gate_vt", "gate_regime", "gate_both", "compounded",
-            "bayes_trend", "bayes_trend_vt"):
+for key in ("bayes_only", "and_trend200", "triple_or", "majority_3",
+            "golden_or", "asym_persist", "erl_kill", "bayes_trend_vt"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
-        d = all_m[key].get(k, 0) - bayes_m.get(k, 0)
+        d = all_m[key].get(k, 0) - base_m.get(k, 0)
         s = "+" if d > 0 else ""
         row.append(f"{s}{d:.2%}" if k in ("CAGR","Max DD","Volatility") else f"{s}{d:.2f}")
     delta_rows.append(row)
@@ -343,8 +438,8 @@ print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
 
 print("\n── Delta vs SPY Buy & Hold ──")
 delta_rows = []
-for key in ("bayes_only", "gate_vt", "gate_regime", "gate_both", "compounded",
-            "bayes_trend", "bayes_trend_vt"):
+for key in ("bayes_only", "bayes_trend", "and_trend200", "triple_or",
+            "majority_3", "golden_or", "asym_persist", "erl_kill"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
         d = all_m[key].get(k, 0) - spy_m.get(k, 0)
@@ -356,10 +451,10 @@ print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
 
 # ── Signal agreement diagnostics ───────────────────────────────────────────
 print("\n── Signal agreement (Bayes-λ vs 200d trend) ──")
-both_on  = ((info_btrend["lam"] > 0.5) & (info_btrend["trend"] > 0.5)).mean()
-only_lam = ((info_btrend["lam"] > 0.5) & (info_btrend["trend"] <= 0.5)).mean()
-only_tr  = ((info_btrend["lam"] <= 0.5) & (info_btrend["trend"] > 0.5)).mean()
-both_off = ((info_btrend["lam"] <= 0.5) & (info_btrend["trend"] <= 0.5)).mean()
+both_on  = ((info_btrend["lam"] > 0.5) & (info_btrend["trend200"] > 0.5)).mean()
+only_lam = ((info_btrend["lam"] > 0.5) & (info_btrend["trend200"] <= 0.5)).mean()
+only_tr  = ((info_btrend["lam"] <= 0.5) & (info_btrend["trend200"] > 0.5)).mean()
+both_off = ((info_btrend["lam"] <= 0.5) & (info_btrend["trend200"] <= 0.5)).mean()
 print(f"  both on          {both_on:5.1%}    only λ says on    {only_lam:5.1%}")
 print(f"  only trend on    {only_tr:5.1%}    both off (exit)   {both_off:5.1%}")
 
@@ -384,10 +479,16 @@ COLORS = {
     "gate_regime":    "#E65100",   # deep orange
     "gate_both":      "#1B5E20",   # dark green
     "compounded":     "#B71C1C",   # dark red     (old, broken)
-    "bayes_trend":    "#6A1B9A",   # deep purple  (ensemble)
-    "bayes_trend_vt": "#C2185B",   # deep pink    (ensemble + levers)
+    "bayes_trend":    "#6A1B9A",   # deep purple  (OR baseline)
+    "bayes_trend_vt": "#C2185B",   # deep pink    (OR + levers)
+    "and_trend200":   "#424242",   # dark grey    (AND defensive)
+    "triple_or":      "#2E7D32",   # green        (triple OR, aggressive)
+    "majority_3":     "#0277BD",   # strong blue  (majority vote)
+    "golden_or":      "#BF360C",   # rust         (golden cross)
+    "asym_persist":   "#4A148C",   # indigo       (persistence filter)
+    "erl_kill":       "#D84315",   # orange-red   (ERL kill switch)
 }
-LWS = {k: (3.0 if k == "bayes_trend" else (1.5 if k == "bnh" else 2.0))
+LWS = {k: (3.0 if k == "bayes_trend" else (1.5 if k == "bnh" else 1.8))
        for k in COLORS}
 LSS = {k: ("--" if k == "bnh" else "-") for k in COLORS}
 _PCT    = mticker.FuncFormatter(lambda x, _: f"{x:.0%}")
@@ -468,6 +569,12 @@ out = pd.DataFrame({
     "compounded":     ret_comp,
     "bayes_trend":    ret_btrend,
     "bayes_trend_vt": ret_btrend_vt,
+    "and_trend200":   ret_and,
+    "triple_or":      ret_trio,
+    "majority_3":     ret_maj,
+    "golden_or":      ret_gold,
+    "asym_persist":   ret_asym,
+    "erl_kill":       ret_erl,
 })
 out.to_csv(RESULTS_DIR / "spy_timing_returns.csv")
 logger.info("Saved: results/spy_timing_returns.csv")
