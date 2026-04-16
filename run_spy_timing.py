@@ -1,21 +1,52 @@
 #!/usr/bin/env python3
 """
-SPY market timing via BOCPD + EWMA Omega.
+SPY market timing — gate/sizer decomposition.
 
-Question: can a simple risk-on / risk-off rule on SPY beat buy & hold?
+Why this file was rewritten
+---------------------------
+In the earlier multi-lever design, three signals all fought for the same job:
 
-Three strategies, all SPY-only:
-  1. SPY Buy & Hold           — baseline
-  2. Binary timing            — 100% SPY when λ > 0.5, else cash
-  3. Proportional timing      — SPY allocation = clip((λ − 0.25) / 0.50, 0, 1)
-                                 0% SPY at λ=0.25, 50% at λ=0.50, 100% at λ=0.75
+    alloc = λ_continuous × vol_target × regime_scalar
 
-Signal: EWMA Omega on SPY with ERL-adaptive halflife (v4)
-    halflife = clip(erl / 3,  14, 84)
-    λ = sigmoid(2.5 × log(Omega_ewma))   clipped to [0.10, 0.80]
+When realized vol on the underlying (≈16%) exceeded the 10% target, VT
+already cut size to ~0.6×. An overlapping regime scalar multiplied on top,
+and a continuous λ shifted the baseline away from 1.0 too. The three levers
+were firing against each other, dragging allocation far below what either
+risk control alone would prescribe.
 
-Rebalancing: weekly (Friday), same as AMR strategies
-Transaction costs: 5 bps per unit of turnover
+The cleaner decomposition
+-------------------------
+Separate the *direction* decision from the *sizing* decision:
+
+  GATE          Bayesian binary switch. Either we're in the market or we're not.
+                Uses the fixed-halflife (42d) EWMA Omega on SPY — the "Bayesian
+                fixed window" baseline — and trips on λ > 0.5.
+
+  SIZE LEVERS   Multiplicative scalers, applied only when the gate is open.
+                Each lever has a well-defined *job* it does alone.
+
+                  • VT scaler      = clip(σ_target / σ_realized, 0, lev_cap)
+                  • Regime scaler  = clip(0.5 + 0.5·min(ERL, 126)/126, 0.5, 1)
+
+Final weight = gate × ∏ scalers,  then capped at the leverage cap.
+
+Strategies
+----------
+  bnh             SPY buy & hold                     (baseline)
+  bayes_only      gate = λ_fixed > 0.5, no levers    (pure Bayesian binary)
+  gate_vt         gate × VT scaler
+  gate_regime     gate × regime scaler (ERL-based)
+  gate_both       gate × VT × regime scaler          (the proposed fix)
+  compounded      continuous λ × VT × regime         (old multi-lever design, for contrast)
+
+Common parameters
+-----------------
+  Rebalance        weekly (Friday)
+  Lookback         252 trading days
+  Realized vol     21-day trailing SPY
+  Target vol       10%
+  Leverage cap     1.5×
+  Transaction cost 5 bps per unit of effective-weight turnover
 """
 import logging, sys
 from pathlib import Path
@@ -44,8 +75,12 @@ BT_END   = "2024-12-31"
 TC       = 0.0005       # 5 bps per unit of weight change
 LOOKBACK = 252
 VOL_WIN  = 21
-_ANN     = 252
-_EPS     = 1e-8
+TARGET_VOL   = 0.10
+LEVERAGE_CAP = 1.50
+FIXED_HL     = 42.0     # fixed EWMA halflife for the Bayesian gate
+ERL_FULL     = 126.0    # ERL at which the regime scaler reaches 1.0
+_ANN = 252
+_EPS = 1e-8
 
 # ── Data ───────────────────────────────────────────────────────────────────
 df     = pd.read_csv("portfolio_data.csv", parse_dates=["Date"], index_col="Date").sort_index()
@@ -54,8 +89,9 @@ spy_bt = spy.loc[BT_START:BT_END].rename("SPY")
 
 print("""
 ╔══════════════════════════════════════════════════════════════╗
-║   SPY Market Timing  ·  BOCPD + EWMA Omega (ERL-adaptive)   ║
-║   Risk-on / Risk-off  ·  2016–2024                           ║
+║   SPY Market Timing  ·  gate × sizers decomposition         ║
+║   Binary Bayesian gate + VT / regime as size multipliers    ║
+║   2016–2024                                                  ║
 ╚══════════════════════════════════════════════════════════════╝""")
 
 # ── Pre-compute BOCPD on SPY ───────────────────────────────────────────────
@@ -72,16 +108,32 @@ except Exception:
 rebal_dates = rebal_dates[rebal_dates > spy.index[LOOKBACK + VOL_WIN]]
 rebal_dates = rebal_dates[(rebal_dates >= BT_START) & (rebal_dates <= BT_END)]
 
-# ── Backtest loop ──────────────────────────────────────────────────────────
-# Each strategy: store (date → weight) and reconstruct daily returns
 
-def run_timing(threshold_fn, label):
+# ── Lever definitions ──────────────────────────────────────────────────────
+
+def vt_scaler(recent_returns: np.ndarray) -> float:
+    """σ_target / σ_realized, capped by leverage cap. Realized from trailing 21d."""
+    sigma = float(recent_returns.std() * np.sqrt(_ANN))
+    if sigma < _EPS:
+        return 1.0
+    return float(np.clip(TARGET_VOL / sigma, 0.0, LEVERAGE_CAP))
+
+
+def regime_scaler(erl: float) -> float:
+    """Down-size when the regime is fresh; full size once ERL ≥ 126d."""
+    stability = float(np.clip(min(erl, ERL_FULL) / ERL_FULL, 0.0, 1.0))
+    return float(np.clip(0.5 + 0.5 * stability, 0.5, 1.0))
+
+
+# ── Unified backtest loop ──────────────────────────────────────────────────
+
+def run_strategy(weight_fn, label):
     """
-    threshold_fn(lam) -> float in [0, 1]
-    Returns daily return Series and rebalance weight Series.
+    weight_fn(lam_fixed, lam_continuous, erl, recent) -> float in [0, leverage_cap].
+    Returns daily return Series and a diagnostic DataFrame keyed by rebal date.
     """
     port_rets, ret_dates = [], []
-    weights_out = []
+    diag = []
     prev_w = None
 
     for i, rebal_t in enumerate(rebal_dates):
@@ -89,20 +141,23 @@ def run_timing(threshold_fn, label):
         if len(hist) < LOOKBACK + VOL_WIN:
             continue
 
-        window = hist.values[-LOOKBACK:].reshape(-1, 1)  # (T, 1) for compute_continuous_lam
+        window = hist.values[-LOOKBACK:].reshape(-1, 1)   # (T, 1) for compute_continuous_lam
+        recent = hist.values[-VOL_WIN:]
         erl    = float(bocpd_erl.loc[:rebal_t].iloc[-1])
 
-        # ERL-adaptive halflife (v4 approach)
-        hl  = float(np.clip(erl / 3.0, 14.0, 84.0))
-        lam = compute_continuous_lam(
+        # Fixed-halflife λ  — the Bayesian binary gate signal
+        lam_fixed = compute_continuous_lam(
             window, cp=0.0, erl=None,
             spy_idx=0, rf_daily=RF / _ANN,
-            ewma_halflife=hl,
+            ewma_halflife=FIXED_HL,
         )
+        # Continuous λ retained for the legacy "compounded" comparison
+        lam_cont = lam_fixed   # same call; separate name for clarity at callsite
 
-        w = float(np.clip(threshold_fn(lam), 0.0, 1.0))
+        w = float(np.clip(weight_fn(lam_fixed, lam_cont, erl, recent),
+                          0.0, LEVERAGE_CAP))
 
-        # Transaction cost on weight change
+        # Transaction cost on effective weight change
         tc_cost = TC * abs(w - (prev_w if prev_w is not None else w))
 
         # Hold-period returns
@@ -118,23 +173,56 @@ def run_timing(threshold_fn, label):
 
         port_rets.extend(pf.tolist())
         ret_dates.extend(period.index.tolist())
-        weights_out.append((rebal_t, w, lam, erl, hl))
+        diag.append((rebal_t, w, lam_fixed, erl,
+                     vt_scaler(recent), regime_scaler(erl)))
 
         prev_w = w
 
-    ret_s    = pd.Series(port_rets, index=ret_dates, name=label)
-    info_df  = pd.DataFrame(weights_out, columns=["date", "weight", "lam", "erl", "hl"])
-    info_df  = info_df.set_index("date")
-    return ret_s, info_df
+    ret_s   = pd.Series(port_rets, index=ret_dates, name=label)
+    diag_df = pd.DataFrame(diag, columns=["date","weight","lam","erl","vt","regime"])
+    diag_df = diag_df.set_index("date")
+    return ret_s, diag_df
 
 
-logger.info("Running binary timing (λ > 0.5 → 100% SPY) …")
-ret_bin,  info_bin  = run_timing(lambda lam: 1.0 if lam > 0.50 else 0.0,
-                                 "binary")
+# ── Strategy definitions ───────────────────────────────────────────────────
+#   gate(lam)   = 1 if lam > 0.5 else 0
+#   size_both   = gate × vt × regime
+#   compounded  = lam × vt × regime  (old design, for contrast)
 
-logger.info("Running proportional timing …")
-ret_prop, info_prop = run_timing(lambda lam: np.clip((lam - 0.25) / 0.50, 0.0, 1.0),
-                                 "proportional")
+def _gate(lam):         return 1.0 if lam > 0.5 else 0.0
+
+def w_bayes_only(lam_fix, lam_c, erl, recent):
+    return _gate(lam_fix)
+
+def w_gate_vt(lam_fix, lam_c, erl, recent):
+    return _gate(lam_fix) * vt_scaler(recent)
+
+def w_gate_regime(lam_fix, lam_c, erl, recent):
+    return _gate(lam_fix) * regime_scaler(erl)
+
+def w_gate_both(lam_fix, lam_c, erl, recent):
+    return _gate(lam_fix) * vt_scaler(recent) * regime_scaler(erl)
+
+def w_compounded(lam_fix, lam_c, erl, recent):
+    # Old multi-lever design: continuous λ ∈ [0.1, 0.8] treated as allocation,
+    # multiplied by VT and regime. All three can shrink size simultaneously.
+    return lam_c * vt_scaler(recent) * regime_scaler(erl)
+
+
+logger.info("bayes_only  — binary gate, no levers")
+ret_bayes, info_bayes = run_strategy(w_bayes_only, "bayes_only")
+
+logger.info("gate_vt     — binary gate × VT")
+ret_gvt,   info_gvt   = run_strategy(w_gate_vt, "gate_vt")
+
+logger.info("gate_regime — binary gate × regime scaler")
+ret_greg,  info_greg  = run_strategy(w_gate_regime, "gate_regime")
+
+logger.info("gate_both   — binary gate × VT × regime   (proposed fix)")
+ret_both,  info_both  = run_strategy(w_gate_both, "gate_both")
+
+logger.info("compounded  — λ_continuous × VT × regime  (old multi-lever design)")
+ret_comp,  info_comp  = run_strategy(w_compounded, "compounded")
 
 # ── Metrics ────────────────────────────────────────────────────────────────
 COL_KEYS = ["CAGR", "Sharpe", "Sortino", "Max DD", "Calmar", "Volatility"]
@@ -143,9 +231,12 @@ def fmt(v, k):
     return f"{v:.2%}" if k in ("CAGR", "Max DD", "Volatility") else f"{v:.2f}"
 
 strategies = {
-    "binary":       (ret_bin,  "Binary (100% / 0%)"),
-    "proportional": (ret_prop, "Proportional (0–100%)"),
-    "bnh":          (spy_bt,   "SPY Buy & Hold"),
+    "bnh":         (spy_bt,    "SPY Buy & Hold"),
+    "bayes_only":  (ret_bayes, "Bayes-only  (gate, no levers)"),
+    "gate_vt":     (ret_gvt,   "Gate × VT"),
+    "gate_regime": (ret_greg,  "Gate × Regime"),
+    "gate_both":   (ret_both,  "Gate × VT × Regime  (fix)"),
+    "compounded":  (ret_comp,  "λ × VT × Regime  (old)"),
 }
 
 spy_m = compute_metrics(spy_bt, rf=RF)
@@ -156,37 +247,57 @@ for key, (ret, label) in strategies.items():
     all_m[key] = m
     rows.append([label] + [fmt(m.get(k, 0), k) for k in COL_KEYS])
 
-print("\n" + "═" * 72)
-print("  SPY TIMING vs BUY & HOLD  ·  2016–2024")
-print("═" * 72)
+print("\n" + "═" * 76)
+print("  SPY TIMING — gate × sizer decomposition  ·  2016–2024")
+print("═" * 76)
 print(tabulate(rows, headers=["Strategy"] + COL_KEYS, tablefmt="rounded_grid"))
 
-# ── Attribution: time invested ─────────────────────────────────────────────
+# ── Attribution ────────────────────────────────────────────────────────────
 print("\n── Time allocation ──")
-for key, label in [("binary", "Binary"), ("proportional", "Proportional")]:
-    info = info_bin if key == "binary" else info_prop
-    pct_invested = info["weight"].mean()
-    pct_risky    = (info["weight"] > 0).mean()
-    print(f"  {label:20s}  avg allocation = {pct_invested:.1%}   "
-          f"weeks invested = {pct_risky:.1%}")
+for key in ("bayes_only", "gate_vt", "gate_regime", "gate_both", "compounded"):
+    info = {"bayes_only": info_bayes, "gate_vt": info_gvt,
+            "gate_regime": info_greg, "gate_both": info_both,
+            "compounded": info_comp}[key]
+    pct_alloc = info["weight"].mean()
+    pct_on    = (info["weight"] > 0).mean()
+    print(f"  {strategies[key][1]:32s}  avg wt = {pct_alloc:5.1%}   "
+          f"pct on = {pct_on:5.1%}")
 
-# ── v3 regime-timing quality: how often did we miss crashes? ───────────────
-print("\n── λ signal statistics ──")
-for key, label in [("binary", "Binary"), ("proportional", "Proportional")]:
-    info = info_bin if key == "binary" else info_prop
-    print(f"  {label}:  λ mean={info['lam'].mean():.3f}  "
-          f"std={info['lam'].std():.3f}  "
-          f"min={info['lam'].min():.3f}  "
-          f"max={info['lam'].max():.3f}")
+print("\n── Lever statistics ──")
+diag_ref = info_both   # levers computed in every strategy, same values
+print(f"  VT scaler      mean={diag_ref['vt'].mean():.2f}  "
+      f"std={diag_ref['vt'].std():.2f}  "
+      f"min={diag_ref['vt'].min():.2f}  "
+      f"max={diag_ref['vt'].max():.2f}")
+print(f"  Regime scaler  mean={diag_ref['regime'].mean():.2f}  "
+      f"std={diag_ref['regime'].std():.2f}  "
+      f"min={diag_ref['regime'].min():.2f}  "
+      f"max={diag_ref['regime'].max():.2f}")
+print(f"  λ (fixed 42d)  mean={diag_ref['lam'].mean():.2f}  "
+      f"std={diag_ref['lam'].std():.2f}  "
+      f"min={diag_ref['lam'].min():.2f}  "
+      f"max={diag_ref['lam'].max():.2f}")
 
-# ── Improvement vs B&H ─────────────────────────────────────────────────────
-print("\n── vs SPY Buy & Hold ──")
+# ── Delta vs Bayes-only ────────────────────────────────────────────────────
+print("\n── Marginal effect of each lever (vs Bayes-only gate) ──")
+bayes_m = all_m["bayes_only"]
 delta_rows = []
-for key, label in [("binary", "Binary"), ("proportional", "Proportional")]:
-    m = all_m[key]
-    row = [label]
+for key in ("gate_vt", "gate_regime", "gate_both", "compounded"):
+    row = [strategies[key][1]]
     for k in COL_KEYS:
-        d = m.get(k, 0) - spy_m.get(k, 0)
+        d = all_m[key].get(k, 0) - bayes_m.get(k, 0)
+        s = "+" if d > 0 else ""
+        row.append(f"{s}{d:.2%}" if k in ("CAGR","Max DD","Volatility") else f"{s}{d:.2f}")
+    delta_rows.append(row)
+print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
+               tablefmt="simple"))
+
+print("\n── Delta vs SPY Buy & Hold ──")
+delta_rows = []
+for key in ("bayes_only", "gate_vt", "gate_regime", "gate_both", "compounded"):
+    row = [strategies[key][1]]
+    for k in COL_KEYS:
+        d = all_m[key].get(k, 0) - spy_m.get(k, 0)
         s = "+" if d > 0 else ""
         row.append(f"{s}{d:.2%}" if k in ("CAGR","Max DD","Volatility") else f"{s}{d:.2f}")
     delta_rows.append(row)
@@ -195,101 +306,105 @@ print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
 
 # ── Plots ──────────────────────────────────────────────────────────────────
 fig = plt.figure(figsize=(22, 16))
-fig.suptitle("SPY Market Timing (BOCPD + EWMA Omega)  ·  2016–2024",
+fig.suptitle("SPY Timing  ·  Binary Bayesian gate with VT / regime size scalers  ·  2016–2024",
              fontsize=14, fontweight="bold")
 gs = gridspec.GridSpec(3, 3, figure=fig, hspace=0.50, wspace=0.35)
 
 ax_cum  = fig.add_subplot(gs[0, :])
 ax_dd   = fig.add_subplot(gs[1, 0])
 ax_sr   = fig.add_subplot(gs[1, 1])
-ax_lam  = fig.add_subplot(gs[1, 2])
-ax_wt   = fig.add_subplot(gs[2, 0])
-ax_erl  = fig.add_subplot(gs[2, 1])
-ax_hl   = fig.add_subplot(gs[2, 2])
+ax_wt   = fig.add_subplot(gs[1, 2])
+ax_vt   = fig.add_subplot(gs[2, 0])
+ax_reg  = fig.add_subplot(gs[2, 1])
+ax_erl  = fig.add_subplot(gs[2, 2])
 
 COLORS = {
-    "binary":      "#1A237E",   # deep navy
-    "proportional":"#1B5E20",   # dark green
     "bnh":         "#37474F",   # grey
+    "bayes_only":  "#1A237E",   # deep navy
+    "gate_vt":     "#00695C",   # deep teal
+    "gate_regime": "#E65100",   # deep orange
+    "gate_both":   "#1B5E20",   # dark green   (the fix)
+    "compounded":  "#B71C1C",   # dark red     (old, broken)
 }
+LWS = {k: (3.0 if k == "gate_both" else (1.5 if k == "bnh" else 2.0))
+       for k in COLORS}
+LSS = {k: ("--" if k == "bnh" else "-") for k in COLORS}
 _PCT    = mticker.FuncFormatter(lambda x, _: f"{x:.0%}")
 _DOLLAR = mticker.FuncFormatter(lambda x, _: f"${x:.2f}")
 
 # Cumulative wealth
 for key, (ret, label) in strategies.items():
     cum = (1 + ret.loc[BT_START:BT_END]).cumprod()
-    lw  = 2.5 if key != "bnh" else 1.5
-    ls  = "--" if key == "bnh" else "-"
-    ax_cum.plot(cum.index, cum.values, label=label, color=COLORS[key], lw=lw, ls=ls)
+    ax_cum.plot(cum.index, cum.values, label=label,
+                color=COLORS[key], lw=LWS[key], ls=LSS[key])
 ax_cum.set_yscale("log")
 ax_cum.yaxis.set_major_formatter(_DOLLAR)
 ax_cum.set_title("Cumulative Wealth (log scale)", fontweight="bold")
-ax_cum.legend(fontsize=10, framealpha=0.9)
+ax_cum.legend(fontsize=10, framealpha=0.9, ncol=3)
 
 # Drawdown
 for key, (ret, label) in strategies.items():
     cum = (1 + ret.loc[BT_START:BT_END]).cumprod()
     dd  = (cum - cum.cummax()) / (cum.cummax() + 1e-9)
-    ax_dd.plot(dd.index, dd.values, color=COLORS[key], lw=1.5, label=label,
-               ls="--" if key == "bnh" else "-")
+    ax_dd.plot(dd.index, dd.values, color=COLORS[key], lw=1.4, label=label,
+               ls=LSS[key])
 ax_dd.yaxis.set_major_formatter(_PCT)
-ax_dd.set_title("Drawdown", fontweight="bold"); ax_dd.legend(fontsize=8)
+ax_dd.set_title("Drawdown", fontweight="bold"); ax_dd.legend(fontsize=7)
 
 # Rolling Sharpe
 for key, (ret, label) in strategies.items():
     exc = ret.loc[BT_START:BT_END] - RF / 252
     rs  = exc.rolling(126).mean() / exc.rolling(126).std() * np.sqrt(252)
-    ax_sr.plot(rs.index, rs.values, color=COLORS[key], lw=1.5, label=label,
-               ls="--" if key == "bnh" else "-")
+    ax_sr.plot(rs.index, rs.values, color=COLORS[key], lw=1.4, label=label,
+               ls=LSS[key])
 ax_sr.axhline(0, color="black", lw=0.6, ls="--")
 ax_sr.axhline(1, color="green", lw=0.5, ls=":", alpha=0.6)
-ax_sr.set_title("Rolling 6-Month Sharpe", fontweight="bold"); ax_sr.legend(fontsize=8)
+ax_sr.set_title("Rolling 6-Month Sharpe", fontweight="bold"); ax_sr.legend(fontsize=7)
 
-# λ over time
-ax_lam.plot(info_bin.index, info_bin["lam"].values, color=COLORS["binary"], lw=1.2)
-ax_lam.fill_between(info_bin.index, 0.5, info_bin["lam"].values,
-                    where=info_bin["lam"].values > 0.5, alpha=0.25, color="green",
-                    label="Risk-on (λ > 0.5)")
-ax_lam.fill_between(info_bin.index, 0.5, info_bin["lam"].values,
-                    where=info_bin["lam"].values < 0.5, alpha=0.25, color="red",
-                    label="Risk-off (λ < 0.5)")
-ax_lam.axhline(0.5, color="black", lw=0.8, ls="--")
-ax_lam.set_ylim(0.0, 0.9); ax_lam.set_title("λ Signal (EWMA Omega)", fontweight="bold")
-ax_lam.legend(fontsize=8)
-
-# SPY allocation over time (proportional)
-ax_wt.fill_between(info_prop.index, 0, info_prop["weight"].values * 100,
-                   alpha=0.6, color=COLORS["proportional"])
-ax_wt.axhline(50, color="black", lw=0.6, ls="--", alpha=0.5)
-ax_wt.set_ylim(0, 105)
+# Effective weight paths for the three lever combos
+ax_wt.plot(info_bayes.index, info_bayes["weight"].values * 100,
+           color=COLORS["bayes_only"], lw=1.1, label="Bayes-only (0/100)")
+ax_wt.plot(info_both.index,  info_both["weight"].values * 100,
+           color=COLORS["gate_both"],  lw=1.5, label="Gate × VT × Regime")
+ax_wt.plot(info_comp.index,  info_comp["weight"].values * 100,
+           color=COLORS["compounded"], lw=1.1, label="Compounded (old)", alpha=0.8)
+ax_wt.axhline(100, color="black", lw=0.6, ls="--", alpha=0.5)
 ax_wt.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x,_: f"{x:.0f}%"))
-ax_wt.set_title("SPY Allocation (proportional)", fontweight="bold")
+ax_wt.set_title("Effective SPY weight", fontweight="bold")
+ax_wt.legend(fontsize=8)
+
+# VT scaler
+ax_vt.plot(info_both.index, info_both["vt"].values, color="#00695C", lw=1.2)
+ax_vt.fill_between(info_both.index, 0, info_both["vt"].values, alpha=0.2, color="#00695C")
+ax_vt.axhline(1.0, color="black", lw=0.6, ls="--")
+ax_vt.axhline(LEVERAGE_CAP, color="red", lw=0.5, ls=":", alpha=0.7, label=f"cap {LEVERAGE_CAP}×")
+ax_vt.set_title("VT scaler = σ_target / σ_realized", fontweight="bold")
+ax_vt.legend(fontsize=7)
+
+# Regime scaler
+ax_reg.plot(info_both.index, info_both["regime"].values, color="#E65100", lw=1.2)
+ax_reg.fill_between(info_both.index, 0.5, info_both["regime"].values, alpha=0.2, color="#E65100")
+ax_reg.set_ylim(0.45, 1.05)
+ax_reg.set_title("Regime scaler = f(ERL)", fontweight="bold")
 
 # ERL
-ax_erl.plot(info_bin.index, info_bin["erl"].values, color="#5C6BC0", lw=1.2)
-ax_erl.fill_between(info_bin.index, 0, info_bin["erl"].values, alpha=0.2, color="#5C6BC0")
-ax_erl.axhline(42, color="orange", lw=0.8, ls="--", alpha=0.7, label="ERL=42")
-ax_erl.axhline(126, color="red", lw=0.6, ls=":", alpha=0.6, label="ERL=126")
+ax_erl.plot(info_both.index, info_both["erl"].values, color="#5C6BC0", lw=1.1)
+ax_erl.fill_between(info_both.index, 0, info_both["erl"].values, alpha=0.2, color="#5C6BC0")
+ax_erl.axhline(ERL_FULL, color="green", lw=0.8, ls="--", alpha=0.7, label=f"ERL={ERL_FULL:.0f}")
 ax_erl.set_title("BOCPD Expected Run Length", fontweight="bold")
-ax_erl.legend(fontsize=8)
-
-# Adaptive halflife
-ax_hl.plot(info_bin.index, info_bin["hl"].values, color="#E65100", lw=1.2)
-ax_hl.fill_between(info_bin.index, 14, info_bin["hl"].values, alpha=0.2, color="#E65100")
-ax_hl.axhline(42, color="green", lw=0.8, ls="--", alpha=0.7, label="hl=42 (mid)")
-ax_hl.set_ylim(10, 90)
-ax_hl.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x,_: f"{x:.0f}d"))
-ax_hl.set_title("Adaptive EWMA Halflife = clip(ERL/3, 14, 84)", fontweight="bold")
-ax_hl.legend(fontsize=8)
+ax_erl.legend(fontsize=7)
 
 fig.savefig(RESULTS_DIR / "spy_timing.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
 logger.info("Saved: results/spy_timing.png")
 
 out = pd.DataFrame({
-    "binary":       ret_bin,
-    "proportional": ret_prop,
-    "SPY_BnH":      spy_bt,
+    "bnh":         spy_bt,
+    "bayes_only":  ret_bayes,
+    "gate_vt":     ret_gvt,
+    "gate_regime": ret_greg,
+    "gate_both":   ret_both,
+    "compounded":  ret_comp,
 })
 out.to_csv(RESULTS_DIR / "spy_timing_returns.csv")
 logger.info("Saved: results/spy_timing_returns.csv")
