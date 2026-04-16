@@ -32,12 +32,27 @@ Final weight = gate × ∏ scalers,  then capped at the leverage cap.
 
 Strategies
 ----------
-  bnh             SPY buy & hold                     (baseline)
-  bayes_only      gate = λ_fixed > 0.5, no levers    (pure Bayesian binary)
-  gate_vt         gate × VT scaler
-  gate_regime     gate × regime scaler (ERL-based)
-  gate_both       gate × VT × regime scaler          (the proposed fix)
-  compounded      continuous λ × VT × regime         (old multi-lever design, for contrast)
+  bnh              SPY buy & hold                     (baseline)
+  bayes_only       gate = λ_fixed > 0.5, no levers    (pure Bayesian binary)
+  gate_vt          gate × VT scaler
+  gate_regime      gate × regime scaler (ERL-based)
+  gate_both        gate × VT × regime scaler          (levers on the Bayes gate)
+  compounded       continuous λ × VT × regime         (old multi-lever design, for contrast)
+
+  bayes_trend      ensemble OR-gate  (λ_fixed > 0.5  OR  SPY > 200d SMA), no levers
+  bayes_trend_vt   ensemble OR-gate × VT × regime
+
+Why the ensemble gate
+---------------------
+The Omega-λ gate measures a *rate-based* signal (weighted up/down day ratio);
+the 200d SMA measures a *level-based* trend. Their classification errors are
+largely uncorrelated — textbook ensemble setup. Time-series momentum via
+long-horizon trend filters is one of the most out-of-sample-robust findings
+in empirical asset pricing (Moskowitz/Ooi/Pedersen 2012; 58 instruments,
+century-long sample), and the 200d SMA is its canonical non-tuned daily
+implementation. Combining via OR-gate (either signal lets us stay in) keeps
+us invested during uptrends that Omega alone fades, while still flipping
+off when *both* signals concur that the regime has broken.
 
 Common parameters
 -----------------
@@ -79,6 +94,7 @@ TARGET_VOL   = 0.10
 LEVERAGE_CAP = 1.50
 FIXED_HL     = 42.0     # fixed EWMA halflife for the Bayesian gate
 ERL_FULL     = 126.0    # ERL at which the regime scaler reaches 1.0
+TREND_WIN    = 200      # trailing SMA window for the trend-ensemble gate
 _ANN = 252
 _EPS = 1e-8
 
@@ -99,6 +115,11 @@ logger.info("Pre-computing BOCPD on SPY …")
 _cp_arr, _erl_arr = precompute_bocpd(spy.values, hazard=1 / 252)
 bocpd_erl = pd.Series(_erl_arr, index=spy.index)
 bocpd_cp  = pd.Series(_cp_arr,  index=spy.index)
+
+# ── Pre-compute 200d SMA trend signal on SPY prices ────────────────────────
+spy_price  = df["SPY"].reindex(spy.index).ffill()
+spy_sma    = spy_price.rolling(TREND_WIN, min_periods=TREND_WIN).mean()
+trend_on   = (spy_price > spy_sma).astype(float)   # 1.0 when price above SMA
 
 # ── Rebalance grid ─────────────────────────────────────────────────────────
 try:
@@ -129,7 +150,7 @@ def regime_scaler(erl: float) -> float:
 
 def run_strategy(weight_fn, label):
     """
-    weight_fn(lam_fixed, lam_continuous, erl, recent) -> float in [0, leverage_cap].
+    weight_fn(lam_fixed, lam_continuous, erl, recent, trend) -> float in [0, leverage_cap].
     Returns daily return Series and a diagnostic DataFrame keyed by rebal date.
     """
     port_rets, ret_dates = [], []
@@ -144,6 +165,9 @@ def run_strategy(weight_fn, label):
         window = hist.values[-LOOKBACK:].reshape(-1, 1)   # (T, 1) for compute_continuous_lam
         recent = hist.values[-VOL_WIN:]
         erl    = float(bocpd_erl.loc[:rebal_t].iloc[-1])
+        trend  = float(trend_on.loc[:rebal_t].iloc[-1])    # 0.0 or 1.0 (NaN-safe below)
+        if not np.isfinite(trend):
+            trend = 0.0
 
         # Fixed-halflife λ  — the Bayesian binary gate signal
         lam_fixed = compute_continuous_lam(
@@ -154,7 +178,7 @@ def run_strategy(weight_fn, label):
         # Continuous λ retained for the legacy "compounded" comparison
         lam_cont = lam_fixed   # same call; separate name for clarity at callsite
 
-        w = float(np.clip(weight_fn(lam_fixed, lam_cont, erl, recent),
+        w = float(np.clip(weight_fn(lam_fixed, lam_cont, erl, recent, trend),
                           0.0, LEVERAGE_CAP))
 
         # Transaction cost on effective weight change
@@ -174,12 +198,12 @@ def run_strategy(weight_fn, label):
         port_rets.extend(pf.tolist())
         ret_dates.extend(period.index.tolist())
         diag.append((rebal_t, w, lam_fixed, erl,
-                     vt_scaler(recent), regime_scaler(erl)))
+                     vt_scaler(recent), regime_scaler(erl), trend))
 
         prev_w = w
 
     ret_s   = pd.Series(port_rets, index=ret_dates, name=label)
-    diag_df = pd.DataFrame(diag, columns=["date","weight","lam","erl","vt","regime"])
+    diag_df = pd.DataFrame(diag, columns=["date","weight","lam","erl","vt","regime","trend"])
     diag_df = diag_df.set_index("date")
     return ret_s, diag_df
 
@@ -189,24 +213,33 @@ def run_strategy(weight_fn, label):
 #   size_both   = gate × vt × regime
 #   compounded  = lam × vt × regime  (old design, for contrast)
 
-def _gate(lam):         return 1.0 if lam > 0.5 else 0.0
+def _gate(lam):              return 1.0 if lam > 0.5 else 0.0
+def _gate_or(lam, trend):    return 1.0 if (lam > 0.5 or trend > 0.5) else 0.0
 
-def w_bayes_only(lam_fix, lam_c, erl, recent):
+def w_bayes_only(lam_fix, lam_c, erl, recent, trend):
     return _gate(lam_fix)
 
-def w_gate_vt(lam_fix, lam_c, erl, recent):
+def w_gate_vt(lam_fix, lam_c, erl, recent, trend):
     return _gate(lam_fix) * vt_scaler(recent)
 
-def w_gate_regime(lam_fix, lam_c, erl, recent):
+def w_gate_regime(lam_fix, lam_c, erl, recent, trend):
     return _gate(lam_fix) * regime_scaler(erl)
 
-def w_gate_both(lam_fix, lam_c, erl, recent):
+def w_gate_both(lam_fix, lam_c, erl, recent, trend):
     return _gate(lam_fix) * vt_scaler(recent) * regime_scaler(erl)
 
-def w_compounded(lam_fix, lam_c, erl, recent):
+def w_compounded(lam_fix, lam_c, erl, recent, trend):
     # Old multi-lever design: continuous λ ∈ [0.1, 0.8] treated as allocation,
     # multiplied by VT and regime. All three can shrink size simultaneously.
     return lam_c * vt_scaler(recent) * regime_scaler(erl)
+
+def w_bayes_trend(lam_fix, lam_c, erl, recent, trend):
+    # Ensemble OR-gate: Bayesian λ OR 200d trend — no levers.
+    return _gate_or(lam_fix, trend)
+
+def w_bayes_trend_vt(lam_fix, lam_c, erl, recent, trend):
+    # Ensemble OR-gate × VT × regime.
+    return _gate_or(lam_fix, trend) * vt_scaler(recent) * regime_scaler(erl)
 
 
 logger.info("bayes_only  — binary gate, no levers")
@@ -224,6 +257,12 @@ ret_both,  info_both  = run_strategy(w_gate_both, "gate_both")
 logger.info("compounded  — λ_continuous × VT × regime  (old multi-lever design)")
 ret_comp,  info_comp  = run_strategy(w_compounded, "compounded")
 
+logger.info("bayes_trend — ensemble OR-gate (λ OR SPY>200d), no levers")
+ret_btrend, info_btrend = run_strategy(w_bayes_trend, "bayes_trend")
+
+logger.info("bayes_trend_vt — ensemble OR-gate × VT × regime")
+ret_btrend_vt, info_btrend_vt = run_strategy(w_bayes_trend_vt, "bayes_trend_vt")
+
 # ── Metrics ────────────────────────────────────────────────────────────────
 COL_KEYS = ["CAGR", "Sharpe", "Sortino", "Max DD", "Calmar", "Volatility"]
 
@@ -231,12 +270,14 @@ def fmt(v, k):
     return f"{v:.2%}" if k in ("CAGR", "Max DD", "Volatility") else f"{v:.2f}"
 
 strategies = {
-    "bnh":         (spy_bt,    "SPY Buy & Hold"),
-    "bayes_only":  (ret_bayes, "Bayes-only  (gate, no levers)"),
-    "gate_vt":     (ret_gvt,   "Gate × VT"),
-    "gate_regime": (ret_greg,  "Gate × Regime"),
-    "gate_both":   (ret_both,  "Gate × VT × Regime  (fix)"),
-    "compounded":  (ret_comp,  "λ × VT × Regime  (old)"),
+    "bnh":            (spy_bt,        "SPY Buy & Hold"),
+    "bayes_only":     (ret_bayes,     "Bayes-only  (gate, no levers)"),
+    "gate_vt":        (ret_gvt,       "Gate × VT"),
+    "gate_regime":    (ret_greg,      "Gate × Regime"),
+    "gate_both":      (ret_both,      "Gate × VT × Regime"),
+    "compounded":     (ret_comp,      "λ × VT × Regime  (old)"),
+    "bayes_trend":    (ret_btrend,    "Bayes∪Trend  (ensemble gate)"),
+    "bayes_trend_vt": (ret_btrend_vt, "Bayes∪Trend × VT × Regime"),
 }
 
 spy_m = compute_metrics(spy_bt, rf=RF)
@@ -254,13 +295,20 @@ print(tabulate(rows, headers=["Strategy"] + COL_KEYS, tablefmt="rounded_grid"))
 
 # ── Attribution ────────────────────────────────────────────────────────────
 print("\n── Time allocation ──")
-for key in ("bayes_only", "gate_vt", "gate_regime", "gate_both", "compounded"):
-    info = {"bayes_only": info_bayes, "gate_vt": info_gvt,
-            "gate_regime": info_greg, "gate_both": info_both,
-            "compounded": info_comp}[key]
+INFOS = {
+    "bayes_only":     info_bayes,
+    "gate_vt":        info_gvt,
+    "gate_regime":    info_greg,
+    "gate_both":      info_both,
+    "compounded":     info_comp,
+    "bayes_trend":    info_btrend,
+    "bayes_trend_vt": info_btrend_vt,
+}
+for key in INFOS:
+    info = INFOS[key]
     pct_alloc = info["weight"].mean()
     pct_on    = (info["weight"] > 0).mean()
-    print(f"  {strategies[key][1]:32s}  avg wt = {pct_alloc:5.1%}   "
+    print(f"  {strategies[key][1]:35s}  avg wt = {pct_alloc:5.1%}   "
           f"pct on = {pct_on:5.1%}")
 
 print("\n── Lever statistics ──")
@@ -279,10 +327,11 @@ print(f"  λ (fixed 42d)  mean={diag_ref['lam'].mean():.2f}  "
       f"max={diag_ref['lam'].max():.2f}")
 
 # ── Delta vs Bayes-only ────────────────────────────────────────────────────
-print("\n── Marginal effect of each lever (vs Bayes-only gate) ──")
+print("\n── Marginal effect of each lever / ensemble (vs Bayes-only gate) ──")
 bayes_m = all_m["bayes_only"]
 delta_rows = []
-for key in ("gate_vt", "gate_regime", "gate_both", "compounded"):
+for key in ("gate_vt", "gate_regime", "gate_both", "compounded",
+            "bayes_trend", "bayes_trend_vt"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
         d = all_m[key].get(k, 0) - bayes_m.get(k, 0)
@@ -294,7 +343,8 @@ print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
 
 print("\n── Delta vs SPY Buy & Hold ──")
 delta_rows = []
-for key in ("bayes_only", "gate_vt", "gate_regime", "gate_both", "compounded"):
+for key in ("bayes_only", "gate_vt", "gate_regime", "gate_both", "compounded",
+            "bayes_trend", "bayes_trend_vt"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
         d = all_m[key].get(k, 0) - spy_m.get(k, 0)
@@ -303,6 +353,15 @@ for key in ("bayes_only", "gate_vt", "gate_regime", "gate_both", "compounded"):
     delta_rows.append(row)
 print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
                tablefmt="simple"))
+
+# ── Signal agreement diagnostics ───────────────────────────────────────────
+print("\n── Signal agreement (Bayes-λ vs 200d trend) ──")
+both_on  = ((info_btrend["lam"] > 0.5) & (info_btrend["trend"] > 0.5)).mean()
+only_lam = ((info_btrend["lam"] > 0.5) & (info_btrend["trend"] <= 0.5)).mean()
+only_tr  = ((info_btrend["lam"] <= 0.5) & (info_btrend["trend"] > 0.5)).mean()
+both_off = ((info_btrend["lam"] <= 0.5) & (info_btrend["trend"] <= 0.5)).mean()
+print(f"  both on          {both_on:5.1%}    only λ says on    {only_lam:5.1%}")
+print(f"  only trend on    {only_tr:5.1%}    both off (exit)   {both_off:5.1%}")
 
 # ── Plots ──────────────────────────────────────────────────────────────────
 fig = plt.figure(figsize=(22, 16))
@@ -319,14 +378,16 @@ ax_reg  = fig.add_subplot(gs[2, 1])
 ax_erl  = fig.add_subplot(gs[2, 2])
 
 COLORS = {
-    "bnh":         "#37474F",   # grey
-    "bayes_only":  "#1A237E",   # deep navy
-    "gate_vt":     "#00695C",   # deep teal
-    "gate_regime": "#E65100",   # deep orange
-    "gate_both":   "#1B5E20",   # dark green   (the fix)
-    "compounded":  "#B71C1C",   # dark red     (old, broken)
+    "bnh":            "#37474F",   # grey
+    "bayes_only":     "#1A237E",   # deep navy
+    "gate_vt":        "#00695C",   # deep teal
+    "gate_regime":    "#E65100",   # deep orange
+    "gate_both":      "#1B5E20",   # dark green
+    "compounded":     "#B71C1C",   # dark red     (old, broken)
+    "bayes_trend":    "#6A1B9A",   # deep purple  (ensemble)
+    "bayes_trend_vt": "#C2185B",   # deep pink    (ensemble + levers)
 }
-LWS = {k: (3.0 if k == "gate_both" else (1.5 if k == "bnh" else 2.0))
+LWS = {k: (3.0 if k == "bayes_trend" else (1.5 if k == "bnh" else 2.0))
        for k in COLORS}
 LSS = {k: ("--" if k == "bnh" else "-") for k in COLORS}
 _PCT    = mticker.FuncFormatter(lambda x, _: f"{x:.0%}")
@@ -361,13 +422,13 @@ ax_sr.axhline(0, color="black", lw=0.6, ls="--")
 ax_sr.axhline(1, color="green", lw=0.5, ls=":", alpha=0.6)
 ax_sr.set_title("Rolling 6-Month Sharpe", fontweight="bold"); ax_sr.legend(fontsize=7)
 
-# Effective weight paths for the three lever combos
-ax_wt.plot(info_bayes.index, info_bayes["weight"].values * 100,
-           color=COLORS["bayes_only"], lw=1.1, label="Bayes-only (0/100)")
-ax_wt.plot(info_both.index,  info_both["weight"].values * 100,
-           color=COLORS["gate_both"],  lw=1.5, label="Gate × VT × Regime")
-ax_wt.plot(info_comp.index,  info_comp["weight"].values * 100,
-           color=COLORS["compounded"], lw=1.1, label="Compounded (old)", alpha=0.8)
+# Effective weight paths for the main strategies
+ax_wt.plot(info_bayes.index,  info_bayes["weight"].values * 100,
+           color=COLORS["bayes_only"],  lw=1.1, label="Bayes-only (0/100)")
+ax_wt.plot(info_btrend.index, info_btrend["weight"].values * 100,
+           color=COLORS["bayes_trend"], lw=1.5, label="Bayes∪Trend")
+ax_wt.plot(info_comp.index,   info_comp["weight"].values * 100,
+           color=COLORS["compounded"],  lw=1.1, label="Compounded (old)", alpha=0.8)
 ax_wt.axhline(100, color="black", lw=0.6, ls="--", alpha=0.5)
 ax_wt.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x,_: f"{x:.0f}%"))
 ax_wt.set_title("Effective SPY weight", fontweight="bold")
@@ -399,12 +460,14 @@ plt.close(fig)
 logger.info("Saved: results/spy_timing.png")
 
 out = pd.DataFrame({
-    "bnh":         spy_bt,
-    "bayes_only":  ret_bayes,
-    "gate_vt":     ret_gvt,
-    "gate_regime": ret_greg,
-    "gate_both":   ret_both,
-    "compounded":  ret_comp,
+    "bnh":            spy_bt,
+    "bayes_only":     ret_bayes,
+    "gate_vt":        ret_gvt,
+    "gate_regime":    ret_greg,
+    "gate_both":      ret_both,
+    "compounded":     ret_comp,
+    "bayes_trend":    ret_btrend,
+    "bayes_trend_vt": ret_btrend_vt,
 })
 out.to_csv(RESULTS_DIR / "spy_timing_returns.csv")
 logger.info("Saved: results/spy_timing_returns.csv")
