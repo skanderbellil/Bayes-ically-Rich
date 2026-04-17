@@ -234,6 +234,18 @@ for t in range(max(HURST_WIN, KER_WIN + 1), len(spy) + 1):
 hurst_series = pd.Series(_H,   index=spy.index)
 ker_series   = pd.Series(_KER, index=spy.index)
 
+# Data-driven KER threshold: rolling 70th percentile of KER itself over 252d.
+# Kaufman's literature threshold of 0.30 is calibrated for single names / commodities;
+# SPY's KER distribution is compressed (mean ≈ 0.12, max ≈ 0.41 on this sample), so
+# a fixed threshold either never fires or always fires. A rolling self-quantile makes
+# the "trending" call instrument-relative and therefore portable.
+ker_q70_series = ker_series.rolling(252, min_periods=60).quantile(0.70)
+
+# Continuous Hurst sizer: linear ramp from H=0.50 (w=0) to H=0.60 (w=1).
+# Smooth version of the binary H > 0.55 trigger; reduces weight churn at the boundary.
+def hurst_size(h: float) -> float:
+    return float(np.clip((h - 0.50) / 0.10, 0.0, 1.0))
+
 
 # ── Unified backtest loop ──────────────────────────────────────────────────
 
@@ -269,6 +281,7 @@ def run_strategy(weight_fn, label):
             "golden":   _safe_float(golden_cross.loc[:rebal_t].iloc[-1]),
             "hurst":    _safe_float(hurst_series.loc[:rebal_t].iloc[-1], default=0.5),
             "ker":      _safe_float(ker_series.loc[:rebal_t].iloc[-1],   default=0.0),
+            "ker_thr":  _safe_float(ker_q70_series.loc[:rebal_t].iloc[-1], default=0.30),
         }
         trend = sig["trend200"]   # legacy binding for old weight_fns below
 
@@ -302,14 +315,14 @@ def run_strategy(weight_fn, label):
         diag.append((rebal_t, w, lam_fixed, erl,
                      vt_scaler(recent), regime_scaler(erl),
                      sig["trend50"], sig["trend200"], sig["golden"],
-                     sig["hurst"], sig["ker"]))
+                     sig["hurst"], sig["ker"], sig["ker_thr"]))
 
         prev_w = w
 
     ret_s   = pd.Series(port_rets, index=ret_dates, name=label)
     diag_df = pd.DataFrame(diag, columns=["date","weight","lam","erl","vt","regime",
                                            "trend50","trend200","golden",
-                                           "hurst","ker"])
+                                           "hurst","ker","ker_thr"])
     diag_df = diag_df.set_index("date")
     return ret_s, diag_df
 
@@ -420,6 +433,77 @@ def w_kama_bull(lam_fix, lam_c, erl, recent, sig, state):
     bull = (sig["ker"] > KER_UP) and (sig["trend200"] > 0.5)
     return 1.0 if bull else 0.0
 
+# 10. Kaufman-bull-adaptive — uses a rolling 70th-percentile of KER as its own
+#     threshold rather than Kaufman's 0.30 literature value. Self-adapts to the
+#     instrument's KER distribution; relevant because SPY's KER is compressed.
+def w_kama_bull_adapt(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    bull = (sig["ker"] > sig["ker_thr"]) and (sig["trend200"] > 0.5)
+    return 1.0 if bull else 0.0
+
+# 11. Hurst-bull-VT — Hurst gate × vol targeting. The binary Hurst-bull runs at
+#     ~9% realised vol, well under SPY's 18%. Vol-targeting the surviving signal
+#     levers the "on" periods up toward 10% target, recapturing CAGR without
+#     giving back the ERL-kill drawdown protection.
+def w_hurst_bull_vt(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    bull = (sig["hurst"] > HURST_UP) and (sig["trend200"] > 0.5)
+    return vt_scaler(recent) if bull else 0.0
+
+# 12. Hurst-continuous — smooth sizer: w = ramp(H: 0.50→0.60) × drift flag × VT.
+#     Avoids binary churn at H ≈ 0.55. Drift filter kept binary (price vs SMA200).
+def w_hurst_cont(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    if sig["trend200"] <= 0.5:
+        return 0.0
+    return hurst_size(sig["hurst"]) * vt_scaler(recent)
+
+# 13. Hurst ∩ KER-adaptive — both persistence estimators must agree. Strict
+#     gate; expected to be more selective than either alone, lowest drawdown.
+def w_hurst_and_ker(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    bull = ((sig["hurst"] > HURST_UP)
+            and (sig["ker"] > sig["ker_thr"])
+            and (sig["trend200"] > 0.5))
+    return 1.0 if bull else 0.0
+
+# 14. Hurst ∪ KER-adaptive — either estimator fires (with drift confirmation).
+#     More inclusive; expected higher time-in-market and CAGR than the AND.
+def w_hurst_or_ker(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    if sig["trend200"] <= 0.5:
+        return 0.0
+    on = (sig["hurst"] > HURST_UP) or (sig["ker"] > sig["ker_thr"])
+    return 1.0 if on else 0.0
+
+# 15. Hurst-bull-levered — fixed 1.5× leverage while the bull signal is on.
+#     Rationale: Hurst-bull only fires when persistence is high AND drift is
+#     positive AND the Bayesian change-point detector hasn't spotted a regime
+#     flip — i.e., exactly the conditions under which leverage is historically
+#     safe. This is the "regime-conditional leverage" rule: don't scale to vol,
+#     scale to the reliability of the trend itself.
+LEV_FIXED = 1.50
+def w_hurst_bull_lev(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    bull = (sig["hurst"] > HURST_UP) and (sig["trend200"] > 0.5)
+    return LEV_FIXED if bull else 0.0
+
+# 16. Hurst-ramp-levered — smooth ramp (H: 0.50→0.60 → [0,1]) × 1.5.
+#     Smoother entry/exit; size scales continuously with persistence strength.
+#     Hybrid of the continuous sizer (12) and the fixed-leverage binary (15).
+def w_hurst_ramp_lev(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    if sig["trend200"] <= 0.5:
+        return 0.0
+    return hurst_size(sig["hurst"]) * LEV_FIXED
+
 
 logger.info("bayes_only  — binary gate, no levers")
 ret_bayes, info_bayes = run_strategy(w_bayes_only, "bayes_only")
@@ -471,6 +555,27 @@ ret_hb, info_hb       = run_strategy(w_hurst_bull, "hurst_bull")
 logger.info("kama_bull     — KER>0.30  ∧ SPY>SMA200, ERL<15 kill")
 ret_kb, info_kb       = run_strategy(w_kama_bull, "kama_bull")
 
+logger.info("kama_bull_adapt — KER > rolling-q70(KER) ∧ drift, ERL-kill")
+ret_kba, info_kba     = run_strategy(w_kama_bull_adapt, "kama_bull_adapt")
+
+logger.info("hurst_bull_vt  — Hurst-bull × vol targeting")
+ret_hbvt, info_hbvt   = run_strategy(w_hurst_bull_vt, "hurst_bull_vt")
+
+logger.info("hurst_cont     — continuous Hurst sizer × drift × VT")
+ret_hc, info_hc       = run_strategy(w_hurst_cont, "hurst_cont")
+
+logger.info("hurst_and_ker  — Hurst ∧ adaptive-KER ∧ drift, ERL-kill")
+ret_hak, info_hak     = run_strategy(w_hurst_and_ker, "hurst_and_ker")
+
+logger.info("hurst_or_ker   — Hurst ∨ adaptive-KER ∧ drift, ERL-kill")
+ret_hok, info_hok     = run_strategy(w_hurst_or_ker, "hurst_or_ker")
+
+logger.info("hurst_bull_lev — Hurst-bull × fixed 1.5× leverage")
+ret_hbl, info_hbl     = run_strategy(w_hurst_bull_lev, "hurst_bull_lev")
+
+logger.info("hurst_ramp_lev — continuous Hurst sizer × 1.5× leverage")
+ret_hrl, info_hrl     = run_strategy(w_hurst_ramp_lev, "hurst_ramp_lev")
+
 # ── Metrics ────────────────────────────────────────────────────────────────
 COL_KEYS = ["CAGR", "Sharpe", "Sortino", "Max DD", "Calmar", "Volatility"]
 
@@ -497,6 +602,13 @@ strategies = {
     # physics-inspired bull-trend detectors
     "hurst_bull":     (ret_hb,        "Hurst-bull  (H>0.55 ∧ drift, ERL-kill)"),
     "kama_bull":      (ret_kb,        "Kaufman-bull  (KER>0.30 ∧ drift, ERL-kill)"),
+    "kama_bull_adapt":(ret_kba,       "Kaufman-bull  (KER>roll-q70 ∧ drift, ERL-kill)"),
+    "hurst_bull_vt":  (ret_hbvt,      "Hurst-bull × VT  (levered winner)"),
+    "hurst_cont":     (ret_hc,        "Hurst-continuous × drift × VT"),
+    "hurst_and_ker":  (ret_hak,       "Hurst ∧ KER-adapt ∧ drift, ERL-kill"),
+    "hurst_or_ker":   (ret_hok,       "Hurst ∨ KER-adapt ∧ drift, ERL-kill"),
+    "hurst_bull_lev": (ret_hbl,       "Hurst-bull × 1.5× leverage"),
+    "hurst_ramp_lev": (ret_hrl,       "Hurst-ramp × 1.5× leverage"),
 }
 
 spy_m = compute_metrics(spy_bt, rf=RF)
@@ -531,6 +643,13 @@ INFOS = {
     "super":          info_sup,
     "hurst_bull":     info_hb,
     "kama_bull":      info_kb,
+    "kama_bull_adapt":info_kba,
+    "hurst_bull_vt":  info_hbvt,
+    "hurst_cont":     info_hc,
+    "hurst_and_ker":  info_hak,
+    "hurst_or_ker":   info_hok,
+    "hurst_bull_lev": info_hbl,
+    "hurst_ramp_lev": info_hrl,
 }
 for key in INFOS:
     info = INFOS[key]
@@ -560,7 +679,10 @@ base_m = all_m["bayes_trend"]
 delta_rows = []
 for key in ("bayes_only", "and_trend200", "triple_or", "majority_3",
             "golden_or", "asym_persist", "erl_kill", "super",
-            "hurst_bull", "kama_bull",
+            "hurst_bull", "kama_bull", "kama_bull_adapt",
+            "hurst_bull_vt", "hurst_cont",
+            "hurst_and_ker", "hurst_or_ker",
+            "hurst_bull_lev", "hurst_ramp_lev",
             "bayes_trend_vt"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
@@ -575,7 +697,10 @@ print("\n── Delta vs SPY Buy & Hold ──")
 delta_rows = []
 for key in ("bayes_only", "bayes_trend", "and_trend200", "triple_or",
             "majority_3", "golden_or", "asym_persist", "erl_kill", "super",
-            "hurst_bull", "kama_bull"):
+            "hurst_bull", "kama_bull", "kama_bull_adapt",
+            "hurst_bull_vt", "hurst_cont",
+            "hurst_and_ker", "hurst_or_ker",
+            "hurst_bull_lev", "hurst_ramp_lev"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
         d = all_m[key].get(k, 0) - spy_m.get(k, 0)
@@ -600,7 +725,10 @@ for label, s, e in SUBS:
     rows_sub = []
     for key in ("bnh", "bayes_only", "bayes_trend", "majority_3",
                 "erl_kill", "super", "and_trend200", "triple_or",
-                "hurst_bull", "kama_bull"):
+                "hurst_bull", "kama_bull", "kama_bull_adapt",
+                "hurst_bull_vt", "hurst_cont",
+                "hurst_and_ker", "hurst_or_ker",
+            "hurst_bull_lev", "hurst_ramp_lev"):
         ret = strategies[key][0].loc[s:e]
         m   = compute_metrics(ret, rf=RF)
         rows_sub.append([strategies[key][1]] +
@@ -620,9 +748,14 @@ print(f"  Kaufman ER   (126d):  mean={_k_reb.mean():.3f}  std={_k_reb.std():.3f}
       f"min={_k_reb.min():.3f}  max={_k_reb.max():.3f}  "
       f"%>{KER_UP:.2f}={float((_k_reb > KER_UP).mean()):.1%}")
 # Joint bull condition (persistence × drift) — how often each gate actually fires.
-_h_on = ((info_hb["hurst"] > HURST_UP) & (info_hb["trend200"] > 0.5)).mean()
-_k_on = ((info_kb["ker"]   > KER_UP)   & (info_kb["trend200"] > 0.5)).mean()
-print(f"  Hurst-bull   raw-on:  {_h_on:.1%}    Kaufman-bull raw-on: {_k_on:.1%}")
+_h_on  = ((info_hb["hurst"]  > HURST_UP)         & (info_hb["trend200"]  > 0.5)).mean()
+_k_on  = ((info_kb["ker"]    > KER_UP)           & (info_kb["trend200"]  > 0.5)).mean()
+_ka_on = ((info_kba["ker"]   > info_kba["ker_thr"]) & (info_kba["trend200"] > 0.5)).mean()
+print(f"  Hurst-bull   raw-on:  {_h_on:.1%}    Kaufman-bull raw-on: {_k_on:.1%}    "
+      f"Kaufman-adapt raw-on: {_ka_on:.1%}")
+_thr = info_kba["ker_thr"].dropna()
+print(f"  Adaptive KER threshold (rolling q70):  mean={_thr.mean():.3f}  "
+      f"min={_thr.min():.3f}  max={_thr.max():.3f}")
 
 # ── Signal agreement diagnostics ───────────────────────────────────────────
 print("\n── Signal agreement (Bayes-λ vs 200d trend) ──")
@@ -664,7 +797,14 @@ COLORS = {
     "erl_kill":       "#D84315",   # orange-red   (ERL kill switch)
     "super":          "#263238",   # near-black   (super ensemble)
     "hurst_bull":     "#AD1457",   # magenta      (Hurst)
-    "kama_bull":      "#0D47A1",   # deep blue    (KER)
+    "kama_bull":      "#0D47A1",   # deep blue    (KER literature)
+    "kama_bull_adapt":"#5E35B1",   # purple       (KER adaptive)
+    "hurst_bull_vt":  "#F06292",   # pink         (Hurst × VT)
+    "hurst_cont":     "#00838F",   # teal         (Hurst continuous)
+    "hurst_and_ker":  "#558B2F",   # olive        (Hurst ∧ KER)
+    "hurst_or_ker":   "#FF8F00",   # amber        (Hurst ∨ KER)
+    "hurst_bull_lev": "#6D4C41",   # chocolate    (Hurst × 1.5×)
+    "hurst_ramp_lev": "#1B5E20",   # forest       (Hurst ramp × 1.5×)
 }
 LWS = {k: (3.0 if k == "bayes_trend" else (1.5 if k == "bnh" else 1.8))
        for k in COLORS}
@@ -756,6 +896,13 @@ out = pd.DataFrame({
     "super":          ret_sup,
     "hurst_bull":     ret_hb,
     "kama_bull":      ret_kb,
+    "kama_bull_adapt":ret_kba,
+    "hurst_bull_vt":  ret_hbvt,
+    "hurst_cont":     ret_hc,
+    "hurst_and_ker":  ret_hak,
+    "hurst_or_ker":   ret_hok,
+    "hurst_bull_lev": ret_hbl,
+    "hurst_ramp_lev": ret_hrl,
 })
 out.to_csv(RESULTS_DIR / "spy_timing_returns.csv")
 logger.info("Saved: results/spy_timing_returns.csv")
