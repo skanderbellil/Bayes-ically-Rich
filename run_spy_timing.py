@@ -304,6 +304,15 @@ def w_erl_kill(lam_fix, lam_c, erl, recent, sig, state):
         return 0.0
     return 1.0 if (lam_fix > 0.5 or sig["trend200"] > 0.5) else 0.0
 
+# 7. Super-ensemble — Majority-of-3 body with the ERL-kill early-exit override.
+#    Combines the two best-performing creative ideas: a low-variance Condorcet
+#    classifier for direction, plus a Bayesian-native downturn veto.
+def w_super(lam_fix, lam_c, erl, recent, sig, state):
+    if erl < 15.0:
+        return 0.0
+    votes = int(lam_fix > 0.5) + int(sig["trend50"] > 0.5) + int(sig["trend200"] > 0.5)
+    return 1.0 if votes >= 2 else 0.0
+
 
 logger.info("bayes_only  — binary gate, no levers")
 ret_bayes, info_bayes = run_strategy(w_bayes_only, "bayes_only")
@@ -345,6 +354,9 @@ ret_asym, info_asym   = run_strategy(w_asym_persist, "asym_persist")
 logger.info("erl_kill      — Bayes∪Trend200 with ERL<15 kill switch")
 ret_erl, info_erl     = run_strategy(w_erl_kill, "erl_kill")
 
+logger.info("super         — Majority-of-3 body + ERL-kill override")
+ret_sup, info_sup     = run_strategy(w_super, "super")
+
 # ── Metrics ────────────────────────────────────────────────────────────────
 COL_KEYS = ["CAGR", "Sharpe", "Sortino", "Max DD", "Calmar", "Volatility"]
 
@@ -367,6 +379,7 @@ strategies = {
     "golden_or":      (ret_gold,      "Bayes∪GoldenCross"),
     "asym_persist":   (ret_asym,      "Bayes∪Trend200 + 2wk exit-persist"),
     "erl_kill":       (ret_erl,       "Bayes∪Trend200 + ERL-kill"),
+    "super":          (ret_sup,       "Majority-3 + ERL-kill  (super)"),
 }
 
 spy_m = compute_metrics(spy_bt, rf=RF)
@@ -398,6 +411,7 @@ INFOS = {
     "golden_or":      info_gold,
     "asym_persist":   info_asym,
     "erl_kill":       info_erl,
+    "super":          info_sup,
 }
 for key in INFOS:
     info = INFOS[key]
@@ -426,7 +440,8 @@ print("\n── Delta vs Bayes∪Trend200 (OR baseline) ──")
 base_m = all_m["bayes_trend"]
 delta_rows = []
 for key in ("bayes_only", "and_trend200", "triple_or", "majority_3",
-            "golden_or", "asym_persist", "erl_kill", "bayes_trend_vt"):
+            "golden_or", "asym_persist", "erl_kill", "super",
+            "bayes_trend_vt"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
         d = all_m[key].get(k, 0) - base_m.get(k, 0)
@@ -439,7 +454,7 @@ print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
 print("\n── Delta vs SPY Buy & Hold ──")
 delta_rows = []
 for key in ("bayes_only", "bayes_trend", "and_trend200", "triple_or",
-            "majority_3", "golden_or", "asym_persist", "erl_kill"):
+            "majority_3", "golden_or", "asym_persist", "erl_kill", "super"):
     row = [strategies[key][1]]
     for k in COL_KEYS:
         d = all_m[key].get(k, 0) - spy_m.get(k, 0)
@@ -448,6 +463,28 @@ for key in ("bayes_only", "bayes_trend", "and_trend200", "triple_or",
     delta_rows.append(row)
 print(tabulate(delta_rows, headers=["Strategy"] + [f"Δ {k}" for k in COL_KEYS],
                tablefmt="simple"))
+
+# ── Subperiod robustness  (pre-COVID vs post) ──────────────────────────────
+# The 2016–2024 window mixes a long bull, the COVID crash, a 2022 bear, and
+# the 2023–2024 rally. Reporting Sharpe / MaxDD on each subperiod separately
+# flags strategies that only work in one regime.
+SUBS = [
+    ("2016-2019  (pre-COVID bull)", "2016-01-01", "2019-12-31"),
+    ("2020-2024  (COVID + 2022 bear + rally)", "2020-01-01", "2024-12-31"),
+]
+SUB_KEYS = ["CAGR", "Sharpe", "Sortino", "Max DD"]
+print("\n── Subperiod robustness ──")
+for label, s, e in SUBS:
+    print(f"\n  {label}")
+    rows_sub = []
+    for key in ("bnh", "bayes_only", "bayes_trend", "majority_3",
+                "erl_kill", "super", "and_trend200", "triple_or"):
+        ret = strategies[key][0].loc[s:e]
+        m   = compute_metrics(ret, rf=RF)
+        rows_sub.append([strategies[key][1]] +
+                        [fmt(m.get(k, 0), k) for k in SUB_KEYS])
+    print(tabulate(rows_sub, headers=["Strategy"] + SUB_KEYS,
+                   tablefmt="simple"))
 
 # ── Signal agreement diagnostics ───────────────────────────────────────────
 print("\n── Signal agreement (Bayes-λ vs 200d trend) ──")
@@ -487,6 +524,7 @@ COLORS = {
     "golden_or":      "#BF360C",   # rust         (golden cross)
     "asym_persist":   "#4A148C",   # indigo       (persistence filter)
     "erl_kill":       "#D84315",   # orange-red   (ERL kill switch)
+    "super":          "#263238",   # near-black   (super ensemble)
 }
 LWS = {k: (3.0 if k == "bayes_trend" else (1.5 if k == "bnh" else 1.8))
        for k in COLORS}
@@ -575,6 +613,7 @@ out = pd.DataFrame({
     "golden_or":      ret_gold,
     "asym_persist":   ret_asym,
     "erl_kill":       ret_erl,
+    "super":          ret_sup,
 })
 out.to_csv(RESULTS_DIR / "spy_timing_returns.csv")
 logger.info("Saved: results/spy_timing_returns.csv")
