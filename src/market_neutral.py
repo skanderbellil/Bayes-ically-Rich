@@ -126,8 +126,12 @@ def _rebalance_dates(idx: pd.DatetimeIndex, freq: str, start_offset: int) -> pd.
 
 
 def _freq_alias(freq: str) -> str:
-    # to_period wants "W", "M", etc.
-    return {"W-FRI": "W", "W": "W", "ME": "M", "M": "M"}.get(freq, "W")
+    # to_period wants "W", "M", "D", etc.
+    return {
+        "W-FRI": "W", "W": "W",
+        "ME": "M", "M": "M",
+        "D": "D", "B": "D",
+    }.get(freq, "W")
 
 
 # ---------------------------------------------------------------------------
@@ -191,13 +195,13 @@ def run_market_neutral(
     for reb_t in reb_dates:
         t = idx.get_loc(reb_t)
 
-        # Residual z-score over [t - z_window, t-1] — uses only past data
-        window = residuals[t - p.z_window + 1 : t + 1, :]   # last z_window rows up to t
-        # Standardise by the residual's own std on the same window
-        mu = np.nanmean(window, axis=0)
-        sd = np.nanstd(window, axis=0, ddof=1)
-        sd = np.where(sd > 1e-8, sd, 1.0)
-        z  = (np.nansum(window, axis=0) / np.sqrt(p.z_window)) / sd
+        # Residual z-score over [t - z_window, t-1] — strictly past data.
+        # The weight computed at t is applied to returns on t (via ffill),
+        # so the window must END at t-1 to avoid same-day lookahead.
+        window = residuals[t - p.z_window : t, :]
+        sd     = np.nanstd(window, axis=0, ddof=1)
+        sd     = np.where(sd > 1e-8, sd, 1.0)
+        z      = (np.nansum(window, axis=0) / np.sqrt(p.z_window)) / sd
 
         if not np.all(np.isfinite(z)):
             w_prev = np.zeros_like(w_prev)
