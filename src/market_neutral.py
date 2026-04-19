@@ -64,6 +64,17 @@ class MNParams:
     leverage_cap: float = 2.0       # gross leverage ceiling (hedge + book)
     tc: float = 0.0005              # 5 bps per unit turnover
     hazard: float = 1 / 252         # BOCPD prior: ~1 regime change / year
+    # Hedge β specification
+    #   "symmetric" : classic OLS β, zeros full SPY exposure
+    #   "quantile"  : Koenker-Bassett β at τ; hedges the lower-tail slope only,
+    #                 so in positive-SPY days the book retains upside exposure
+    #   "bear_hmm"  : β estimated on days weighted by posterior P(bear)
+    #                 from a 3-state Gaussian HMM on SPY returns;
+    #                 the regime, not the sign of today's return, defines
+    #                 what "downside" means
+    hedge_mode: str = "symmetric"
+    quantile_tau: float = 0.10      # lower-tail quantile for "quantile" mode
+    hmm_refit_every: int = 252      # refit HMM every N days (bear_hmm mode)
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +122,146 @@ def _rolling_beta_alpha(
         a[t] = alpha
         b[t] = beta
     return a, b
+
+
+# ---------------------------------------------------------------------------
+# Quantile regression β  (Koenker–Bassett check-loss minimisation)
+# ---------------------------------------------------------------------------
+
+def _quantile_beta_alpha(y: np.ndarray, x: np.ndarray, tau: float) -> tuple[float, float]:
+    """
+    Minimise Σ ρ_τ(y - α - β x) where ρ_τ(u) = u · (τ - 1{u<0}).
+
+    Solved as a 2-parameter Nelder-Mead problem warm-started from OLS.
+    At τ = 0.10 the slope β answers: how does y typically move when x is
+    in the lower decile of its distribution, conditional on the linear
+    specification — i.e. the tail sensitivity of y to x.
+    """
+    from scipy.optimize import minimize
+
+    mask = np.isfinite(y) & np.isfinite(x)
+    if mask.sum() < 10:
+        return np.nan, np.nan
+    y, x = y[mask], x[mask]
+    n = len(y)
+
+    # OLS warm start
+    sx, sy = x.sum(), y.sum()
+    sxx = (x * x).sum()
+    sxy = (x * y).sum()
+    denom = n * sxx - sx * sx
+    if denom <= 0:
+        return np.nan, np.nan
+    b0 = (n * sxy - sx * sy) / denom
+    a0 = (sy - b0 * sx) / n
+
+    def check_loss(params):
+        a, b = params
+        r = y - a - b * x
+        return float(np.sum(np.where(r >= 0.0, tau * r, (tau - 1.0) * r)))
+
+    res = minimize(
+        check_loss, x0=[a0, b0],
+        method="Nelder-Mead",
+        options={"xatol": 1e-5, "fatol": 1e-7, "maxiter": 400},
+    )
+    return float(res.x[0]), float(res.x[1])
+
+
+def _rolling_quantile_beta(
+    y: np.ndarray, x: np.ndarray, window: int, tau: float,
+    reb_idx: np.ndarray,
+) -> np.ndarray:
+    """
+    Quantile β evaluated only at rebalance-relevant indices `reb_idx`,
+    each using the trailing `window` days up to (but not including) the
+    rebalance day.  Returns a length-T array with β at those indices,
+    NaN elsewhere — downstream code reads β at t-1, matching the shift
+    convention used for symmetric β.
+    """
+    T = len(y)
+    out = np.full(T, np.nan)
+    for t in reb_idx:
+        s = t - window
+        if s < 0:
+            continue
+        _, b = _quantile_beta_alpha(y[s:t], x[s:t], tau)
+        out[t - 1] = b       # stored at t-1 so betas[t-1] is the hedge coef
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Bear-HMM weighted β
+# ---------------------------------------------------------------------------
+
+def _bear_posterior(mkt: np.ndarray, refit_points: list[int]) -> np.ndarray:
+    """
+    Forward-filtered P(bear_t) from a 3-state Gaussian HMM, refit at
+    every point in `refit_points`.  Between refits the most recent model
+    is carried forward, so posteriors at time t only depend on data ≤ t.
+    """
+    from src.regime_models import HMM3
+
+    T = len(mkt)
+    post = np.zeros(T)
+    current: Optional[HMM3] = None
+    for i, rp in enumerate(refit_points):
+        if rp < 60:            # need minimum history to fit a 3-state HMM
+            continue
+        hmm = HMM3().fit(mkt[:rp].reshape(-1, 1))
+        if not hmm.is_fitted:
+            continue
+        next_rp = refit_points[i + 1] if i + 1 < len(refit_points) else T
+        end = min(next_rp, T)
+        _, raw_post = hmm._model.score_samples(mkt[:end].reshape(-1, 1))
+        bear_internal = [
+            k for k, v in hmm._state_map.items() if v == HMM3.BEAR
+        ][0]
+        # Only fill indices [rp, end) so each slice uses the model
+        # that was fit on data up to its own rebalance window.
+        post[rp:end] = raw_post[rp:end, bear_internal]
+    return post
+
+
+def _weighted_beta(y: np.ndarray, x: np.ndarray, w: np.ndarray) -> float:
+    """Weighted OLS slope only (alpha not needed for hedge sizing)."""
+    w = np.where(np.isfinite(w), w, 0.0)
+    ws = w.sum()
+    if ws < 1e-6:
+        return np.nan
+    mx = np.sum(w * x) / ws
+    my = np.sum(w * y) / ws
+    var = np.sum(w * (x - mx) ** 2) / ws
+    if var < 1e-12:
+        return np.nan
+    cov = np.sum(w * (x - mx) * (y - my)) / ws
+    return float(cov / var)
+
+
+def _rolling_bear_beta(
+    R: np.ndarray, mkt: np.ndarray, bear_post: np.ndarray,
+    window: int, reb_idx: np.ndarray,
+) -> np.ndarray:
+    """
+    Bear-weighted β for every asset column at each rebalance index.
+    Weights are P(bear) posteriors restricted to the trailing window;
+    returned shape (T, k) with β stored at t-1 (same shift as symmetric β).
+    """
+    T, k = R.shape
+    out = np.full((T, k), np.nan)
+    for t in reb_idx:
+        s = t - window
+        if s < 0:
+            continue
+        w = bear_post[s:t]
+        # If the posterior has too little bear mass fall back to NaN → caller
+        # will substitute symmetric β for that rebalance.
+        if w.sum() < 3.0:   # <~3 equivalent bear days in the window
+            continue
+        x = mkt[s:t]
+        for j in range(k):
+            out[t - 1, j] = _weighted_beta(R[s:t, j], x, w)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +335,35 @@ def run_market_neutral(
 
     # ── 4. Rebalance loop ────────────────────────────────────────────────
     start_offset = p.reg_window + p.z_window + 5
+    # HMM needs a longer warmup to identify three regimes stably
+    if p.hedge_mode == "bear_hmm":
+        start_offset = max(start_offset, 2 * p.reg_window)
     reb_dates = _rebalance_dates(idx, p.rebalance_freq, start_offset)
+    reb_locs  = np.array([idx.get_loc(r) for r in reb_dates], dtype=int)
+
+    # ── 4a. Hedge-β series depending on mode ─────────────────────────────
+    # Hedge β is what the SPY hedge leg is sized against.  Residuals are
+    # always constructed from symmetric β (above); only the hedge sizing
+    # differs across modes.
+    hedge_betas = betas.copy()   # default: symmetric OLS β
+    if p.hedge_mode == "quantile":
+        for j in range(k):
+            qb = _rolling_quantile_beta(
+                R[:, j], mkt, window=p.reg_window,
+                tau=p.quantile_tau, reb_idx=reb_locs,
+            )
+            # fill in only where QR produced a value; keep symmetric elsewhere
+            mask = np.isfinite(qb)
+            hedge_betas[mask, j] = qb[mask]
+    elif p.hedge_mode == "bear_hmm":
+        refit_every = max(p.hmm_refit_every, 60)
+        refit_points = list(range(refit_every, T, refit_every))
+        bear_post = _bear_posterior(mkt, refit_points)
+        bb = _rolling_bear_beta(R, mkt, bear_post, p.reg_window, reb_locs)
+        mask = np.isfinite(bb)
+        hedge_betas = np.where(mask, bb, hedge_betas)
+    elif p.hedge_mode != "symmetric":
+        raise ValueError(f"unknown hedge_mode: {p.hedge_mode}")
 
     cols = assets + [p.market]
     weights = pd.DataFrame(index=reb_dates, columns=cols, dtype=float)
@@ -220,8 +399,12 @@ def run_market_neutral(
             continue
         w_res = raw / gross                                 # unit gross on residuals
 
-        # Market hedge: zero portfolio beta
-        beta_now = betas[t - 1, :]                          # last-known betas
+        # Market hedge — sized against mode-specific β.  In "symmetric"
+        # mode this is OLS β (full market neutrality).  In "quantile" or
+        # "bear_hmm" modes it is a downside-weighted β, so the hedge
+        # matches the book's downside exposure but undershoots upside
+        # exposure — positive-SPY days leave residual long-market beta.
+        beta_now = hedge_betas[t - 1, :]
         if not np.all(np.isfinite(beta_now)):
             beta_now = np.nan_to_num(beta_now, nan=0.0)
         w_mkt = -float(np.sum(w_res * beta_now))
