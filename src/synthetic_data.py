@@ -271,6 +271,81 @@ def default_realistic_spec(factor_names: Sequence[str] = tuple(BASE_FACTORS)) ->
     return RealisticUniverseSpec(factor_names=list(factor_names), assets=assets)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# WIDE preset: sectors, credit, rates, FX, size, style.
+# Betas reflect the canonical exposure of each real-world instrument to the
+# 5 base factors (SPY, TLT, GLD, EEM, VNQ), chosen from published
+# fund-factsheet-style loadings — not fitted to returns.
+#
+# Ordering per row: betas · ann_α · idio_ar · idio_sd · sv_ar · sv_sd · t_df
+# idio_sd values are daily residual std.  Fat tails (t_df) are strongest for
+# single-sector ETFs that show concentrated idiosyncratic shocks.
+# ─────────────────────────────────────────────────────────────────────────────
+
+WIDE_ASSETS = [
+    # ── US sector SPDRs (9) ────────────────────────────────────────────────
+    ("XLK_s",  [ 1.15, -0.05,  0.00,  0.05, -0.05],  0.00, -0.04, 0.0060, 0.92, 0.22, 6.5),  # tech
+    ("XLF_s",  [ 1.25,  0.05,  0.00,  0.10, -0.05],  0.00, -0.03, 0.0075, 0.91, 0.25, 5.5),  # financials
+    ("XLE_s",  [ 0.90, -0.15,  0.15,  0.20,  0.00],  0.00,  0.00, 0.0120, 0.89, 0.28, 5.0),  # energy
+    ("XLV_s",  [ 0.80,  0.05,  0.05, -0.05, -0.05],  0.00, -0.02, 0.0060, 0.92, 0.20, 7.0),  # health
+    ("XLY_s",  [ 1.15, -0.05,  0.00,  0.10,  0.05],  0.00, -0.03, 0.0070, 0.91, 0.22, 6.0),  # disc
+    ("XLP_s",  [ 0.60,  0.10,  0.05,  0.00, -0.05],  0.00,  0.02, 0.0050, 0.93, 0.18, 8.0),  # staples
+    ("XLI_s",  [ 1.05,  0.00,  0.05,  0.10,  0.05],  0.00, -0.02, 0.0065, 0.91, 0.22, 6.5),  # industrials
+    ("XLU_s",  [ 0.50,  0.35,  0.05,  0.00,  0.15],  0.00,  0.05, 0.0055, 0.92, 0.20, 7.0),  # utilities
+    ("XLB_s",  [ 1.10, -0.05,  0.20,  0.15,  0.05],  0.00, -0.02, 0.0075, 0.90, 0.25, 5.5),  # materials
+    # ── Credit (2) ─────────────────────────────────────────────────────────
+    ("LQD_s",  [ 0.10,  0.60,  0.05, -0.05,  0.05],  0.00,  0.08, 0.0030, 0.93, 0.18, 8.0),  # IG credit
+    ("HYG2_s", [ 0.40,  0.20,  0.00,  0.15,  0.05],  0.00,  0.07, 0.0040, 0.92, 0.22, 5.5),  # HY credit
+    # ── Rates curve (2) ────────────────────────────────────────────────────
+    ("IEF_s",  [-0.05,  0.80,  0.00, -0.05,  0.00],  0.00,  0.05, 0.0035, 0.94, 0.15, 8.5),  # 7-10y
+    ("SHY_s",  [ 0.00,  0.15,  0.00,  0.00,  0.00],  0.00,  0.10, 0.0010, 0.94, 0.12, 10.0), # 1-3y
+    # ── Size / style (3) ───────────────────────────────────────────────────
+    ("IWM2_s", [ 1.15, -0.02,  0.00,  0.10,  0.10],  0.00, -0.03, 0.0070, 0.90, 0.22, 6.0),  # small cap
+    ("IWD_s",  [ 1.00,  0.00,  0.05,  0.05,  0.05],  0.00, -0.03, 0.0055, 0.92, 0.20, 6.5),  # value
+    ("MTUM_s", [ 1.00, -0.05,  0.00,  0.05, -0.05],  0.00, -0.05, 0.0060, 0.91, 0.22, 6.0),  # momentum
+    # ── International / FX (3) ─────────────────────────────────────────────
+    ("EFA_s",  [ 0.90,  0.05,  0.10,  0.25,  0.00],  0.00, -0.02, 0.0055, 0.91, 0.22, 6.5),  # DM ex-US
+    ("UUP_s",  [-0.05, -0.10, -0.20, -0.25,  0.00],  0.00,  0.03, 0.0035, 0.92, 0.18, 8.0),  # USD
+    ("FXE_s",  [ 0.05,  0.05,  0.20,  0.05,  0.00],  0.00,  0.02, 0.0040, 0.92, 0.18, 8.0),  # EUR
+    # ── Commodities (2) ────────────────────────────────────────────────────
+    ("SLV_s",  [ 0.20, -0.10,  0.75,  0.15,  0.00],  0.00,  0.04, 0.0100, 0.90, 0.28, 5.5),  # silver
+    ("USO_s",  [ 0.35, -0.15,  0.20,  0.30,  0.00],  0.00,  0.00, 0.0130, 0.89, 0.28, 5.0),  # oil
+]
+
+
+def wide_realistic_spec(
+    factor_names: Sequence[str] = tuple(BASE_FACTORS),
+    ou_half_life: Optional[float] = None,
+    include_base: bool = True,
+) -> RealisticUniverseSpec:
+    """
+    Preset covering sectors + credit + rates + FX + size/style + commodities.
+
+    21 assets (or 30 when combined with the base `REALISTIC_ASSETS`), all
+    with distinct factor-loading profiles chosen to give genuine residual
+    diversity once the market component is regressed out.
+
+    If `ou_half_life` is set, every synthetic asset gets OU mean-reverting
+    residuals at that half-life — the DGP the market-neutral strategy was
+    designed to capture.
+    """
+    all_rows = list(REALISTIC_ASSETS) if include_base else []
+    all_rows = all_rows + WIDE_ASSETS
+
+    assets: List[AssetParams] = []
+    for name, betas, a_ann, rho, sig, sv_ar, sv_sd, t_df in all_rows:
+        assets.append(AssetParams(
+            name=name,
+            betas=np.array(betas[: len(factor_names)], dtype=float),
+            alpha_ann=a_ann,
+            idio_ar=rho if ou_half_life is None else 0.0,
+            idio_sd=sig,
+            sv_ar=sv_ar, sv_innov_sd=sv_sd, t_df=t_df,
+            ou_half_life=ou_half_life,
+        ))
+    return RealisticUniverseSpec(factor_names=list(factor_names), assets=assets)
+
+
 def expand_universe_realistic(
     returns: pd.DataFrame,
     spec: Optional[RealisticUniverseSpec] = None,
