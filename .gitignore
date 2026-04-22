@@ -8,3 +8,4 @@ results/
 *.png
 *.csv
 .DS_Store
+.dfl_cache/
