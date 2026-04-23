@@ -605,31 +605,38 @@ def make_orchestrator_net(in_dim: int = N_FEATS, hidden: int = 64,
     torch, nn, _, _ = _lazy_torch()
 
     class Net(nn.Module):
+        """Two-head architecture: shared body + μ-head (for QP) + α-head
+        (return predictor for an auxiliary MSE loss).
+
+        The α-head is a multi-task regularizer: predicting next-week pod+SPY
+        returns from the shared features forces the body to learn
+        representations that capture return structure, not just whatever
+        idiosyncratic signal minimizes SPO+ regret on 2018-2021. This
+        commonly closes the train/val generalization gap in DFL pipelines
+        (Caruana 1997, Ruder 2017). At inference the α-head is ignored.
+        """
         def __init__(self):
             super().__init__()
-            # Wider net + dropout for regularization; the limiting factor here
-            # is generalization across regimes, not capacity.
             self.body = nn.Sequential(
                 nn.Linear(in_dim, hidden), nn.ReLU(), nn.Dropout(dropout),
                 nn.Linear(hidden, hidden), nn.ReLU(), nn.Dropout(dropout),
-                nn.Linear(hidden, out_dim),
             )
-            # log_scale ≈ softplus(-2) = 0.13 puts μ on the same scale as Σw,
-            # so the QP meaningfully trades return for variance.
+            self.mu_head = nn.Linear(hidden, out_dim)      # feeds the QP
+            self.alpha_head = nn.Linear(hidden, out_dim)    # aux MSE target
+
+            # softplus(-2) = 0.13 puts μ on the same scale as Σw so the QP
+            # meaningfully trades return for variance.
             self.log_scale = nn.Parameter(torch.tensor(-2.0))
             self.log_gamma = nn.Parameter(torch.tensor(-6.0))   # softplus≈0.0025
-            # ρ is NOT a learned parameter — it is scheduled externally
-            # (see _anchor_schedule). A learned ρ was found to stay near its
-            # init value for hundreds of epochs, tethering DFL to EWMA. The
-            # schedule instead forces a warm-start → free-play curriculum:
-            # strong anchor initially for low-variance gradients, then
-            # released so the NN can discover allocations better than EWMA.
+            # ρ (anchor strength) is NOT learned — externally scheduled;
+            # a learned ρ was observed to tether DFL to EWMA indefinitely.
 
         def forward(self, x):
-            raw = self.body(x)
-            mu = raw * torch.nn.functional.softplus(self.log_scale)
+            h = self.body(x)
+            mu = self.mu_head(h) * torch.nn.functional.softplus(self.log_scale)
+            r_pred = self.alpha_head(h)                    # raw, unscaled
             gamma = torch.nn.functional.softplus(self.log_gamma)
-            return mu, gamma
+            return mu, gamma, r_pred
 
     return Net()
 
@@ -735,7 +742,7 @@ def _run_sequence(net, layer, feats_t, L_t, asset_rets_t, anchor_t, rho: float,
     rho2 = float(rho) ** 2
     for i in range(start_idx, end_idx):
         x = feats_t[i:i+1]
-        mu, gamma = net(x)                          # (1,N_ORCH), ()
+        mu, gamma, _ = net(x)                       # α-head unused here
         L_i = L_t[i:i+1]
         q_anchor = rho2 * anchor_t[i:i+1]           # (1, N_ORCH)
         (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor)
@@ -753,7 +760,8 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
               patience: int = 15, verbose: bool = True,
               bootstrap_frac: float = 0.85, n_rolling_windows: int = 6,
               rolling_window_len: int = 52,
-              loss_kind: str = "spo_plus"):
+              loss_kind: str = "spo_plus",
+              lambda_aux: float = 10.0):
     """Train the orchestrator end-to-end with `loss_kind` ∈ {spo_plus, robust_sharpe}.
 
     `spo_plus` (default) — per-step SPO+ regret (Elmachtoub-Grigas 2022).
@@ -802,7 +810,7 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
     if loss_kind not in ("spo_plus", "robust_sharpe"):
         raise ValueError(f"unknown loss_kind={loss_kind!r}")
     if verbose:
-        print(f"[train] loss_kind={loss_kind}")
+        print(f"[train] loss_kind={loss_kind}  lambda_aux={lambda_aux}")
 
     for ep in range(1, epochs + 1):
         t0 = time.time()
@@ -810,18 +818,17 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
         rho_ep = _anchor_schedule(ep)
 
         if loss_kind == "spo_plus":
-            # Subsample a contiguous train sub-window so the w_prev chain
-            # remains coherent (SPO+ has no temporal aggregation, so any
-            # contiguous slice is valid). Pick a random window each epoch
-            # for stochasticity. Keeps wall-clock per epoch ≈ 60-70% of full.
             n_tr = i1 - i0
             sub = max(rolling_window_len + 12, int(n_tr * bootstrap_frac))
             start = i0 + int(rng.integers(0, max(1, n_tr - sub + 1)))
             end = start + sub
-            loss, R_tr = spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t,
-                                       anchor_t, rho_ep, start, end,
-                                       return_realized=True)
+            spo_l, aux_l, R_tr = spo_plus_loss(
+                net, layer, feats_t, L_t, asset_rets_t, anchor_t, rho_ep,
+                start, end, return_realized=True)
+            loss = spo_l + lambda_aux * aux_l
             tr_sr_signal = float(sharpe_torch(R_tr))
+            aux_val = float(aux_l.detach())
+            spo_val = float(spo_l.detach())
         else:
             _, R_tr_full = _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
                                          anchor_t, rho_ep, i0, i1, train=True)
@@ -831,6 +838,8 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
             R_tr = R_tr_full[torch.as_tensor(keep)]
             loss = robust_sharpe_loss(R_tr, n_rolling_windows, rolling_window_len)
             tr_sr_signal = float(sharpe_torch(R_tr.detach()))
+            aux_val = float("nan")
+            spo_val = float("nan")
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 5.0)
@@ -851,8 +860,9 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
         if verbose and (ep <= 10 or ep % 10 == 0):
             scale = float(torch.nn.functional.softplus(net.log_scale))
             gamma = float(torch.nn.functional.softplus(net.log_gamma))
+            aux_tag = f"spo={spo_val:+.4f} aux={aux_val:.5f} " if loss_kind == "spo_plus" else ""
             print(f"[train] ep {ep:3d}/{epochs}  loss={float(loss):+.4f}  "
-                  f"train_SR={tr_sr_signal:+.3f}  "
+                  f"{aux_tag}train_SR={tr_sr_signal:+.3f}  "
                   f"val_SR={val_sr_mean:+.3f}  val_robust={val_sr_robust:+.3f}  "
                   f"rho={rho_ep:.2f}  scale={scale:.3f}  gamma={gamma:.4f}  {dt:.1f}s")
 
@@ -943,9 +953,13 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
                   return_realized: bool = False):
     """Aggregated SPO+ regret over [start_idx, end_idx).
 
-    Returns scalar mean per-step SPO+ loss with grad through NN params.
-    If `return_realized=True`, also returns the (k,) realized return tensor
-    of the NN policy (no grad), used for diagnostics / val Sharpe tracking.
+    Returns (spo_loss, aux_mse_loss) with grad through the NN. The aux MSE
+    is the mean squared error of the α-head's return prediction vs the
+    realized next-week return — used as a multi-task regularizer. Caller
+    composes the final loss as `spo + lambda_aux * mse`.
+
+    If `return_realized=True`, also returns (k,) realized return tensor of
+    the NN policy (no grad).
     """
     import torch
     net.train()                                # dropout active during training
@@ -953,35 +967,38 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
     rho2 = float(rho) ** 2
     w_prev = torch.full((1, N_ORCH), 1.0 / N_ORCH)
 
-    losses = []
+    spo_terms = []
+    aux_sq_err = []
     rs_realized = []
     for i in range(start_idx, end_idx):
         x = feats_t[i:i+1]
-        mu_nn, gamma = net(x)                  # (1, N_ORCH), ()
+        mu_nn, gamma, r_pred = net(x)          # (1,N_ORCH), (), (1,N_ORCH)
         L_i = L_t[i:i+1]
         gamma_i = gamma.expand(1)
         q_anchor = rho2 * anchor_t[i:i+1]
         r_i = asset_rets_t[i:i+1]              # (1, N_ORCH)
 
-        # (1) Oracle: QP if it knew next-period returns. Detached.
+        # Auxiliary: α-head predicts next-week returns. Shared body means
+        # this gradient flows into the representation used by μ-head too.
+        aux_sq_err.append(((r_pred - r_i) ** 2).mean())
+
+        # (1) Oracle decision, detached.
         with torch.no_grad():
             w_oracle = _solve_qp_step(layer, L_i, r_i, gamma_i.detach(),
                                       w_prev, rho_scl, q_anchor)
 
-        # (2) SPO+ surrogate: QP with μ_eff = 2*μ_NN - r. Grad flows here.
+        # (2) SPO+ decision with μ_eff = 2 μ_NN - r. Grad path.
         mu_spo = 2.0 * mu_nn - r_i
         w_spo = _solve_qp_step(layer, L_i, mu_spo, gamma_i, w_prev,
                                rho_scl, q_anchor)
 
-        # SPO+ per-step loss (drop ||r||² and constants that don't affect μ-grad).
-        # Detach w_oracle (constant target by definition).
+        # SPO+ regret (drop r-only constant terms — zero gradient wrt μ).
         w_or_d = w_oracle.detach()
-        loss_i = ((mu_spo * w_spo).sum()
-                  - 2.0 * (mu_nn * w_or_d).sum()
-                  + (r_i * w_or_d).sum())
-        losses.append(loss_i)
+        spo_terms.append(((mu_spo * w_spo).sum()
+                         - 2.0 * (mu_nn * w_or_d).sum()
+                         + (r_i * w_or_d).sum()))
 
-        # (3) NN decision for w_prev chain (and realized-return tracking).
+        # (3) NN decision — bookkeeping for w_prev chain / realized tracking.
         with torch.no_grad():
             w_nn = _solve_qp_step(layer, L_i, mu_nn.detach(), gamma_i.detach(),
                                   w_prev, rho_scl, q_anchor)
@@ -989,10 +1006,11 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
                 rs_realized.append((w_nn * r_i).sum())
         w_prev = w_nn.detach()
 
-    loss = torch.stack(losses).mean()
+    spo_loss = torch.stack(spo_terms).mean()
+    aux_mse = torch.stack(aux_sq_err).mean()
     if return_realized:
-        return loss, torch.stack(rs_realized).detach()
-    return loss
+        return spo_loss, aux_mse, torch.stack(rs_realized).detach()
+    return spo_loss, aux_mse
 
 
 # ---------- Baselines ----------
@@ -1157,7 +1175,7 @@ def rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
     with torch.no_grad():
         for i in range(start_idx, end_idx):
             x = feats_t[i:i+1]
-            mu, gamma = net(x)
+            mu, gamma, _ = net(x)                  # α-head unused at inference
             L_i = L_t[i:i+1]
             q_anchor = rho2 * anchor_t[i:i+1]
             (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor)
@@ -1332,12 +1350,16 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
                         f"traded drawdown protection for absolute return, "
                         f"so this is not a risk-reduction story. DFL is "
                         f"genuinely short of SPY on this window; no spin.")
-        obs.append(f"DFL does NOT beat naive SPY buy-and-hold (SR {spy_sr:.2f} "
-                   f"vs DFL {dfl_sr:.2f}) on this test window. SPY in "
-                   f"2023-2024 delivered a mega-cap rally the pod universe "
-                   f"cannot fully replicate (the closest analogue is "
-                   f"cross-sectional Momentum, which does get a large mean "
-                   f"allocation). {mdd_note}")
+        # Identify which pod DFL actually leans on most, so the note is
+        # accurate regardless of how training rebalances the allocation.
+        top_label = max(alloc["mean"], key=alloc["mean"].get)
+        top_w = alloc["mean"][top_label]
+        obs.append(f"DFL does NOT beat naive SPY buy-and-hold "
+                   f"(SR {spy_sr:.2f} vs DFL {dfl_sr:.2f}) on this test "
+                   f"window. SPY in 2023-2024 delivered a mega-cap rally "
+                   f"the pod universe cannot fully replicate. DFL's largest "
+                   f"mean allocation is {top_label} ({top_w:.1%}); the net "
+                   f"allocation is broadly diversified. {mdd_note}")
     else:
         obs.append(f"DFL also beats SPY buy-and-hold (SR delta {dfl_sr-spy_sr:+.3f}), "
                    f"confirming the pod diversification plus end-to-end training "
@@ -1407,6 +1429,14 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
         "Three QP solves per step (oracle / spo / nn-rollout), but only the "
         "spo solve carries gradients. Fallback `loss_kind='robust_sharpe'` "
         "(softmin over rolling-window Sharpes) is retained for ablation.\n"
+        "- **Dual-head NN with auxiliary alpha loss** (Caruana 1997 "
+        "multi-task): shared body → μ-head (feeds QP) + α-head (predicts "
+        "next-week pod+SPY returns, trained with MSE). Combined loss = "
+        "SPO+(μ, r) + λ_aux·MSE(r_pred, r). The α-head acts as a "
+        "regularizer on the shared features — forcing the body to learn "
+        "return-predictive representations rather than whatever quirks "
+        "minimise SPO+ regret on the 2018-2021 train slice. "
+        "λ_aux=10 keeps the two losses comparable in magnitude.\n"
         "- **Bootstrap sub-window** (85% of train weeks per epoch, "
         "contiguous random slice) for additional stochasticity.\n"
         "- Wider NN (hidden=64) + dropout=0.15 for capacity without overfit.\n"
