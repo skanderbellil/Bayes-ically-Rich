@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """dfl_orchestrator.py — Decision-Focused Multi-Pod Portfolio System.
 
-Level-1: 5 asset-level pods on S&P 100 survivors
-  Momentum, MinVariance, MeanReversion, RiskParity, LowBeta
-Level-2: Differentiable orchestrator over {pod1..pod5, SPY} using a
+Level-1: 6 asset-level pods on S&P 100 survivors
+  Momentum, MinVariance, MeanReversion, RiskParity, LowBeta, Trend
+Level-2: Differentiable orchestrator over {pod1..pod6, SPY} using a
   cvxpylayers mean-variance QP, trained end-to-end on realized-Sharpe loss.
 
 Non-obvious design choices are cited inline to the motivating paper:
@@ -295,6 +295,36 @@ def pod_low_beta(prices: pd.DataFrame, spy: pd.Series, t: pd.Timestamp) -> np.nd
     return _uniform_on_mask(mask, prices.shape[1])
 
 
+def pod_trend(prices: pd.DataFrame, t: pd.Timestamp) -> np.ndarray:
+    """Time-series momentum on each name (Moskowitz-Ooi-Pedersen 2012 TSMOM).
+
+    Long only names whose own 12-month return is positive ("trend-on"),
+    vol-targeted weights within the trending set, then simplex-projected.
+    Distinct from cross-sectional Momentum: here we KEEP or KILL each name
+    based on its own sign, not rank vs peers — so in broad up-markets the
+    pod concentrates risk, in choppy markets it deconcentrates.
+    """
+    hist = prices.loc[:t]
+    if len(hist) < MOM_LOOKBACK + 1:
+        return _uniform(prices.shape[1])
+    # 252-day own-return (keep the skip-month convention for consistency).
+    p_now = hist.iloc[-MOM_SKIP - 1]
+    p_then = hist.iloc[-MOM_LOOKBACK - 1]
+    tsmom = (p_now / p_then - 1.0).values
+    # Vol targeting: inverse-vol weighting of the surviving (positive-trend) set.
+    rets = hist.pct_change().iloc[-MOM_LOOKBACK:-MOM_SKIP]
+    vol = rets.std(axis=0).values
+    vol = np.where(vol > 1e-8, vol, np.inf)          # kill zero-vol names
+    mask = tsmom > 0.0
+    if mask.sum() == 0:
+        # Fully bearish trend signal — park uniformly across the universe
+        # as a neutral fallback (the orchestrator can re-route to SPY).
+        return _uniform(prices.shape[1])
+    inv_vol = np.where(mask, 1.0 / vol, 0.0)
+    w = inv_vol / inv_vol.sum()
+    return project_simplex(w)
+
+
 # ---------- helpers ----------
 
 def _uniform(n: int) -> np.ndarray:
@@ -331,17 +361,20 @@ def _project_capped_simplex(v: np.ndarray, cap: float) -> np.ndarray:
 
 def pod_weights_all(prices: pd.DataFrame, spy: pd.Series,
                     t: pd.Timestamp) -> np.ndarray:
-    """Stack 5 pod weight vectors into a (5, n_assets) matrix."""
+    """Stack 6 pod weight vectors into a (6, n_assets) matrix."""
     return np.stack([
         pod_momentum(prices, t),
         pod_min_variance(prices, t),
         pod_mean_reversion(prices, t),
         pod_risk_parity(prices, t),
         pod_low_beta(prices, spy, t),
+        pod_trend(prices, t),
     ], axis=0)
 
 
-POD_NAMES = ["Momentum", "MinVar", "MeanRev", "RiskParity", "LowBeta"]
+POD_NAMES = ["Momentum", "MinVar", "MeanRev", "RiskParity", "LowBeta", "Trend"]
+N_PODS = len(POD_NAMES)
+N_ORCH = N_PODS + 1                 # + SPY
 
 
 # ---------- Pod return streams (cached) ----------
@@ -350,13 +383,13 @@ POD_NAMES = ["Momentum", "MinVar", "MeanRev", "RiskParity", "LowBeta"]
 class PodPanel:
     """All pod outputs across the full rebalance schedule.
 
-    weights   : (T, 5, N) pod weight tensor per rebalance date
-    pod_rets  : (T, 5)     pod returns over the *next* rebalance interval
-    turnover  : (T, 5)     L1 turnover vs previous rebalance
-    spy_rets  : (T,)       SPY return over the next rebalance interval
-    dates     : (T,)       rebalance dates (Friday of decision)
-    next_dates: (T,)       next rebalance date (end of holding period)
-    asset_rets: (T, N)     equal-weighted bench of constituents over the interval
+    weights   : (T, N_PODS, N) pod weight tensor per rebalance date
+    pod_rets  : (T, N_PODS)    pod returns over the *next* rebalance interval
+    turnover  : (T, N_PODS)    L1 turnover vs previous rebalance
+    spy_rets  : (T,)           SPY return over the next rebalance interval
+    dates     : (T,)           rebalance dates (Friday of decision)
+    next_dates: (T,)           next rebalance date (end of holding period)
+    asset_rets: (T, N)         buy-and-hold constituent returns over the interval
     """
     weights: np.ndarray
     pod_rets: np.ndarray
@@ -382,9 +415,11 @@ def build_pod_panel(prices: pd.DataFrame, spy: pd.Series,
     Rebalance = Friday close; holding period = close(t) -> close(next_t).
     No look-ahead: pod weights at t use only data up to and including t.
     """
-    cache = CACHE_DIR / "pod_panel.pkl"
+    cache = CACHE_DIR / "pod_panel_v2.pkl"
     signature = {
         "n_assets": prices.shape[1],
+        "n_pods": N_PODS,
+        "pod_names": POD_NAMES,
         "date_lo": str(prices.index.min().date()),
         "date_hi": str(prices.index.max().date()),
         "schedule_start": schedule_start,
@@ -412,14 +447,14 @@ def build_pod_panel(prices: pd.DataFrame, spy: pd.Series,
     T = len(dates)
     N = prices.shape[1]
 
-    weights = np.zeros((T, 5, N))
-    pod_rets = np.zeros((T, 5))
+    weights = np.zeros((T, N_PODS, N))
+    pod_rets = np.zeros((T, N_PODS))
     spy_rets = np.zeros(T)
     asset_rets = np.zeros((T, N))
 
     t_start = time.time()
-    prev_w = np.tile(_uniform(N), (5, 1))
-    turnover = np.zeros((T, 5))
+    prev_w = np.tile(_uniform(N), (N_PODS, 1))
+    turnover = np.zeros((T, N_PODS))
     for i, t in enumerate(dates):
         W = pod_weights_all(prices, spy, t)
         weights[i] = W
@@ -450,19 +485,21 @@ def build_pod_panel(prices: pd.DataFrame, spy: pd.Series,
 # No look-ahead: pod_rets at index i is realized only after date t_i, so
 # the feature at step i uses pod_rets[:i] (not including i itself).
 
-N_FEATS = 13   # 5 pod Sharpes + 5 pod vols + 3 regime features
+N_FEATS = 2 * N_PODS + 3   # pod Sharpes + pod vols + 3 regime features
 
 
 def build_orchestrator_features(panel: PodPanel, spy: pd.Series,
                                 prices: pd.DataFrame) -> np.ndarray:
-    """Return (T, 13) feature matrix aligned to panel.dates.
+    """Return (T, N_FEATS) feature matrix aligned to panel.dates.
 
     Features per step i (t = panel.dates[i]):
-      [0..4]   pod rolling Sharpe over last `LOOKBACK` weekly returns up to i-1
-      [5..9]   pod rolling vol (annualized) over same window
-      [10]     SPY 20-day realized vol, using daily prices up to t
-      [11]     SPY drawdown from 60-day high at t
-      [12]     Cross-sectional dispersion (std of 5d returns at t across names)
+      [0 .. N_PODS-1]           pod rolling Sharpe over last `LOOKBACK` weekly
+                                returns up to i-1
+      [N_PODS .. 2*N_PODS-1]    pod rolling vol (annualized) over same window
+      [2*N_PODS + 0]            SPY 20-day realized vol, daily grain up to t
+      [2*N_PODS + 1]            SPY drawdown from 60-day high at t
+      [2*N_PODS + 2]            Cross-sectional dispersion (std of 5d returns
+                                at t across names)
     """
     T = len(panel.dates)
     feats = np.zeros((T, N_FEATS))
@@ -473,20 +510,20 @@ def build_orchestrator_features(panel: PodPanel, spy: pd.Series,
         if win.shape[0] >= 4:
             mu = win.mean(axis=0)
             sd = win.std(axis=0) + 1e-9
-            feats[i, 0:5] = (mu / sd) * np.sqrt(52)        # ann. Sharpe
-            feats[i, 5:10] = sd * np.sqrt(52)              # ann. vol
+            feats[i, 0:N_PODS]         = (mu / sd) * np.sqrt(52)   # ann. Sharpe
+            feats[i, N_PODS:2*N_PODS]  = sd * np.sqrt(52)          # ann. vol
         # SPY realized vol (20d, daily) and 60d drawdown — daily grain.
         spy_hist = spy.loc[:t]
         if len(spy_hist) >= 60:
             rd = spy_hist.pct_change().iloc[-20:].std() * np.sqrt(252)
             dd = spy_hist.iloc[-60:].iloc[-1] / spy_hist.iloc[-60:].max() - 1.0
-            feats[i, 10] = float(rd)
-            feats[i, 11] = float(dd)
+            feats[i, 2*N_PODS + 0] = float(rd)
+            feats[i, 2*N_PODS + 1] = float(dd)
         # Cross-sectional dispersion of 5-day returns at t.
         ph = prices.loc[:t]
         if len(ph) >= 6:
             r5 = (ph.iloc[-1] / ph.iloc[-6] - 1.0).values
-            feats[i, 12] = float(np.nanstd(r5))
+            feats[i, 2*N_PODS + 2] = float(np.nanstd(r5))
     return feats
 
 
@@ -509,18 +546,26 @@ def _lazy_torch():
     return torch, nn, cp, CvxpyLayer
 
 
-def build_qp_layer(n: int = 6):
-    """DPP-compliant mean-variance QP with turnover penalty.
+def build_qp_layer(n: int = N_ORCH):
+    """DPP-compliant mean-variance QP with turnover penalty AND prior anchor.
 
     min 0.5 ||L w||^2 - mu^T w + gamma * sum(s)
-     s.t. sum(w) = 1,  0 <= w <= ORCH_CAP,  -s <= w - w_prev <= s,  s >= 0
+        + 0.5 * ||rho_scl * w||^2 - q_anchor^T w
+     s.t. sum(w) = 1, 0 <= w <= ORCH_CAP, -s <= w - w_prev <= s, s >= 0
 
-    L (n x n parameter) is a factor satisfying Σ = L^T L, passed from
-    PyTorch — Cholesky of the empirical pod+SPY covariance (Agrawal et al.
-    2019: DPP requires param-affine-in-variable structure; we give it as a
-    factored form rather than cp.quad_form with a parameter matrix).
-    The turnover penalty is the L1 form of Gârleanu-Pedersen 2013 TC,
-    split into a slack variable so the gamma*||.||_1 term becomes linear.
+    The last two terms encode an L2 pull toward an EWMA-softmax prior
+    w_anchor, EXPANDED so DPP holds:
+
+        0.5 * ρ^2 * ||w - w_anchor||^2  ≡
+          0.5 * ||rho_scl w||^2 - q_anchor^T w  + const(ρ, w_anchor)
+
+    where rho_scl = ρ and q_anchor = ρ^2 · w_anchor are pre-multiplied in
+    PyTorch (the constant is dropped — irrelevant to argmin). Each cvxpy
+    parameter interacts with the variable affinely, never parameter-×-
+    parameter, which is required by Agrawal et al. 2019 §3 (DPP). The
+    anchor gives DFL a sensible starting behaviour (= EWMA) and a
+    trust region the -Sharpe loss can relax — this is the mechanism that
+    unblocks training from its previous flat-loss plateau.
     """
     _, _, cp, CvxpyLayer = _lazy_torch()
     w = cp.Variable(n)
@@ -529,8 +574,14 @@ def build_qp_layer(n: int = 6):
     mu = cp.Parameter(n)
     gamma = cp.Parameter(nonneg=True)
     w_prev = cp.Parameter(n)
+    rho_scl = cp.Parameter(nonneg=True)          # = ρ (scalar)
+    q_anchor = cp.Parameter(n)                    # = ρ^2 · w_anchor  (vector)
     obj = cp.Minimize(
-        0.5 * cp.sum_squares(L @ w) - mu @ w + gamma * cp.sum(s)
+        0.5 * cp.sum_squares(L @ w)
+        - mu @ w
+        + gamma * cp.sum(s)
+        + 0.5 * cp.sum_squares(rho_scl * w)
+        - q_anchor @ w
     )
     cons = [
         cp.sum(w) == 1,
@@ -542,30 +593,37 @@ def build_qp_layer(n: int = 6):
     ]
     prob = cp.Problem(obj, cons)
     assert prob.is_dpp(), "QP is not DPP-compliant"
-    return CvxpyLayer(prob, parameters=[L, mu, gamma, w_prev], variables=[w])
+    return CvxpyLayer(
+        prob,
+        parameters=[L, mu, gamma, w_prev, rho_scl, q_anchor],
+        variables=[w],
+    )
 
 
-def make_orchestrator_net(in_dim: int = N_FEATS, hidden: int = 32,
-                          out_dim: int = 6):
+def make_orchestrator_net(in_dim: int = N_FEATS, hidden: int = 64,
+                          out_dim: int = N_ORCH, dropout: float = 0.15):
     torch, nn, _, _ = _lazy_torch()
 
     class Net(nn.Module):
         def __init__(self):
             super().__init__()
+            # Wider net + dropout for regularization; the limiting factor here
+            # is generalization across regimes, not capacity.
             self.body = nn.Sequential(
-                nn.Linear(in_dim, hidden), nn.ReLU(),
-                nn.Linear(hidden, hidden), nn.ReLU(),
+                nn.Linear(in_dim, hidden), nn.ReLU(), nn.Dropout(dropout),
+                nn.Linear(hidden, hidden), nn.ReLU(), nn.Dropout(dropout),
                 nn.Linear(hidden, out_dim),
             )
-            # log_scale folds the λ risk-aversion scalar (Ban-El Karoui-Lim
-            # 2018): scale of μ relative to Σ = effective risk aversion.
-            # Init small so that Σ (weekly ~1e-4) is comparable to μ at start;
-            # otherwise the QP degenerates to argmax-over-NN-output and the
-            # NN never sees a gradient that distinguishes regimes.
-            self.log_scale = nn.Parameter(torch.tensor(-4.0))    # softplus≈0.018
-            # log_gamma small so early training can explore turnover;
-            # realized-Sharpe loss will push γ up if churn is costly.
-            self.log_gamma = nn.Parameter(torch.tensor(-6.0))    # softplus≈0.0025
+            # log_scale ≈ softplus(-2) = 0.13 puts μ on the same scale as Σw,
+            # so the QP meaningfully trades return for variance.
+            self.log_scale = nn.Parameter(torch.tensor(-2.0))
+            self.log_gamma = nn.Parameter(torch.tensor(-6.0))   # softplus≈0.0025
+            # ρ is NOT a learned parameter — it is scheduled externally
+            # (see _anchor_schedule). A learned ρ was found to stay near its
+            # init value for hundreds of epochs, tethering DFL to EWMA. The
+            # schedule instead forces a warm-start → free-play curriculum:
+            # strong anchor initially for low-variance gradients, then
+            # released so the NN can discover allocations better than EWMA.
 
         def forward(self, x):
             raw = self.body(x)
@@ -576,24 +634,40 @@ def make_orchestrator_net(in_dim: int = N_FEATS, hidden: int = 32,
     return Net()
 
 
+def _anchor_schedule(epoch: int, warmup: int = 15, release: int = 75,
+                     rho_hi: float = 1.5, rho_lo: float = 0.05) -> float:
+    """ρ schedule: warmup anchored to EWMA, linear release, then free play.
+
+    ≤ warmup  → ρ = rho_hi        (DFL ≈ EWMA: learn μ patterns while safe)
+    warmup..release → linear to rho_lo
+    ≥ release → ρ = rho_lo        (nearly unconstrained, TC + variance only)
+    """
+    if epoch <= warmup:
+        return rho_hi
+    if epoch >= release:
+        return rho_lo
+    frac = (epoch - warmup) / float(release - warmup)
+    return rho_hi + (rho_lo - rho_hi) * frac
+
+
 def build_cov_factors(pod_rets: np.ndarray, spy_rets: np.ndarray,
                       lookback: int = LOOKBACK, eps: float = 1e-6
                       ) -> np.ndarray:
-    """Per-step (T, 6, 6) Cholesky factors of rolling empirical covariance.
+    """Per-step (T, N_ORCH, N_ORCH) Cholesky factors of rolling cov.
 
     Factor L is lower-triangular with L L^T = Σ; we return L^T so that
     cp.sum_squares(L^T @ w) = w^T Σ w. Uses data strictly before step i,
     so no look-ahead (step 0 falls back to identity * small σ).
     """
     T = pod_rets.shape[0]
-    stack = np.concatenate([pod_rets, spy_rets[:, None]], axis=1)   # (T, 6)
-    out = np.zeros((T, 6, 6))
-    default = np.eye(6) * 0.02        # weekly ~2% vol prior when no history
+    stack = np.concatenate([pod_rets, spy_rets[:, None]], axis=1)   # (T, N_ORCH)
+    out = np.zeros((T, N_ORCH, N_ORCH))
+    default = np.eye(N_ORCH) * 0.02   # weekly ~2% vol prior when no history
     for i in range(T):
         lo = max(0, i - lookback)
         win = stack[lo:i]
         if win.shape[0] >= 10:
-            sigma = np.cov(win, rowvar=False) + eps * np.eye(6)
+            sigma = np.cov(win, rowvar=False) + eps * np.eye(N_ORCH)
             try:
                 L = np.linalg.cholesky(sigma)
                 out[i] = L.T       # so cp: ||L.T w||^2 = w^T Σ w
@@ -629,7 +703,7 @@ def make_splits(dates: pd.DatetimeIndex) -> SplitIdx:
 
 
 def _combined_returns(pod_rets: np.ndarray, spy_rets: np.ndarray) -> np.ndarray:
-    """(T, 6) asset-return matrix for the orchestrator: 5 pods + SPY."""
+    """(T, N_ORCH) asset-return matrix for the orchestrator: pods + SPY."""
     return np.concatenate([pod_rets, spy_rets[:, None]], axis=1)
 
 
@@ -641,26 +715,30 @@ def sharpe_torch(rets, freq: int = 52, eps: float = 1e-8):
     return (mu / (sd + eps)) * (freq ** 0.5)
 
 
-def _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
+def _run_sequence(net, layer, feats_t, L_t, asset_rets_t, anchor_t, rho: float,
                   start_idx: int, end_idx: int, train: bool):
-    """Roll forward through [start_idx, end_idx) and return (w_matrix, rets).
+    """Roll forward through [start_idx, end_idx), returning (w_matrix, rets).
 
-    asset_rets_t : (T, 6) tensor of realized pod+SPY returns over each step.
-    Returns w_matrix (k, 6) and realized returns vector (k,). Turnover drag
-    is NOT applied here — the orchestrator internalizes TC via the γ
+    asset_rets_t : (T, N_ORCH) tensor of realized pod+SPY returns per step.
+    anchor_t     : (T, N_ORCH) EWMA-softmax prior allocation per step.
+    Returns w_matrix (k, N_ORCH) and realized returns vector (k,). Turnover
+    drag is NOT applied here — the orchestrator internalizes TC via the γ
     penalty in the QP (Gârleanu-Pedersen 2013). Explicit TC is applied in
-    the backtest stage for honest reporting.
+    the backtest for honest reporting.
     """
     import torch
     net.train(train)
     ws = []
     rs = []
-    w_prev = torch.full((1, 6), 1.0 / 6)
+    w_prev = torch.full((1, N_ORCH), 1.0 / N_ORCH)
+    rho_scl = torch.tensor([float(rho)], dtype=torch.float32)   # (1,)
+    rho2 = float(rho) ** 2
     for i in range(start_idx, end_idx):
         x = feats_t[i:i+1]
-        mu, gamma = net(x)                          # (1,6), ()
-        L_i = L_t[i:i+1]                            # (1,6,6)
-        (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev)
+        mu, gamma = net(x)                          # (1,N_ORCH), ()
+        L_i = L_t[i:i+1]
+        q_anchor = rho2 * anchor_t[i:i+1]           # (1, N_ORCH)
+        (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor)
         r_i = (w_i * asset_rets_t[i]).sum()
         ws.append(w_i)
         rs.append(r_i)
@@ -671,22 +749,42 @@ def _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
 
 
 def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
-              splits: SplitIdx, epochs: int = 60, lr: float = 1e-3,
-              patience: int = 10, verbose: bool = True):
-    """Train the orchestrator end-to-end on -Sharpe loss, early stop on val."""
+              splits: SplitIdx, epochs: int = 120, lr: float = 1e-3,
+              patience: int = 15, verbose: bool = True,
+              bootstrap_frac: float = 0.85, n_rolling_windows: int = 6,
+              rolling_window_len: int = 52):
+    """Train the orchestrator end-to-end on a ROBUST Sharpe loss.
+
+    Improvements vs. the baseline -mean-Sharpe:
+      1. Bootstrap mini-batch (sample `bootstrap_frac` of train weeks per
+         epoch) — reduces gradient variance and acts like dropout over time.
+      2. Worst-window aggregation: compute Sharpe on each of N overlapping
+         52-week rolling windows within the bootstrapped sample, and use
+         the MIN (softmin) across windows as the loss. This targets the
+         *dynamic* Sharpe objective — an allocator that's mediocre-averaged
+         but robust across regimes is preferred over one that wins big in
+         2021 and loses in 2022. Standard robust-RL formulation
+         (Tamar-Glassner-Mannor 2015); closer to CVaR-style tail aversion.
+      3. Early stop on val uses the same robust worst-window aggregation
+         so the checkpoint selection criterion matches the training loss.
+    """
     import torch
 
     train_idx = np.flatnonzero(splits.train)
     val_idx   = np.flatnonzero(splits.val)
 
-    # Standardize features using ONLY train-window stats (no look-ahead).
     feats_z, f_mu, f_sd = standardize_with_train(feats, splits.train)
     feats_t = torch.tensor(feats_z, dtype=torch.float32)
     L_t = torch.tensor(L_stack, dtype=torch.float32)
     asset_rets = _combined_returns(panel.pod_rets, panel.spy_rets)
     asset_rets_t = torch.tensor(asset_rets, dtype=torch.float32)
 
-    layer = build_qp_layer(6)
+    # Precompute EWMA-softmax anchor across the full panel. No look-ahead:
+    # baseline_ewma_softmax is built with strictly-prior pod returns.
+    anchor_np = baseline_ewma_softmax(panel)
+    anchor_t = torch.tensor(anchor_np, dtype=torch.float32)
+
+    layer = build_qp_layer(N_ORCH)
     net = make_orchestrator_net()
     opt = torch.optim.Adam(net.parameters(), lr=lr)
 
@@ -698,86 +796,145 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
     bad = 0
     history = []
 
+    rng = np.random.default_rng(SEED)
+    # Match the release epoch of _anchor_schedule — DFL is meaningfully free
+    # only after this point, so early-stopping shouldn't select warmup epochs.
+    WARMUP_DONE = 15
+    RELEASE_DONE = 75
+
     for ep in range(1, epochs + 1):
         t0 = time.time()
         opt.zero_grad()
-        _, R_tr = _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
-                                i0, i1, train=True)
-        loss = -sharpe_torch(R_tr)
+
+        # Anchor schedule — warm-start / release curriculum (see docstring).
+        rho_ep = _anchor_schedule(ep)
+
+        _, R_tr_full = _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
+                                     anchor_t, rho_ep, i0, i1, train=True)
+        # Bootstrap a fraction of the train-window indices, preserving order
+        # so rolling-window Sharpe still has temporal meaning.
+        n_tr = R_tr_full.shape[0]
+        k = max(rolling_window_len + 2, int(n_tr * bootstrap_frac))
+        keep = np.sort(rng.choice(n_tr, size=k, replace=False))
+        R_tr = R_tr_full[torch.as_tensor(keep)]
+        loss = robust_sharpe_loss(R_tr, n_rolling_windows, rolling_window_len)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 5.0)
         opt.step()
 
         with torch.no_grad():
+            # Validation uses a FIXED low-ρ setting (post-curriculum), so
+            # early-stop tracks the policy we will actually deploy.
             _, R_val = _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
-                                     j0, j1, train=False)
-            val_sr = float(sharpe_torch(R_val))
-            tr_sr  = float(-loss.detach())
+                                     anchor_t, 0.05, j0, j1, train=False)
+            val_sr_mean = float(sharpe_torch(R_val))
+            val_sr_robust = float(-robust_sharpe_loss(
+                R_val, min(n_rolling_windows, max(1, R_val.shape[0] - rolling_window_len)),
+                rolling_window_len) if R_val.shape[0] > rolling_window_len
+                else torch.tensor(val_sr_mean))
+            tr_sr = float(sharpe_torch(R_tr.detach()))
 
-        history.append((ep, tr_sr, val_sr))
+        history.append((ep, tr_sr, val_sr_mean, val_sr_robust))
         dt = time.time() - t0
-        if verbose:
+        if verbose and (ep <= 10 or ep % 10 == 0):
             scale = float(torch.nn.functional.softplus(net.log_scale))
             gamma = float(torch.nn.functional.softplus(net.log_gamma))
             print(f"[train] ep {ep:3d}/{epochs}  train_SR={tr_sr:+.3f}  "
-                  f"val_SR={val_sr:+.3f}  scale={scale:.3f}  gamma={gamma:.4f}"
-                  f"  {dt:.1f}s")
+                  f"val_SR={val_sr_mean:+.3f}  val_robust={val_sr_robust:+.3f}  "
+                  f"rho={rho_ep:.2f}  scale={scale:.3f}  gamma={gamma:.4f}  {dt:.1f}s")
 
-        if val_sr > best_val + 1e-4:
-            best_val = val_sr
-            best_state = {k: v.detach().clone() for k, v in net.state_dict().items()}
-            bad = 0
-        else:
-            bad += 1
-            if bad >= patience:
-                if verbose:
-                    print(f"[train] early stop at epoch {ep} "
-                          f"(no val improvement in {patience} epochs)")
-                break
+        # Early stop on robust val criterion — but only start tracking once
+        # the anchor curriculum has released, otherwise we'd lock in the
+        # warmup-epoch policy (which is ≈ EWMA baseline and cannot improve).
+        if ep >= RELEASE_DONE:
+            if val_sr_robust > best_val + 1e-4:
+                best_val = val_sr_robust
+                best_state = {k: v.detach().clone() for k, v in net.state_dict().items()}
+                bad = 0
+            else:
+                bad += 1
+                if bad >= patience:
+                    if verbose:
+                        print(f"[train] early stop at epoch {ep} "
+                              f"(no val_robust improvement in {patience} "
+                              f"epochs past release)")
+                    break
+        elif ep == WARMUP_DONE and verbose:
+            print(f"[train] warmup done at ep {ep}: val_robust={val_sr_robust:+.3f}  "
+                  "(early-stop tracking begins after anchor release)")
 
     if best_state is not None:
         net.load_state_dict(best_state)
-    return net, layer, feats_t, L_t, asset_rets_t, history, (f_mu, f_sd), best_val
+    return (net, layer, feats_t, L_t, asset_rets_t, anchor_t, history,
+            (f_mu, f_sd), best_val)
+
+
+def robust_sharpe_loss(R, n_windows: int, window_len: int):
+    """Negative soft-min of annualized Sharpe over overlapping rolling windows.
+
+    Smooth-min via log-sum-exp for differentiability, temperature=8 —
+    smaller temp = harder min, more pessimistic. With temperature=8 on
+    values of order 1, the softmin is ~close to min but gradient still
+    flows to all windows. Works for very short R (falls back to single
+    Sharpe). Ref: softmin / Tamar-Glassner-Mannor 2015 "Policy Gradients
+    Beyond Expectations".
+    """
+    import torch
+    T = R.shape[0]
+    if T <= window_len or n_windows <= 1:
+        return -sharpe_torch(R)
+    stride = max(1, (T - window_len) // max(1, n_windows - 1))
+    srs = []
+    for k in range(n_windows):
+        a = k * stride
+        b = a + window_len
+        if b > T:
+            break
+        srs.append(sharpe_torch(R[a:b]))
+    srs = torch.stack(srs)
+    # softmin(x) = -LSE(-x/τ)·τ. Small τ → harder min.
+    tau = 8.0
+    soft_min = -torch.logsumexp(-srs * tau, dim=0) / tau
+    return -soft_min
 
 
 # ---------- Baselines ----------
-# Each baseline returns a (T, 6) weight matrix over {pods, SPY} aligned to
-# panel.dates. Turnover costs are applied uniformly downstream in the
-# backtest, so comparisons are honest.
+# Each baseline returns a (T, N_ORCH) weight matrix over {pods, SPY}
+# aligned to panel.dates. Turnover costs are applied uniformly downstream
+# in the backtest, so comparisons are honest.
 
 def baseline_spy_only(T: int) -> np.ndarray:
-    W = np.zeros((T, 6))
-    W[:, 5] = 1.0
+    W = np.zeros((T, N_ORCH))
+    W[:, N_PODS] = 1.0          # SPY is the last column
     return W
 
 
 def baseline_equal_weight_pods(T: int) -> np.ndarray:
-    """1/5 across 5 pods, 0 SPY — matches the 'equal-weight over pods' spec."""
-    W = np.zeros((T, 6))
-    W[:, :5] = 1.0 / 5.0
+    """1/N_PODS across pods, 0 SPY — matches the spec's 'equal-weight' baseline."""
+    W = np.zeros((T, N_ORCH))
+    W[:, :N_PODS] = 1.0 / N_PODS
     return W
 
 
 def baseline_ewma_softmax(panel: PodPanel, halflife: int = 12,
                           temperature: float = 5.0) -> np.ndarray:
-    """Old hand-crafted orchestrator: 60-day EWMA of pod Sharpes, softmax'd.
+    """Old hand-crafted orchestrator: EWMA of pod Sharpes, softmax'd over pods.
 
-    This is the incumbent we want DFL to beat. Uses pod-return history up
-    to (but not including) step i — no look-ahead. SPY is assigned zero
-    unless insufficient history, in which case weight falls to SPY.
+    This is the incumbent DFL must beat. Uses pod-return history strictly
+    up to (but not including) step i — no look-ahead. SPY assigned zero
+    except during the 12-step priming window where weight falls to SPY.
     """
     T = panel.pod_rets.shape[0]
-    W = np.zeros((T, 6))
+    W = np.zeros((T, N_ORCH))
     alpha = 1.0 - 0.5 ** (1.0 / halflife)
-    ewm_mu = np.zeros(5)
-    ewm_sq = np.zeros(5)
+    ewm_mu = np.zeros(N_PODS)
+    ewm_sq = np.zeros(N_PODS)
     primed = False
     for i in range(T):
         if i < 12:
             # No history yet: park in SPY — the "do nothing smart" fallback.
-            W[i, 5] = 1.0
+            W[i, N_PODS] = 1.0
             continue
-        # Use strictly-prior returns.
         r_prev = panel.pod_rets[i - 1]
         if not primed:
             ewm_mu = panel.pod_rets[:i].mean(axis=0)
@@ -788,14 +945,11 @@ def baseline_ewma_softmax(panel: PodPanel, halflife: int = 12,
             ewm_sq = (1 - alpha) * ewm_sq + alpha * (r_prev ** 2)
         var = np.maximum(ewm_sq - ewm_mu ** 2, 1e-10)
         sr = ewm_mu / np.sqrt(var)
-        # Softmax with a moderate temperature — aggressive enough to
-        # actually shift weight, not so aggressive it degenerates to one-hot.
         z = sr * temperature
         z = z - z.max()
         expz = np.exp(z)
         w_pods = expz / expz.sum()
-        W[i, :5] = w_pods
-        # SPY = 0; this baseline lives purely in pod space.
+        W[i, :N_PODS] = w_pods
     return W
 
 
@@ -806,7 +960,7 @@ class BTResult:
     name: str
     net_rets: np.ndarray
     turnover: np.ndarray          # L1 turnover at each step, starting step 1
-    W: np.ndarray                 # (T, 6) orchestrator weights
+    W: np.ndarray                 # (T, N_ORCH) orchestrator weights
     dates: pd.DatetimeIndex
 
 
@@ -825,7 +979,7 @@ def backtest_with_tc(name: str, W: np.ndarray, asset_rets: np.ndarray,
     turnover = np.zeros(T)
     turnover[1:] = np.abs(W[1:] - W[:-1]).sum(axis=1)
     # Step 0 turnover = from equal-weight prior (realistic initialization).
-    turnover[0] = np.abs(W[0] - np.full(6, 1.0 / 6)).sum()
+    turnover[0] = np.abs(W[0] - np.full(N_ORCH, 1.0 / N_ORCH)).sum()
     tc = turnover * (tc_bps / 1e4)
     net = gross - tc
     return BTResult(name=name, net_rets=net, turnover=turnover, W=W, dates=dates)
@@ -868,34 +1022,48 @@ def pod_allocation_stats(bt: BTResult, regime_vol: np.ndarray) -> dict:
     """Mean weight per pod + regime-conditional means (high vs low SPY vol).
 
     Regime split at median of SPY 20d realized vol over the backtest window.
+    Tiny negatives from QP-solver slack (|w| < 1e-4) are clipped to 0 for
+    cleaner display.
     """
     labels = POD_NAMES + ["SPY"]
-    mean_w = dict(zip(labels, bt.W.mean(axis=0).round(4)))
+    def _clip(arr):
+        arr = np.where(np.abs(arr) < 1e-4, 0.0, arr)
+        return arr.round(4)
+    mean_w = dict(zip(labels, _clip(bt.W.mean(axis=0))))
     vol = regime_vol
     med = float(np.median(vol))
     hi = vol >= med
     lo = vol <  med
-    mean_hi = dict(zip(labels, bt.W[hi].mean(axis=0).round(4)))
-    mean_lo = dict(zip(labels, bt.W[lo].mean(axis=0).round(4)))
+    mean_hi = dict(zip(labels, _clip(bt.W[hi].mean(axis=0))))
+    mean_lo = dict(zip(labels, _clip(bt.W[lo].mean(axis=0))))
     return dict(mean=mean_w, high_vol=mean_hi, low_vol=mean_lo,
                 vol_median=med, n_hi=int(hi.sum()), n_lo=int(lo.sum()))
 
 
 # ---------- DFL test-window rollout ----------
 
-def rollout_dfl(net, layer, feats_t, L_t, asset_rets_t,
-                start_idx: int, end_idx: int) -> np.ndarray:
-    """Produce (k, 6) weight matrix over [start_idx, end_idx) from trained NN."""
+def rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
+                start_idx: int, end_idx: int, rho: float = 0.05) -> np.ndarray:
+    """Produce (k, N_ORCH) weight matrix from the trained NN at test time.
+
+    `rho` is the post-curriculum anchor strength used during evaluation —
+    we keep a small ρ (=0.05) so the QP remains well-conditioned when the
+    NN output is near-uniform; the anchor effectively disappears for any
+    ρ near zero in the DPP penalty 0.5·ρ²·||w-w_a||².
+    """
     import torch
     net.eval()
     ws = []
-    w_prev = torch.full((1, 6), 1.0 / 6)
+    w_prev = torch.full((1, N_ORCH), 1.0 / N_ORCH)
+    rho_scl = torch.tensor([float(rho)], dtype=torch.float32)
+    rho2 = float(rho) ** 2
     with torch.no_grad():
         for i in range(start_idx, end_idx):
             x = feats_t[i:i+1]
             mu, gamma = net(x)
             L_i = L_t[i:i+1]
-            (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev)
+            q_anchor = rho2 * anchor_t[i:i+1]
+            (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor)
             ws.append(w_i)
             w_prev = w_i
     return torch.cat(ws, dim=0).numpy()
@@ -969,7 +1137,7 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
 
 # ---------- End-to-end driver ----------
 
-def run_experiment(epochs: int = 60, patience: int = 10, seed: int = SEED):
+def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
     import torch
     torch.manual_seed(seed)
 
@@ -986,15 +1154,17 @@ def run_experiment(epochs: int = 60, patience: int = 10, seed: int = SEED):
 
     # Train DFL.
     t0 = time.time()
-    net, layer, feats_t, L_t, asset_rets_t, hist, _, best_val = train_dfl(
-        panel, feats, L_stack, splits, epochs=epochs, patience=patience
-    )
-    print(f"[train] done in {time.time()-t0:.1f}s  best val Sharpe={best_val:.3f}")
+    (net, layer, feats_t, L_t, asset_rets_t, anchor_t, hist, _,
+     best_val) = train_dfl(panel, feats, L_stack, splits,
+                           epochs=epochs, patience=patience)
+    print(f"[train] done in {time.time()-t0:.1f}s  "
+          f"best val robust-Sharpe={best_val:.3f}")
 
     # Roll DFL across the test window.
     test_idx = np.flatnonzero(splits.test)
     i0, i1 = int(test_idx[0]), int(test_idx[-1]) + 1
-    W_dfl_test = rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, i0, i1)
+    W_dfl_test = rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
+                             i0, i1)
     dates_test = pd.DatetimeIndex(panel.dates[i0:i1])
     asset_rets_test = asset_rets[i0:i1]
 
@@ -1042,13 +1212,25 @@ def run_experiment(epochs: int = 60, patience: int = 10, seed: int = SEED):
                    f"term structure, sentiment) and a longer training window "
                    f"would likely close the gap.")
     if dfl_sr < spy_sr:
-        obs.append(f"DFL does NOT beat naive SPY buy-and-hold (SR {spy_sr:.2f}) "
-                   f"on this test window. SPY in 2023-2024 delivered a "
-                   f"mega-cap-driven rally that the pod universe cannot fully "
-                   f"replicate. A diversified pod mix trades absolute Sharpe "
-                   f"against drawdown / tail-risk resilience "
-                   f"(DFL MDD {metrics_rows[0]['max_dd']:.1%} vs "
-                   f"SPY MDD {metrics_rows[1]['max_dd']:.1%}).")
+        dfl_mdd = metrics_rows[0]['max_dd']
+        spy_mdd = metrics_rows[1]['max_dd']
+        mdd_gap = dfl_mdd - spy_mdd             # less negative = better for DFL
+        if mdd_gap > 0.01:
+            mdd_note = (f"DFL does pay less drawdown cost "
+                        f"(MDD {dfl_mdd:.1%} vs SPY {spy_mdd:.1%}), "
+                        f"offering a partial Sharpe/DD tradeoff.")
+        else:
+            mdd_note = (f"DFL's MDD ({dfl_mdd:.1%}) is essentially tied "
+                        f"with SPY ({spy_mdd:.1%}) — the active rotation "
+                        f"traded drawdown protection for absolute return, "
+                        f"so this is not a risk-reduction story. DFL is "
+                        f"genuinely short of SPY on this window; no spin.")
+        obs.append(f"DFL does NOT beat naive SPY buy-and-hold (SR {spy_sr:.2f} "
+                   f"vs DFL {dfl_sr:.2f}) on this test window. SPY in "
+                   f"2023-2024 delivered a mega-cap rally the pod universe "
+                   f"cannot fully replicate (the closest analogue is "
+                   f"cross-sectional Momentum, which does get a large mean "
+                   f"allocation). {mdd_note}")
     else:
         obs.append(f"DFL also beats SPY buy-and-hold (SR delta {dfl_sr-spy_sr:+.3f}), "
                    f"confirming the pod diversification plus end-to-end training "
@@ -1096,10 +1278,32 @@ def run_experiment(epochs: int = 60, patience: int = 10, seed: int = SEED):
         f"- Train:   2018-01-01 → {TRAIN_END}\n"
         f"- Validate: 2022-01-01 → {VAL_END}  (2022 rates shock = stressed regime)\n"
         f"- Test:    {TEST_START} → {prices.index.max().date()}  (pure OOS)\n"
-        "\nAll other spec details (5 pods, weekly Friday rebalance, t+1 "
-        "application, 5 bps TC, Ledoit-Wolf shrinkage, exact simplex "
-        "projection, cvxpylayers QP with TC penalty, -Sharpe loss, early "
-        "stopping on val) are preserved."
+        f"\nAll other spec details ({N_PODS} pods + SPY — see below for "
+        "the design improvements layered on top of the base spec — weekly "
+        "Friday rebalance, t+1 application, 5 bps TC, Ledoit-Wolf shrinkage, "
+        "exact simplex projection, cvxpylayers QP, early stopping on val) "
+        "are preserved.\n\n"
+        "### Improvements over the baseline DFL design\n"
+        f"- Added a **Trend pod** (Moskowitz-Ooi-Pedersen 2012 TSMOM) as a "
+        f"{N_PODS}th pod — time-series momentum on each name, distinct from "
+        "cross-sectional Momentum.\n"
+        "- **EWMA-softmax anchor** in the QP objective "
+        "(`0.5·ρ²·‖w - w_anchor‖²`), with a decaying ρ schedule (warm-start "
+        "at 1.5 → linear release to 0.05 by epoch 75). This gives DFL a "
+        "sensible prior so training starts from a coherent allocation "
+        "rather than random, while still allowing the NN to learn "
+        "deviations from EWMA. DPP-compliant via parameter splitting.\n"
+        "- **Robust Sharpe loss**: minimum (softmin, τ=8) over 6 "
+        "overlapping 52-week rolling Sharpes on each bootstrapped batch. "
+        "Targets the worst-window allocator rather than the mean "
+        "(Tamar-Glassner-Mannor 2015), which is strictly closer to the "
+        "'dynamic Sharpe' objective you actually care about.\n"
+        "- **Bootstrap mini-batches** (85% of train weeks per epoch) for "
+        "gradient-variance reduction.\n"
+        "- Wider NN (hidden=64) + dropout=0.15 for capacity without overfit.\n"
+        "- Release-aware early stopping: best-val tracking begins only "
+        "after the anchor releases (ep ≥ 75), so we don't commit to the "
+        "warmup-epoch policy (which is by construction ≈ EWMA)."
     )
 
     write_report(metrics_rows, alloc, hist, obs, adapted_note)
@@ -1107,5 +1311,5 @@ def run_experiment(epochs: int = 60, patience: int = 10, seed: int = SEED):
 
 if __name__ == "__main__":
     t0 = time.time()
-    run_experiment(epochs=60, patience=10)
+    run_experiment(epochs=120, patience=15)
     print(f"[done] total elapsed {time.time()-t0:.1f}s")
