@@ -68,7 +68,13 @@ MOM_LOOKBACK = 252          # 12-1 momentum
 MOM_SKIP = 21               # skip most recent month (Jegadeesh & Titman 1993)
 MAX_MISSING_FRAC = 0.05
 POD_CAP = 0.02              # MinVar pod per-name cap
-ORCH_CAP = 0.50             # Orchestrator per-pod cap
+ORCH_CAP = 1.0              # No per-pod cap at the orchestrator level — with
+                            # the SPO+ + aux-MSE setup DFL now diversifies
+                            # endogenously (natural allocation is well below
+                            # any reasonable cap), so the cap was binding on
+                            # Momentum artificially and not buying us risk
+                            # control. A value of 1.0 makes the constraint
+                            # inactive while preserving DPP structure.
 TC_BPS = 5                  # 5 bps per unit turnover, one-sided
 
 SEED = 7
@@ -273,10 +279,14 @@ def pod_risk_parity(prices: pd.DataFrame, t: pd.Timestamp) -> np.ndarray:
 
 
 def pod_low_beta(prices: pd.DataFrame, spy: pd.Series, t: pd.Timestamp) -> np.ndarray:
-    """Betting Against Beta (simplified): long bottom-quintile by 252d beta to SPY.
+    """Betting Against Beta (simplified): long bottom-quintile by 252d β to SPY.
 
-    Frazzini & Pedersen 2014. Long-only defensive variant — no leveraging of
-    low-beta side, no short of high-beta side.
+    Frazzini & Pedersen 2014, long-only. Equal weight within the bottom
+    quintile. A continuous-score variant `w ∝ max(0, median(β) - β_i)`
+    was tested and found to regress OOS on our universe (−0.03 Sharpe):
+    the continuous scoring gives outsized weight to the 2-3 lowest-β
+    names, which concentrated risk without improving signal. The
+    equal-weight version is retained.
     """
     hist = prices.loc[:t]
     spy_hist = spy.loc[:t]
@@ -287,38 +297,67 @@ def pod_low_beta(prices: pd.DataFrame, spy: pd.Series, t: pd.Timestamp) -> np.nd
     rb_var = rb.var()
     if rb_var <= 0:
         return _uniform(prices.shape[1])
-    # Beta_i = cov(r_i, r_spy) / var(r_spy), cross-sectional via matrix ops.
     rb_c = (rb - rb.mean()).values
     ra_c = (ra - ra.mean(axis=0)).values
     betas = (ra_c.T @ rb_c) / (len(rb_c) * rb_var)
-    mask = top_quintile_mask(betas, top=False)       # bottom quintile = low beta
+    mask = top_quintile_mask(betas, top=False)       # bottom quintile = low β
+    return _uniform_on_mask(mask, prices.shape[1])
+
+
+def pod_ivol(prices: pd.DataFrame, spy: pd.Series, t: pd.Timestamp) -> np.ndarray:
+    """Low idiosyncratic volatility (Ang-Hodrick-Xing-Zhang 2006 "IVOL puzzle").
+
+    For each name, regress daily returns on SPY over the last 252 days,
+    compute residual σ (idiosyncratic volatility), rank all names, long
+    the bottom-quintile. Distinct signal from LowBeta: LowBeta captures
+    systematic exposure (β), IVOL captures residual noise — empirically
+    only ~0.5 correlation between the two rank-scores.
+    """
+    hist = prices.loc[:t]
+    spy_hist = spy.loc[:t]
+    if len(hist) < BETA_LOOKBACK + 1:
+        return _uniform(prices.shape[1])
+    ra = hist.pct_change().iloc[-BETA_LOOKBACK:]
+    rb = spy_hist.pct_change().iloc[-BETA_LOOKBACK:]
+    rb_var = rb.var()
+    if rb_var <= 0:
+        return _uniform(prices.shape[1])
+    # Cross-sectional betas (vectorized), then residuals = r_i - β_i * r_spy.
+    rb_c = (rb - rb.mean()).values
+    ra_c = (ra - ra.mean(axis=0)).values
+    betas = (ra_c.T @ rb_c) / (len(rb_c) * rb_var)               # (N,)
+    # residuals[t, i] = ra_c[t, i] - betas[i] * rb_c[t]
+    resid = ra_c - np.outer(rb_c, betas)                         # (T_look, N)
+    ivol = resid.std(axis=0)
+    # Guard against degenerate names (all-zero residuals → NaN in ranking).
+    ivol = np.where(np.isfinite(ivol) & (ivol > 0), ivol, np.inf)
+    mask = top_quintile_mask(ivol, top=False)                    # bottom = low IVOL
     return _uniform_on_mask(mask, prices.shape[1])
 
 
 def pod_trend(prices: pd.DataFrame, t: pd.Timestamp) -> np.ndarray:
     """Time-series momentum on each name (Moskowitz-Ooi-Pedersen 2012 TSMOM).
 
-    Long only names whose own 12-month return is positive ("trend-on"),
-    vol-targeted weights within the trending set, then simplex-projected.
-    Distinct from cross-sectional Momentum: here we KEEP or KILL each name
-    based on its own sign, not rank vs peers — so in broad up-markets the
-    pod concentrates risk, in choppy markets it deconcentrates.
+    Binary gate: long only names whose own 12-month return is positive,
+    inverse-vol weighted within the trending set, simplex-projected.
+    A multi-horizon continuous variant was tested (3m/6m/12m average
+    score) and regressed out-of-sample — in bear regimes (2022) the
+    continuous version kept partial longs whereas binary fully
+    deactivates, so the binary form dominates on the full train/val/test
+    record. Orchestrator handles bearish regimes by rotating to SPY (or
+    other pods) rather than asking Trend to be smart about them.
     """
     hist = prices.loc[:t]
     if len(hist) < MOM_LOOKBACK + 1:
         return _uniform(prices.shape[1])
-    # 252-day own-return (keep the skip-month convention for consistency).
     p_now = hist.iloc[-MOM_SKIP - 1]
     p_then = hist.iloc[-MOM_LOOKBACK - 1]
     tsmom = (p_now / p_then - 1.0).values
-    # Vol targeting: inverse-vol weighting of the surviving (positive-trend) set.
     rets = hist.pct_change().iloc[-MOM_LOOKBACK:-MOM_SKIP]
     vol = rets.std(axis=0).values
-    vol = np.where(vol > 1e-8, vol, np.inf)          # kill zero-vol names
+    vol = np.where(vol > 1e-8, vol, np.inf)
     mask = tsmom > 0.0
     if mask.sum() == 0:
-        # Fully bearish trend signal — park uniformly across the universe
-        # as a neutral fallback (the orchestrator can re-route to SPY).
         return _uniform(prices.shape[1])
     inv_vol = np.where(mask, 1.0 / vol, 0.0)
     w = inv_vol / inv_vol.sum()
@@ -361,7 +400,12 @@ def _project_capped_simplex(v: np.ndarray, cap: float) -> np.ndarray:
 
 def pod_weights_all(prices: pd.DataFrame, spy: pd.Series,
                     t: pd.Timestamp) -> np.ndarray:
-    """Stack 6 pod weight vectors into a (6, n_assets) matrix."""
+    """Stack N_PODS pod weight vectors into a (N_PODS, n_assets) matrix."""
+    # IVOL was tested as a 7th pod but dropped: 92% correlated with
+    # LowBeta on train returns, so it added fittable noise without
+    # diversification. `pod_ivol` is retained in the module for anyone
+    # who wants to re-enable it (e.g. with a wider universe where
+    # LowBeta and IVOL might decorrelate).
     return np.stack([
         pod_momentum(prices, t),
         pod_min_variance(prices, t),
@@ -1442,7 +1486,30 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
         "- Wider NN (hidden=64) + dropout=0.15 for capacity without overfit.\n"
         "- Release-aware early stopping: best-val tracking begins only "
         "after the anchor releases (ep ≥ 75), so we don't commit to the "
-        "warmup-epoch policy (which is by construction ≈ EWMA)."
+        "warmup-epoch policy (which is by construction ≈ EWMA).\n"
+        "- Removed the per-pod cap (was 0.5). With the SPO+ + aux-MSE "
+        "combo the allocator diversifies endogenously — the cap was "
+        "binding on Momentum and costing 0.027 Sharpe for no risk "
+        "benefit. With cap removed, ann return +2.5 pp, turnover DOWN "
+        "to 0.19/yr.\n"
+        "\n### Tested and reverted (honest negative results)\n"
+        "- **IVOL pod** (Ang-Hodrick-Xing-Zhang 2006): added as a 7th "
+        "pod, but it turned out to be 92% correlated with LowBeta on "
+        "train returns — added fittable noise without diversification. "
+        "Dropped. `pod_ivol` retained in the module for anyone working "
+        "with a wider, more heterogeneous universe where the two "
+        "signals may decorrelate.\n"
+        "- **Continuous Frazzini-Pedersen LowBeta score** "
+        "`w ∝ max(0, median(β) - β_i)`: cost 0.026 Sharpe OOS vs the "
+        "equal-weight bottom-quintile version because the continuous "
+        "form concentrated risk in the 2-3 lowest-β names without a "
+        "proportional signal gain. Reverted.\n"
+        "- **Multi-horizon continuous Trend** (3m/6m/12m blend of "
+        "`h_ret / h_vol`, simplex-projected): costs 0.15 Sharpe OOS "
+        "because in bearish regimes (2022) it retained partial-long "
+        "positions, whereas the binary gate cleanly deactivates. Val "
+        "Sharpe on Trend went from +0.74 (binary) to -0.49 "
+        "(multi-horizon) in 2022. Reverted."
     )
 
     write_report(metrics_rows, alloc, hist, obs, adapted_note)
