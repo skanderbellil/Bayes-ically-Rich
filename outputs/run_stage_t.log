@@ -1,0 +1,49 @@
+[data] date range: 2016-04-18 -> 2024-12-30
+[data] constituents kept: 94  dropped: 4
+[data] cross-asset extras: ['TLT', 'GLD']
+[data] dropped (>5% missing):
+       APP    57.4%
+       ABNB   53.5%
+       CARR   45.0%
+       CVNA   11.9%
+[data] rows (common trading days, no-NaN): 2191
+[data] full universe: 94 constituents
+[pods] loaded cached panel (pod_panel_v3.pkl)
+[prep] train/val/test: 209/52/104  (prep 0.6s)
+[eta  ] running 4 η values at λ_aux=30.0, ρ_hi=2.5, lr=1e-03
+[eta  ] η= 0.00  best_val_rob=+0.256  max_val_mean=+0.296  epochs=80  147s
+[eta  ] η= 1.00  best_val_rob=-0.650  max_val_mean=+0.235  epochs=80  142s
+[eta  ] η= 5.00  best_val_rob=-0.693  max_val_mean=+0.330  epochs=80  145s
+[eta  ] η=25.00  best_val_rob=-0.742  max_val_mean=+0.324  epochs=80  147s
+[eta  ] BEST η = 0.0 (val_robust=+0.256)
+[train] loss_kind=spo_plus  lambda_aux=30.0
+[train] ep   1/120  loss=+0.7012  spo=+0.0013 aux=0.02333 train_SR=+0.974  val_SR=-0.548  val_robust=-0.548  rho=2.50  scale=0.127  gamma=0.0025  1.6s
+[train] ep   2/120  loss=+0.5654  spo=+0.0010 aux=0.01881 train_SR=+0.964  val_SR=-0.544  val_robust=-0.544  rho=2.50  scale=0.127  gamma=0.0025  1.7s
+[train] ep   3/120  loss=+0.4641  spo=+0.0010 aux=0.01544 train_SR=+0.957  val_SR=-0.516  val_robust=-0.516  rho=2.50  scale=0.127  gamma=0.0025  1.8s
+[train] ep   4/120  loss=+0.3490  spo=+0.0009 aux=0.01160 train_SR=+0.935  val_SR=-0.491  val_robust=-0.491  rho=2.50  scale=0.126  gamma=0.0025  1.7s
+[train] ep   5/120  loss=+0.2625  spo=+0.0008 aux=0.00872 train_SR=+0.948  val_SR=-0.464  val_robust=-0.464  rho=2.50  scale=0.126  gamma=0.0025  1.7s
+[train] ep   6/120  loss=+0.2201  spo=+0.0008 aux=0.00731 train_SR=+0.992  val_SR=-0.414  val_robust=-0.414  rho=2.50  scale=0.126  gamma=0.0025  1.7s
+[train] ep   7/120  loss=+0.1887  spo=+0.0008 aux=0.00626 train_SR=+0.908  val_SR=-0.415  val_robust=-0.415  rho=2.50  scale=0.126  gamma=0.0025  1.8s
+[train] ep   8/120  loss=+0.1784  spo=+0.0008 aux=0.00592 train_SR=+0.884  val_SR=-0.412  val_robust=-0.412  rho=2.50  scale=0.126  gamma=0.0025  2.0s
+[train] ep   9/120  loss=+0.1811  spo=+0.0008 aux=0.00601 train_SR=+0.871  val_SR=-0.392  val_robust=-0.392  rho=2.50  scale=0.126  gamma=0.0025  1.8s
+[train] ep  10/120  loss=+0.1643  spo=+0.0009 aux=0.00545 train_SR=+0.897  val_SR=-0.340  val_robust=-0.340  rho=2.50  scale=0.126  gamma=0.0025  1.8s
+[train] warmup done at ep 15: val_robust=-0.025  (early-stop tracking begins after anchor release)
+[train] ep  20/120  loss=+0.0986  spo=+0.0008 aux=0.00326 train_SR=+0.998  val_SR=-0.088  val_robust=-0.088  rho=2.30  scale=0.125  gamma=0.0025  1.8s
+[train] ep  30/120  loss=+0.0703  spo=+0.0009 aux=0.00231 train_SR=+0.991  val_SR=-0.006  val_robust=-0.006  rho=1.89  scale=0.124  gamma=0.0025  1.8s
+[train] ep  40/120  loss=+0.0617  spo=+0.0014 aux=0.00201 train_SR=+0.930  val_SR=+0.030  val_robust=+0.030  rho=1.48  scale=0.124  gamma=0.0026  1.8s
+[train] ep  50/120  loss=+0.0662  spo=+0.0026 aux=0.00212 train_SR=+0.872  val_SR=+0.014  val_robust=+0.014  rho=1.07  scale=0.123  gamma=0.0026  1.8s
+[train] ep  60/120  loss=+0.0549  spo=+0.0064 aux=0.00162 train_SR=+0.997  val_SR=+0.184  val_robust=+0.184  rho=0.66  scale=0.122  gamma=0.0027  1.7s
+[train] ep  70/120  loss=+0.0685  spo=+0.0240 aux=0.00148 train_SR=+1.080  val_SR=+0.247  val_robust=+0.247  rho=0.25  scale=0.121  gamma=0.0027  1.8s
+[train] ep  80/120  loss=+0.0815  spo=+0.0422 aux=0.00131 train_SR=+1.368  val_SR=+0.143  val_robust=+0.143  rho=0.05  scale=0.119  gamma=0.0028  1.8s
+[train] ep  90/120  loss=+0.0768  spo=+0.0406 aux=0.00121 train_SR=+1.440  val_SR=+0.180  val_robust=+0.180  rho=0.05  scale=0.118  gamma=0.0028  1.8s
+[train] early stop at epoch 90 (no val_robust improvement in 15 epochs past release)
+[train] done in 161.3s  best val robust-Sharpe=0.256
+
+[test] Net-of-TC results:
+  DFL-Orchestrator   ret=+16.33%  vol=11.84%  SR=+1.379  Sortino=+2.274  MDD=-8.18%  Calmar=+2.00  turn=1.05
+  SPY-BuyHold        ret=+23.01%  vol=12.79%  SR=+1.799  Sortino=+2.854  MDD=-9.80%  Calmar=+2.35  turn=0.00
+  EqualWeight-Pods   ret=+15.47%  vol=11.55%  SR=+1.339  Sortino=+2.133  MDD=-8.39%  Calmar=+1.84  turn=0.00
+  EWMA-Softmax       ret=+13.89%  vol=11.64%  SR=+1.193  Sortino=+1.885  MDD=-8.91%  Calmar=+1.56  turn=4.14
+[out] wrote /home/user/Bayes-ically-Rich/outputs/dfl_results.csv
+[out] wrote /home/user/Bayes-ically-Rich/outputs/REPORT.md
+[done] total elapsed 748.0s
