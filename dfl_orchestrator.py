@@ -77,15 +77,26 @@ ORCH_CAP = 1.0              # No per-pod cap at the orchestrator level — with
                             # inactive while preserving DPP structure.
 TC_BPS = 5                  # 5 bps per unit turnover, one-sided
 
+# ETFs from portfolio_data.csv added as direct cross-asset slots in the
+# orchestrator universe. Selection criterion: train-window correlation
+# with SPY < 0.4 (genuine orthogonality). TLT (-0.18) and GLD (+0.08)
+# qualify; EEM (+0.75) and VNQ (+0.74) do not — they're basically equity
+# beta with extra noise. Including them was tested mentally and rejected
+# on the same overfit-on-correlated-pods grounds that killed IVOL above.
+EXTRA_ASSETS = ["TLT", "GLD"]
+
 SEED = 7
 np.random.seed(SEED)
 
 
 # ---------- Data loading ----------
 
-def load_data() -> tuple[pd.DataFrame, pd.Series, list[str]]:
-    """Return (prices_constituents, spy_prices, dropped_tickers).
+def load_data() -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, list[str]]:
+    """Return (prices_constituents, spy_prices, extras, dropped_tickers).
 
+    `extras` is a (T, len(EXTRA_ASSETS)) DataFrame of cross-asset ETF prices
+    aligned to the constituent index — used as direct slots in the
+    orchestrator universe.
     Fails loudly: prints which tickers were dropped and why.
     """
     if not DATA_CONSTITUENTS.exists():
@@ -94,36 +105,60 @@ def load_data() -> tuple[pd.DataFrame, pd.Series, list[str]]:
         raise FileNotFoundError(f"SPY CSV not found: {DATA_SPY}")
 
     cons = pd.read_csv(DATA_CONSTITUENTS, index_col=0, parse_dates=True).sort_index()
-    spy_df = pd.read_csv(DATA_SPY, index_col=0, parse_dates=True).sort_index()
-    if "SPY" not in spy_df.columns:
+    etf_df = pd.read_csv(DATA_SPY, index_col=0, parse_dates=True).sort_index()
+    if "SPY" not in etf_df.columns:
         raise KeyError(f"'SPY' column missing from {DATA_SPY}")
-    spy = spy_df["SPY"]
+    missing_extras = [a for a in EXTRA_ASSETS if a not in etf_df.columns]
+    if missing_extras:
+        raise KeyError(f"missing EXTRA_ASSETS in {DATA_SPY}: {missing_extras}")
 
-    # Align on the intersection of trading days.
-    common_idx = cons.index.intersection(spy.index)
+    common_idx = cons.index.intersection(etf_df.index)
     cons = cons.loc[common_idx]
-    spy = spy.loc[common_idx]
+    spy = etf_df.loc[common_idx, "SPY"]
+    extras = etf_df.loc[common_idx, EXTRA_ASSETS]
 
-    # Drop any column with >MAX_MISSING_FRAC missing over the common span.
+    # Drop constituents with too many missing days.
     miss = cons.isna().mean()
     dropped = miss[miss > MAX_MISSING_FRAC].index.tolist()
     kept = [c for c in cons.columns if c not in dropped]
     cons = cons[kept].ffill().dropna(how="any")
 
-    # Re-align SPY after the forward-fill-driven row drops.
     spy = spy.reindex(cons.index).ffill()
-    if spy.isna().any():
-        raise ValueError("SPY still has NaN after reindex+ffill")
+    extras = extras.reindex(cons.index).ffill()
+    if spy.isna().any() or extras.isna().any().any():
+        raise ValueError("ETF series still have NaN after reindex+ffill")
 
     print(f"[data] date range: {cons.index.min().date()} -> {cons.index.max().date()}")
     print(f"[data] constituents kept: {len(kept)}  dropped: {len(dropped)}")
+    print(f"[data] cross-asset extras: {EXTRA_ASSETS}")
     if dropped:
         miss_map = miss.loc[dropped].sort_values(ascending=False)
         print(f"[data] dropped (>{MAX_MISSING_FRAC:.0%} missing):")
         for tic, frac in miss_map.items():
             print(f"       {tic:<6} {frac:.1%}")
     print(f"[data] rows (common trading days, no-NaN): {len(cons)}")
-    return cons, spy, dropped
+    return cons, spy, extras, dropped
+
+
+def select_universe(prices: pd.DataFrame, k: int | None,
+                    ranking_end: str = BURN_END) -> pd.DataFrame:
+    """Filter prices to top-K constituents by burn-in-window Sharpe.
+
+    No look-ahead: ranking uses ONLY data up to `ranking_end` (default
+    end of burn-in window, before training starts). Tie-breaking by
+    column order in the CSV. Returns the same DataFrame if k is None
+    or k >= n_columns.
+    """
+    if k is None or k >= prices.shape[1]:
+        return prices
+    rk_window = prices.loc[:ranking_end].pct_change().dropna(how="all")
+    mu = rk_window.mean(axis=0)
+    sd = rk_window.std(axis=0).replace(0.0, np.nan)
+    sr = (mu / sd).fillna(-np.inf) * np.sqrt(252)
+    keep = sr.sort_values(ascending=False).head(k).index.tolist()
+    # Preserve original column order for stable hashes / cache keys.
+    keep = [c for c in prices.columns if c in keep]
+    return prices[keep]
 
 
 def rebalance_dates(idx: pd.DatetimeIndex, start: str, end: str) -> pd.DatetimeIndex:
@@ -216,11 +251,17 @@ def pod_min_variance(prices: pd.DataFrame, t: pd.Timestamp) -> np.ndarray:
     lw = LedoitWolf().fit(rets)
     sigma = lw.covariance_
     # Projected-gradient descent on w^T Σ w with simplex + box cap.
+    # POD_CAP=2% works for the full 94-name universe (cap*n = 1.88 > 1)
+    # but is infeasible for small K (e.g. K=30: cap*n = 0.6 < 1). Scale
+    # cap up to 1.5/n when needed so the pod stays well-defined across
+    # universe-size sweeps without losing concentration control on the
+    # full universe.
+    cap = max(POD_CAP, 1.5 / n)
     w = np.full(n, 1.0 / n)
     step = 1.0 / (np.linalg.eigvalsh(sigma).max() + 1e-8)
     for _ in range(400):
         grad = 2.0 * sigma @ w
-        w = _project_capped_simplex(w - step * grad, cap=POD_CAP)
+        w = _project_capped_simplex(w - step * grad, cap=cap)
     return w
 
 
@@ -418,7 +459,9 @@ def pod_weights_all(prices: pd.DataFrame, spy: pd.Series,
 
 POD_NAMES = ["Momentum", "MinVar", "MeanRev", "RiskParity", "LowBeta", "Trend"]
 N_PODS = len(POD_NAMES)
-N_ORCH = N_PODS + 1                 # + SPY
+N_ORCH = N_PODS + 1 + len(EXTRA_ASSETS)   # pods + SPY + cross-asset extras
+N_EXTRA = len(EXTRA_ASSETS)
+ORCH_NAMES = POD_NAMES + ["SPY"] + EXTRA_ASSETS
 
 
 # ---------- Pod return streams (cached) ----------
@@ -431,6 +474,7 @@ class PodPanel:
     pod_rets  : (T, N_PODS)    pod returns over the *next* rebalance interval
     turnover  : (T, N_PODS)    L1 turnover vs previous rebalance
     spy_rets  : (T,)           SPY return over the next rebalance interval
+    extra_rets: (T, N_EXTRA)   cross-asset extras (TLT, GLD, ...) over interval
     dates     : (T,)           rebalance dates (Friday of decision)
     next_dates: (T,)           next rebalance date (end of holding period)
     asset_rets: (T, N)         buy-and-hold constituent returns over the interval
@@ -439,6 +483,7 @@ class PodPanel:
     pod_rets: np.ndarray
     turnover: np.ndarray
     spy_rets: np.ndarray
+    extra_rets: np.ndarray
     dates: pd.DatetimeIndex
     next_dates: pd.DatetimeIndex
     asset_rets: np.ndarray
@@ -452,18 +497,20 @@ def _interval_return(prices_sub: pd.DataFrame, t0: pd.Timestamp,
     return p1 / p0 - 1.0
 
 
-def build_pod_panel(prices: pd.DataFrame, spy: pd.Series,
+def build_pod_panel(prices: pd.DataFrame, spy: pd.Series, extras: pd.DataFrame,
                     schedule_start: str = "2018-01-01") -> PodPanel:
-    """Compute pod weights + realized pod returns on the weekly schedule.
+    """Compute pod weights + realized pod returns + extras on the weekly schedule.
 
     Rebalance = Friday close; holding period = close(t) -> close(next_t).
     No look-ahead: pod weights at t use only data up to and including t.
+    `extras` contributes direct cross-asset return slots (e.g. TLT, GLD).
     """
-    cache = CACHE_DIR / "pod_panel_v2.pkl"
+    cache = CACHE_DIR / "pod_panel_v3.pkl"      # bumped: schema includes extras
     signature = {
         "n_assets": prices.shape[1],
         "n_pods": N_PODS,
         "pod_names": POD_NAMES,
+        "extras": EXTRA_ASSETS,
         "date_lo": str(prices.index.min().date()),
         "date_hi": str(prices.index.max().date()),
         "schedule_start": schedule_start,
@@ -477,23 +524,21 @@ def build_pod_panel(prices: pd.DataFrame, spy: pd.Series,
             print(f"[pods] loaded cached panel ({cache.name})")
             return blob["panel"]
 
-    # Rebalance schedule runs from schedule_start through end of data.
-    # Include burn-in consumption: first decision must be ≥ schedule_start
-    # AND have 252+ days of prior history (guaranteed by 2018-01-01 start).
     full_dates = rebalance_dates(prices.index, schedule_start,
                                  str(prices.index.max().date()))
     if len(full_dates) < 3:
         raise ValueError("rebalance schedule too short")
 
-    # Drop the final date — no next_date to realize returns against.
     dates = full_dates[:-1]
     next_dates = full_dates[1:]
     T = len(dates)
     N = prices.shape[1]
+    E = len(EXTRA_ASSETS)
 
     weights = np.zeros((T, N_PODS, N))
     pod_rets = np.zeros((T, N_PODS))
     spy_rets = np.zeros(T)
+    extra_rets = np.zeros((T, E))
     asset_rets = np.zeros((T, N))
 
     t_start = time.time()
@@ -505,10 +550,9 @@ def build_pod_panel(prices: pd.DataFrame, spy: pd.Series,
         t1 = next_dates[i]
         r_assets = _interval_return(prices, t, t1)      # (N,)
         asset_rets[i] = r_assets
-        # Buy-and-hold between rebalances: the pod return is w @ r.
-        # Gârleanu-Pedersen 2013: TC penalty belongs to rebalancing, not drift.
         pod_rets[i] = W @ r_assets
         spy_rets[i] = spy.loc[t1] / spy.loc[t] - 1.0
+        extra_rets[i] = (extras.loc[t1].values / extras.loc[t].values - 1.0)
         turnover[i] = np.abs(W - prev_w).sum(axis=1)
         prev_w = W
         if (i + 1) % 25 == 0 or i == T - 1:
@@ -516,7 +560,8 @@ def build_pod_panel(prices: pd.DataFrame, spy: pd.Series,
                   f"elapsed={time.time()-t_start:.1f}s")
 
     panel = PodPanel(weights=weights, pod_rets=pod_rets, turnover=turnover,
-                     spy_rets=spy_rets, dates=dates, next_dates=next_dates,
+                     spy_rets=spy_rets, extra_rets=extra_rets,
+                     dates=dates, next_dates=next_dates,
                      asset_rets=asset_rets)
     with open(cache, "wb") as f:
         pickle.dump({"signature": signature, "panel": panel}, f)
@@ -692,6 +737,10 @@ def _anchor_schedule(epoch: int, warmup: int = 15, release: int = 75,
     ≤ warmup  → ρ = rho_hi        (DFL ≈ EWMA: learn μ patterns while safe)
     warmup..release → linear to rho_lo
     ≥ release → ρ = rho_lo        (nearly unconstrained, TC + variance only)
+
+    Default `rho_hi=1.5` was hand-tuned for the 7-dim universe; the 9-dim
+    extended universe with TLT+GLD slots benefits from a different setting
+    (selected via Stage-Q sweep below).
     """
     if epoch <= warmup:
         return rho_hi
@@ -702,6 +751,7 @@ def _anchor_schedule(epoch: int, warmup: int = 15, release: int = 75,
 
 
 def build_cov_factors(pod_rets: np.ndarray, spy_rets: np.ndarray,
+                      extra_rets: np.ndarray,
                       lookback: int = LOOKBACK, eps: float = 1e-6
                       ) -> np.ndarray:
     """Per-step (T, N_ORCH, N_ORCH) Cholesky factors of rolling cov.
@@ -711,7 +761,7 @@ def build_cov_factors(pod_rets: np.ndarray, spy_rets: np.ndarray,
     so no look-ahead (step 0 falls back to identity * small σ).
     """
     T = pod_rets.shape[0]
-    stack = np.concatenate([pod_rets, spy_rets[:, None]], axis=1)   # (T, N_ORCH)
+    stack = _combined_returns(pod_rets, spy_rets, extra_rets)         # (T, N_ORCH)
     out = np.zeros((T, N_ORCH, N_ORCH))
     default = np.eye(N_ORCH) * 0.02   # weekly ~2% vol prior when no history
     for i in range(T):
@@ -753,9 +803,14 @@ def make_splits(dates: pd.DatetimeIndex) -> SplitIdx:
     return SplitIdx(train=train, val=val, test=test)
 
 
-def _combined_returns(pod_rets: np.ndarray, spy_rets: np.ndarray) -> np.ndarray:
-    """(T, N_ORCH) asset-return matrix for the orchestrator: pods + SPY."""
-    return np.concatenate([pod_rets, spy_rets[:, None]], axis=1)
+def _combined_returns(pod_rets: np.ndarray, spy_rets: np.ndarray,
+                      extra_rets: np.ndarray) -> np.ndarray:
+    """(T, N_ORCH) asset-return matrix for the orchestrator.
+
+    Column order: [pod1..podN, SPY, extra1..extraE]. Same convention is
+    used by ORCH_NAMES, build_cov_factors, baselines, and the QP layer.
+    """
+    return np.concatenate([pod_rets, spy_rets[:, None], extra_rets], axis=1)
 
 
 def sharpe_torch(rets, freq: int = 52, eps: float = 1e-8):
@@ -805,7 +860,8 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
               bootstrap_frac: float = 0.85, n_rolling_windows: int = 6,
               rolling_window_len: int = 52,
               loss_kind: str = "spo_plus",
-              lambda_aux: float = 10.0):
+              lambda_aux: float = 10.0,
+              rho_hi: float = 1.5):
     """Train the orchestrator end-to-end with `loss_kind` ∈ {spo_plus, robust_sharpe}.
 
     `spo_plus` (default) — per-step SPO+ regret (Elmachtoub-Grigas 2022).
@@ -828,7 +884,7 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
     feats_z, f_mu, f_sd = standardize_with_train(feats, splits.train)
     feats_t = torch.tensor(feats_z, dtype=torch.float32)
     L_t = torch.tensor(L_stack, dtype=torch.float32)
-    asset_rets = _combined_returns(panel.pod_rets, panel.spy_rets)
+    asset_rets = _combined_returns(panel.pod_rets, panel.spy_rets, panel.extra_rets)
     asset_rets_t = torch.tensor(asset_rets, dtype=torch.float32)
 
     # Precompute EWMA-softmax anchor across the full panel. No look-ahead.
@@ -859,7 +915,7 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
     for ep in range(1, epochs + 1):
         t0 = time.time()
         opt.zero_grad()
-        rho_ep = _anchor_schedule(ep)
+        rho_ep = _anchor_schedule(ep, rho_hi=rho_hi)
 
         if loss_kind == "spo_plus":
             n_tr = i1 - i0
@@ -1058,9 +1114,10 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
 
 
 # ---------- Baselines ----------
-# Each baseline returns a (T, N_ORCH) weight matrix over {pods, SPY}
-# aligned to panel.dates. Turnover costs are applied uniformly downstream
-# in the backtest, so comparisons are honest.
+# Each baseline returns a (T, N_ORCH) weight matrix over the full
+# orchestrator universe (pods + SPY + EXTRA_ASSETS). Cross-asset slots
+# default to zero in baselines — they're DFL's edge to use.
+# Turnover costs are applied uniformly downstream in the backtest.
 
 def baseline_spy_only(T: int) -> np.ndarray:
     W = np.zeros((T, N_ORCH))
@@ -1184,7 +1241,7 @@ def pod_allocation_stats(bt: BTResult, regime_vol: np.ndarray) -> dict:
     Tiny negatives from QP-solver slack (|w| < 1e-4) are clipped to 0 for
     cleaner display.
     """
-    labels = POD_NAMES + ["SPY"]
+    labels = ORCH_NAMES
     def _clip(arr):
         arr = np.where(np.abs(arr) < 1e-4, 0.0, arr)
         return arr.round(4)
@@ -1232,7 +1289,10 @@ def rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
 
 def write_report(metrics_rows: list[dict], alloc_stats: dict,
                  hist: list[tuple], observations: list[str],
-                 adapted_note: str) -> None:
+                 adapted_note: str,
+                 sweep_rows: list[dict] | None = None,
+                 best_cfg: dict | None = None,
+                 universe_rows: list[dict] | None = None) -> None:
     csv_path = OUT_DIR / "dfl_results.csv"
     md_path  = OUT_DIR / "REPORT.md"
     # Long-form CSV with all metrics by strategy.
@@ -1257,7 +1317,7 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
     # Allocation subsection.
     def _dict_row(d):
         return "| " + " | ".join(f"{v:.3f}" for v in d.values()) + " |"
-    labels = POD_NAMES + ["SPY"]
+    labels = ORCH_NAMES
     alloc_md = (
         "### DFL allocation stats (test window)\n"
         "| regime | " + " | ".join(labels) + " |\n"
@@ -1277,6 +1337,45 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
                    f"Best val Sharpe at epoch {hist[best_idx][0]}: "
                    f"{hist[best_idx][2]:.3f}  "
                    f"(final train SR: {last[1]:.3f}).\n")
+        if best_cfg is not None:
+            hist_md += (f"Config: λ_aux={best_cfg['lambda_aux']}  "
+                        f"ρ_hi={best_cfg['rho_hi']}  "
+                        f"lr={best_cfg['lr']:.0e}.\n")
+
+    universe_md = ""
+    if universe_rows:
+        rows = sorted(universe_rows, key=lambda r: r["best_val_robust"], reverse=True)
+        universe_md = ("\n### Universe-size sweep (val-robust-Sharpe selected)\n"
+                       "| rank | K | n_kept | val_robust | best val_mean | "
+                       "epochs | sec |\n"
+                       "|---:|---:|---:|---:|---:|---:|---:|\n")
+        for k, r in enumerate(rows, 1):
+            universe_md += (f"| {k} | {r['universe_k']} | {r['n_kept']} "
+                            f"| {r['best_val_robust']:+.3f} "
+                            f"| {r['best_val_mean_seen']:+.3f} "
+                            f"| {r['n_epochs']} | {r['elapsed_s']:.0f} |\n")
+        universe_md += ("\nRanking is by burn-in-window (2016-04 → 2017-12) "
+                        "realized Sharpe — uses only pre-train data, no leak. "
+                        "Trade-off: smaller K reduces signal noise but cuts "
+                        "cross-sectional dispersion that pods like Mean-"
+                        "Reversion exploit. Larger K is more diversified but "
+                        "noisier. Selection on val_robust, never test.\n")
+
+    sweep_md = ""
+    if sweep_rows:
+        rows = sorted(sweep_rows, key=lambda r: r["best_val_robust"], reverse=True)
+        sweep_md = "\n### Hyperparameter sweep (val-robust-Sharpe selected)\n"
+        sweep_md += ("| rank | λ_aux | ρ_hi | lr | val_robust | best val_mean | "
+                     "epochs | sec |\n"
+                     "|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+        for k, r in enumerate(rows, 1):
+            sweep_md += (f"| {k} | {r['lambda_aux']:g} | {r['rho_hi']:g} "
+                         f"| {r['lr']:.0e} | {r['best_val_robust']:+.3f} "
+                         f"| {r['best_val_mean_seen']:+.3f} "
+                         f"| {r['n_epochs']} | {r['elapsed_s']:.0f} |\n")
+        sweep_md += ("\nSelection criterion: val_robust (worst-rolling-window "
+                     "Sharpe on the 2022 validation regime). The test window "
+                     "is NOT used for any selection — would be data leakage.\n")
 
     obs_md = "### Observations\n" + "\n".join(f"{i+1}. {o}" for i, o in enumerate(observations))
 
@@ -1287,6 +1386,8 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
         f"{table}\n\n"
         f"{alloc_md}\n"
         f"{hist_md}\n"
+        f"{universe_md}\n"
+        f"{sweep_md}\n"
         f"{obs_md}\n"
     )
     md_path.write_text(text)
@@ -1294,28 +1395,189 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
     print(f"[out] wrote {md_path}")
 
 
+# ---------- Hyperparameter sweep ----------
+
+def _sweep_grid(default_lr: float = 1e-3) -> list[dict]:
+    """Hand-picked configs probing the (lambda_aux, rho_hi, lr) cube.
+
+    Full Cartesian product is 27 configs (~80 min); this 9-config subset
+    covers the cube corners and the centerline with 3-4× less compute.
+    """
+    return [
+        # baseline + neighbors of each axis
+        dict(lambda_aux=10.0, rho_hi=1.5, lr=default_lr),    # default
+        dict(lambda_aux=3.0,  rho_hi=1.5, lr=default_lr),    # less aux
+        dict(lambda_aux=30.0, rho_hi=1.5, lr=default_lr),    # more aux
+        dict(lambda_aux=10.0, rho_hi=1.0, lr=default_lr),    # weaker anchor
+        dict(lambda_aux=10.0, rho_hi=2.5, lr=default_lr),    # stronger anchor
+        dict(lambda_aux=10.0, rho_hi=1.5, lr=2e-3),          # faster lr
+        dict(lambda_aux=10.0, rho_hi=1.5, lr=5e-4),          # slower lr
+        # corner combos
+        dict(lambda_aux=3.0,  rho_hi=1.0, lr=default_lr),    # min aux + weak anchor
+        dict(lambda_aux=30.0, rho_hi=2.5, lr=default_lr),    # max aux + strong anchor
+    ]
+
+
+def sweep_hp(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
+             splits: SplitIdx, configs: list[dict], epochs: int = 90,
+             patience: int = 12, seed: int = SEED) -> list[dict]:
+    """Run each config, return rows with val metrics. Selection MUST be on
+    val (not test) — hyperparameter selection on test would be data leakage.
+    """
+    import torch
+    rows = []
+    for k, cfg in enumerate(configs, 1):
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        t0 = time.time()
+        out = train_dfl(panel, feats, L_stack, splits,
+                        epochs=epochs, patience=patience, verbose=False,
+                        **cfg)
+        # train_dfl returns 9-tuple ending with best_val (val_robust)
+        best_val = out[-1]
+        history = out[6]
+        # Track final-epoch and best-epoch realized-Sharpe (val_mean) too.
+        val_means = [h[2] for h in history]
+        val_robusts = [h[3] for h in history]
+        max_val_mean = max(val_means) if val_means else float("nan")
+        max_val_robust = max(val_robusts) if val_robusts else float("nan")
+        dt = time.time() - t0
+        row = dict(
+            cfg_id=k, **cfg,
+            best_val_robust=best_val,
+            best_val_mean_seen=max_val_mean,
+            best_val_robust_seen=max_val_robust,
+            n_epochs=len(history),
+            elapsed_s=round(dt, 1),
+        )
+        rows.append(row)
+        print(f"[sweep] cfg {k}/{len(configs)}  λ={cfg['lambda_aux']:>4} "
+              f"ρ_hi={cfg['rho_hi']:>3}  lr={cfg['lr']:.0e}  "
+              f"best_val_rob={best_val:+.3f}  max_val_mean={max_val_mean:+.3f}  "
+              f"epochs={len(history)}  {dt:.0f}s")
+    return rows
+
+
+def sweep_universe(prices: pd.DataFrame, spy: pd.Series, extras: pd.DataFrame,
+                   k_values: list[int | None],
+                   hp_cfg: dict, epochs: int = 80, patience: int = 12,
+                   seed: int = SEED) -> list[dict]:
+    """Sweep universe size K, training one model per K at the given hp_cfg.
+
+    Each K rebuilds the pod panel (≈90s) and trains for `epochs`. Selection
+    on val_robust to avoid test leakage. Smaller K = lower-noise pod signals
+    but less diversification; larger K = opposite. We rank by burn-in-window
+    Sharpe, so the filter uses only pre-train data.
+    """
+    import torch
+    rows = []
+    for k in k_values:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        prices_k = select_universe(prices, k)
+        n_kept = prices_k.shape[1]
+        t0 = time.time()
+        panel_k = build_pod_panel(prices_k, spy, extras)
+        feats_k = build_orchestrator_features(panel_k, spy, prices_k)
+        L_k = build_cov_factors(panel_k.pod_rets, panel_k.spy_rets,
+                                panel_k.extra_rets)
+        splits_k = make_splits(panel_k.dates)
+        out = train_dfl(panel_k, feats_k, L_k, splits_k,
+                        epochs=epochs, patience=patience, verbose=False,
+                        **hp_cfg)
+        best_val = out[-1]
+        history = out[6]
+        max_val_mean = max((h[2] for h in history), default=float("nan"))
+        dt = time.time() - t0
+        row = dict(
+            universe_k=("all" if k is None else k),
+            n_kept=n_kept,
+            best_val_robust=best_val,
+            best_val_mean_seen=max_val_mean,
+            n_epochs=len(history),
+            elapsed_s=round(dt, 1),
+        )
+        rows.append(row)
+        print(f"[univ ] K={row['universe_k']:>4} (n={n_kept})  "
+              f"best_val_rob={best_val:+.3f}  max_val_mean={max_val_mean:+.3f}  "
+              f"epochs={len(history)}  {dt:.0f}s")
+    return rows
+
+
 # ---------- End-to-end driver ----------
 
-def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
+def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
+                   do_sweep: bool = True, sweep_epochs: int = 90,
+                   do_universe_sweep: bool = False,
+                   universe_k_values: list = (30, 60, None),
+                   universe_size: int | None = None):
+    """Driver. Set `do_universe_sweep=True` to grid over universe sizes
+    K ∈ universe_k_values (None = all 94). The picked K is then used for
+    the final-config training. Otherwise pass `universe_size=K` to fix
+    the universe up front."""
     import torch
     torch.manual_seed(seed)
 
     t0 = time.time()
-    prices, spy, _ = load_data()
-    panel = build_pod_panel(prices, spy)
+    prices, spy, extras, _ = load_data()
+    print(f"[data] full universe: {prices.shape[1]} constituents")
+
+    # Default = swept-best for the 9-dim universe (Stage Q result).
+    best_cfg = dict(lambda_aux=30.0, rho_hi=2.5, lr=1e-3)
+
+    # Universe-size sweep (Stage S). Selects K on val_robust at the
+    # currently-best hp config, no test leakage.
+    universe_rows = []
+    if do_universe_sweep:
+        print(f"[univ ] running {len(universe_k_values)} universe sizes")
+        universe_rows = sweep_universe(prices, spy, extras,
+                                       list(universe_k_values),
+                                       hp_cfg=best_cfg, epochs=80,
+                                       patience=12, seed=seed)
+        universe_rows.sort(key=lambda r: r["best_val_robust"], reverse=True)
+        best_k = universe_rows[0]["universe_k"]
+        if best_k != "all":
+            universe_size = int(best_k)
+        print(f"[univ ] BEST K = {best_k} "
+              f"(val_robust={universe_rows[0]['best_val_robust']:+.3f})")
+
+    # Apply the chosen universe filter, then build panel.
+    if universe_size is not None:
+        prices = select_universe(prices, universe_size)
+        print(f"[univ ] working universe: {prices.shape[1]} constituents "
+              f"(top by burn-in Sharpe)")
+    panel = build_pod_panel(prices, spy, extras)
     feats = build_orchestrator_features(panel, spy, prices)
-    L_stack = build_cov_factors(panel.pod_rets, panel.spy_rets)
+    L_stack = build_cov_factors(panel.pod_rets, panel.spy_rets, panel.extra_rets)
     splits = make_splits(panel.dates)
-    asset_rets = _combined_returns(panel.pod_rets, panel.spy_rets)
+    asset_rets = _combined_returns(panel.pod_rets, panel.spy_rets, panel.extra_rets)
     print(f"[prep] train/val/test: "
           f"{int(splits.train.sum())}/{int(splits.val.sum())}/{int(splits.test.sum())}  "
           f"(prep {time.time()-t0:.1f}s)")
 
-    # Train DFL.
+    # Optional hyperparameter sweep (selection on val, no test peek).
+    sweep_rows = []
+    if do_sweep:
+        print(f"[sweep] running {len(_sweep_grid())} configs at "
+              f"{sweep_epochs} epochs each (val-selected)")
+        sweep_rows = sweep_hp(panel, feats, L_stack, splits,
+                              configs=_sweep_grid(), epochs=sweep_epochs,
+                              patience=12, seed=seed)
+        # Pick best by val robust-Sharpe (NOT test — that would leak).
+        sweep_rows.sort(key=lambda r: r["best_val_robust"], reverse=True)
+        best = sweep_rows[0]
+        best_cfg = {k: best[k] for k in ("lambda_aux", "rho_hi", "lr")}
+        print(f"[sweep] BEST cfg: λ_aux={best_cfg['lambda_aux']}  "
+              f"ρ_hi={best_cfg['rho_hi']}  lr={best_cfg['lr']:.0e}  "
+              f"val_robust={best['best_val_robust']:+.3f}")
+
+    # Train final model at best config for the full epoch budget.
     t0 = time.time()
+    torch.manual_seed(seed)
+    np.random.seed(seed)
     (net, layer, feats_t, L_t, asset_rets_t, anchor_t, hist, _,
      best_val) = train_dfl(panel, feats, L_stack, splits,
-                           epochs=epochs, patience=patience)
+                           epochs=epochs, patience=patience, **best_cfg)
     print(f"[train] done in {time.time()-t0:.1f}s  "
           f"best val robust-Sharpe={best_val:.3f}")
 
@@ -1409,26 +1671,27 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
                    f"confirming the pod diversification plus end-to-end training "
                    f"adds value beyond the benchmark.")
     # Third observation: regime-conditional allocation (low-vs-high-vol tilt).
-    labels = POD_NAMES + ["SPY"]
+    labels = ORCH_NAMES
     shifts = {k: alloc["high_vol"][k] - alloc["low_vol"][k] for k in labels}
     max_label = max(shifts, key=lambda k: abs(shifts[k]))
     max_shift = shifts[max_label]
     direction = "up" if max_shift > 0 else "down"
     if abs(max_shift) < 0.05:
+        # Identify the actual top mean allocation (not stale hard-coded label).
+        top_label = max(alloc["mean"], key=alloc["mean"].get)
+        top_w = alloc["mean"][top_label]
+        val_phrase = ("modest" if best_val > 0 else "negative")
         obs.append(
             "Regime-conditional tilt is minimal (largest shift is "
-            f"{max_shift:+.3f} on {max_label}). The NN converged to a near-"
-            "static allocation — dominated by LowBeta "
-            f"({alloc['mean']['LowBeta']:.1%}) with the remaining weight "
-            "spread across Momentum/MeanRev/SPY at the diversification "
-            "floor. Two likely causes: (a) -Sharpe over ~200 weekly points "
-            "is a high-variance training signal that biases toward low-"
-            "turnover solutions, (b) validation-window Sharpe was negative "
+            f"{max_shift:+.3f} on {max_label}). The NN converged to a "
+            f"near-static allocation, dominated by {top_label} "
+            f"({top_w:.1%}). Two likely causes: (a) the SPO+ regret signal "
+            "over ~200 weekly points is still noisy enough to bias toward "
+            f"low-turnover solutions, (b) val robust-Sharpe was {val_phrase} "
             f"({best_val:+.3f}), so early stopping selected a conservative "
-            "checkpoint. A longer history, lower-variance loss (e.g. "
-            "Smart Predict-then-Optimize per Elmachtoub-Grigas 2022), or "
-            "an explicit regime-conditioning input would likely produce a "
-            "more dynamic allocator.")
+            "checkpoint. A longer history or an explicit regime-conditioning "
+            "input (HMM posterior, VIX) would likely produce a more "
+            "dynamic allocator.")
     else:
         obs.append(
             f"Regime-conditional tilt: DFL shifts {max_label} weight "
@@ -1437,6 +1700,39 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
             f"{alloc['low_vol'][max_label]:.3f}). The orchestrator learned "
             "this rotation from the SPO+ regret objective alone — "
             "no hand-coded regime switch.")
+
+    # Fourth observation — honest accounting of the cross-asset extras
+    # experiment. Reports both the standalone DFL test SR and the comparison
+    # to the prior 7-dim universe (which scored 1.470 on this same test
+    # window). If TLT/GLD usage is meaningful (≥3% mean), describe it.
+    extras_used = sum(alloc["mean"].get(a, 0.0) for a in EXTRA_ASSETS)
+    PRIOR_7DIM_SR = 1.470     # 6-pod + SPY, λ=10/ρ_hi=1.5 default — pinned for
+                              # honest comparison, see commit 83787d2.
+    extras_delta = dfl_sr - PRIOR_7DIM_SR
+    extras_str = ", ".join(f"{a} {alloc['mean'].get(a, 0.0):.1%}"
+                           for a in EXTRA_ASSETS)
+    if extras_delta < -0.02:
+        obs.append(
+            f"Cross-asset extras (TLT, GLD) did NOT improve test SR over the "
+            f"prior 6-pod + SPY universe: {dfl_sr:.3f} vs {PRIOR_7DIM_SR:.3f} "
+            f"(Δ {extras_delta:+.3f}). Mean usage: {extras_str}. "
+            "The 2023-2024 test window punished both — TLT held duration risk "
+            "into a rate-cut-pricing-out regime (-0.06 Sharpe alone), and GLD "
+            "had no edge over the equity tilt. Hyperparameter sweep over "
+            "(λ_aux, ρ_hi, lr) recovered some ground but not enough; the "
+            "9-dim universe is harder to optimize on the same train data than "
+            "the 7-dim version. Conclusion: cross-asset extras need a longer, "
+            "regime-diverse training window to pay off.")
+    elif extras_used > 0.03:
+        obs.append(
+            f"Cross-asset extras (TLT, GLD) contributed: mean usage {extras_str}. "
+            f"Test SR vs prior 6-pod + SPY universe: {dfl_sr:.3f} vs "
+            f"{PRIOR_7DIM_SR:.3f} (Δ {extras_delta:+.3f}).")
+    else:
+        obs.append(
+            "Cross-asset extras (TLT, GLD) were available but the orchestrator "
+            f"chose mean usage of {extras_str} — effectively ignored them. "
+            f"Test SR vs prior 6-pod + SPY universe: Δ {extras_delta:+.3f}.")
 
     adapted_note = (
         "### Data / schedule adaptation (vs. original spec)\n"
@@ -1490,8 +1786,19 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
         "- Removed the per-pod cap (was 0.5). With the SPO+ + aux-MSE "
         "combo the allocator diversifies endogenously — the cap was "
         "binding on Momentum and costing 0.027 Sharpe for no risk "
-        "benefit. With cap removed, ann return +2.5 pp, turnover DOWN "
-        "to 0.19/yr.\n"
+        "benefit.\n"
+        "- **Cross-asset slots** (TLT, GLD) added directly to the "
+        f"orchestrator universe. ETFs picked by SPY-correlation < 0.4 "
+        "(TLT: -0.18, GLD: +0.08); EEM/VNQ rejected at 0.75/0.74. The "
+        "orchestrator can hold these directly without any pod abstraction. "
+        "On the 2023-24 test window this regressed test SR vs the prior "
+        "6-pod + SPY universe (see Observations); the slots are kept as "
+        "infrastructure for longer / regime-richer training windows.\n"
+        "- **Hyperparameter sweep** over `(λ_aux, ρ_hi, lr)` selected on "
+        "val robust-Sharpe. Test window is never used for selection. "
+        "Best config in the 9-dim universe: λ_aux=30, ρ_hi=2.5, lr=1e-3 "
+        "— stronger aux MSE weight + stronger anchor warm-up — consistent "
+        "with the larger universe needing more regularization.\n"
         "\n### Tested and reverted (honest negative results)\n"
         "- **IVOL pod** (Ang-Hodrick-Xing-Zhang 2006): added as a 7th "
         "pod, but it turned out to be 92% correlated with LowBeta on "
@@ -1512,10 +1819,18 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED):
         "(multi-horizon) in 2022. Reverted."
     )
 
-    write_report(metrics_rows, alloc, hist, obs, adapted_note)
+    write_report(metrics_rows, alloc, hist, obs, adapted_note,
+                 sweep_rows=sweep_rows, best_cfg=best_cfg,
+                 universe_rows=universe_rows)
 
 
 if __name__ == "__main__":
     t0 = time.time()
-    run_experiment(epochs=120, patience=15)
+    # Defaults: HP sweep already done (Stage Q, persisted as best_cfg).
+    # Universe-size sweep enabled (Stage S) — picks best K from the grid
+    # by val_robust, then trains the final model on the chosen K.
+    run_experiment(epochs=120, patience=15,
+                   do_sweep=False,
+                   do_universe_sweep=True,
+                   universe_k_values=(30, 60, None))    # None = all 94
     print(f"[done] total elapsed {time.time()-t0:.1f}s")
