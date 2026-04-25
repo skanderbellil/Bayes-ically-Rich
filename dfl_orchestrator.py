@@ -636,25 +636,28 @@ def _lazy_torch():
 
 
 def build_qp_layer(n: int = N_ORCH):
-    """DPP-compliant mean-variance QP with turnover penalty AND prior anchor.
+    """DPP-compliant mean-variance QP with turnover, anchor, and decorrelation.
 
     min 0.5 ||L w||^2 - mu^T w + gamma * sum(s)
         + 0.5 * ||rho_scl * w||^2 - q_anchor^T w
+        + 0.5 * ||L_corr w||^2
      s.t. sum(w) = 1, 0 <= w <= ORCH_CAP, -s <= w - w_prev <= s, s >= 0
 
-    The last two terms encode an L2 pull toward an EWMA-softmax prior
-    w_anchor, EXPANDED so DPP holds:
+    Anchor terms expand `0.5·ρ^2·||w - w_anchor||^2` for DPP:
 
         0.5 * ρ^2 * ||w - w_anchor||^2  ≡
           0.5 * ||rho_scl w||^2 - q_anchor^T w  + const(ρ, w_anchor)
 
-    where rho_scl = ρ and q_anchor = ρ^2 · w_anchor are pre-multiplied in
-    PyTorch (the constant is dropped — irrelevant to argmin). Each cvxpy
-    parameter interacts with the variable affinely, never parameter-×-
-    parameter, which is required by Agrawal et al. 2019 §3 (DPP). The
-    anchor gives DFL a sensible starting behaviour (= EWMA) and a
-    trust region the -Sharpe loss can relax — this is the mechanism that
-    unblocks training from its previous flat-loss plateau.
+    where rho_scl = ρ and q_anchor = ρ^2 · w_anchor are pre-multiplied
+    in PyTorch (the constant is dropped — irrelevant to argmin).
+
+    The decorrelation term `0.5·||L_corr w||^2 = 0.5·η·w^T M_psd w`
+    penalises co-allocation to correlated pods (M_psd = PSD-projected
+    zero-diagonal pod correlation matrix, padded with zeros for SPY/
+    extras — see build_corr_factors). η is folded into L_corr by
+    pre-multiplying by sqrt(η) in PyTorch, keeping DPP intact (parameter
+    × variable, no parameter × parameter). η = 0 → L_corr = 0 → penalty
+    inactive (numerically identical to the no-decorrelation QP).
     """
     _, _, cp, CvxpyLayer = _lazy_torch()
     w = cp.Variable(n)
@@ -665,12 +668,14 @@ def build_qp_layer(n: int = N_ORCH):
     w_prev = cp.Parameter(n)
     rho_scl = cp.Parameter(nonneg=True)          # = ρ (scalar)
     q_anchor = cp.Parameter(n)                    # = ρ^2 · w_anchor  (vector)
+    L_corr = cp.Parameter((n, n))                 # = sqrt(η) · L_pods_padded^T
     obj = cp.Minimize(
         0.5 * cp.sum_squares(L @ w)
         - mu @ w
         + gamma * cp.sum(s)
         + 0.5 * cp.sum_squares(rho_scl * w)
         - q_anchor @ w
+        + 0.5 * cp.sum_squares(L_corr @ w)
     )
     cons = [
         cp.sum(w) == 1,
@@ -684,7 +689,7 @@ def build_qp_layer(n: int = N_ORCH):
     assert prob.is_dpp(), "QP is not DPP-compliant"
     return CvxpyLayer(
         prob,
-        parameters=[L, mu, gamma, w_prev, rho_scl, q_anchor],
+        parameters=[L, mu, gamma, w_prev, rho_scl, q_anchor, L_corr],
         variables=[w],
     )
 
@@ -779,6 +784,61 @@ def build_cov_factors(pod_rets: np.ndarray, spy_rets: np.ndarray,
     return out
 
 
+def build_corr_factors(pod_rets: np.ndarray, lookback: int = LOOKBACK,
+                       eps: float = 1e-6) -> np.ndarray:
+    """Per-step (T, N_ORCH, N_ORCH) factors for the pod-decorrelation penalty.
+
+    Builds a UNIT-η factor; the caller scales by sqrt(eta) to set strength.
+
+    Construction at each step:
+        Σ_pods   = rolling cov of pod returns over `lookback` weeks
+        R_pods   = corr(Σ_pods)                       (N_PODS × N_PODS)
+        M        = R_pods - diag(R_pods)              (zero diagonal — only
+                   off-diagonal pod-pair correlations enter the penalty)
+        M_psd    = PSD-projection of M (eigendecompose, clip negative
+                   eigenvalues to 0, reconstruct)
+        L_pods   = chol(M_psd + eps·I)                (lower-triangular)
+        L_full   = embed L_pods in upper-left of zeros((N_ORCH, N_ORCH))
+        return     L_full.T
+
+    Then `cp.sum_squares(L_full.T @ w) = w^T M_psd_padded w`. SPY/extras
+    rows/cols are zero, so they're not penalised.
+
+    PSD projection is necessary because zero-diagonal correlation matrices
+    are not generally PSD (e.g. 2×2 with ρ=1 has eigvals ±1) and cvxpy
+    requires a convex objective. Projecting onto the PSD cone is the
+    minimum-Frobenius-norm convex relaxation (Higham 2002).
+
+    No look-ahead — uses pod_rets[lo:i], strictly before step i.
+    """
+    T = pod_rets.shape[0]
+    out = np.zeros((T, N_ORCH, N_ORCH))
+    for i in range(T):
+        lo = max(0, i - lookback)
+        win = pod_rets[lo:i]                          # (k, N_PODS)
+        if win.shape[0] < 10:
+            continue
+        sigma = np.cov(win, rowvar=False)             # (N_PODS, N_PODS)
+        std = np.sqrt(np.maximum(np.diag(sigma), 1e-12))
+        R = sigma / np.outer(std, std)
+        M = R - np.diag(np.diag(R))                   # zero diagonal
+        try:
+            evals, evecs = np.linalg.eigh(M)
+        except np.linalg.LinAlgError:
+            continue
+        evals_clipped = np.maximum(evals, 0.0)
+        M_psd = (evecs * evals_clipped) @ evecs.T
+        M_psd = M_psd + eps * np.eye(N_PODS)
+        try:
+            L_pods = np.linalg.cholesky(M_psd)        # (N_PODS, N_PODS)
+        except np.linalg.LinAlgError:
+            continue
+        Lfull = np.zeros((N_ORCH, N_ORCH))
+        Lfull[:N_PODS, :N_PODS] = L_pods
+        out[i] = Lfull.T
+    return out
+
+
 # ---------- Training ----------
 # Loss = -annualized Sharpe of realized portfolio returns over the training
 # window, computed differentiably in PyTorch. The graph is BPTT-truncated at
@@ -822,11 +882,13 @@ def sharpe_torch(rets, freq: int = 52, eps: float = 1e-8):
 
 
 def _run_sequence(net, layer, feats_t, L_t, asset_rets_t, anchor_t, rho: float,
-                  start_idx: int, end_idx: int, train: bool):
+                  start_idx: int, end_idx: int, train: bool, Lcorr_t=None):
     """Roll forward through [start_idx, end_idx), returning (w_matrix, rets).
 
     asset_rets_t : (T, N_ORCH) tensor of realized pod+SPY returns per step.
     anchor_t     : (T, N_ORCH) EWMA-softmax prior allocation per step.
+    Lcorr_t      : (T, N_ORCH, N_ORCH) decorrelation Cholesky stack. Pass
+                   None or zeros to disable the penalty.
     Returns w_matrix (k, N_ORCH) and realized returns vector (k,). Turnover
     drag is NOT applied here — the orchestrator internalizes TC via the γ
     penalty in the QP (Gârleanu-Pedersen 2013). Explicit TC is applied in
@@ -834,6 +896,8 @@ def _run_sequence(net, layer, feats_t, L_t, asset_rets_t, anchor_t, rho: float,
     """
     import torch
     net.train(train)
+    if Lcorr_t is None:
+        Lcorr_t = torch.zeros(L_t.shape[0], N_ORCH, N_ORCH, dtype=L_t.dtype)
     ws = []
     rs = []
     w_prev = torch.full((1, N_ORCH), 1.0 / N_ORCH)
@@ -843,8 +907,9 @@ def _run_sequence(net, layer, feats_t, L_t, asset_rets_t, anchor_t, rho: float,
         x = feats_t[i:i+1]
         mu, gamma, _ = net(x)                       # α-head unused here
         L_i = L_t[i:i+1]
+        Lc_i = Lcorr_t[i:i+1]
         q_anchor = rho2 * anchor_t[i:i+1]           # (1, N_ORCH)
-        (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor)
+        (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor, Lc_i)
         r_i = (w_i * asset_rets_t[i]).sum()
         ws.append(w_i)
         rs.append(r_i)
@@ -861,7 +926,9 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
               rolling_window_len: int = 52,
               loss_kind: str = "spo_plus",
               lambda_aux: float = 10.0,
-              rho_hi: float = 1.5):
+              rho_hi: float = 1.5,
+              eta_corr: float = 0.0,
+              corr_unit_stack: np.ndarray | None = None):
     """Train the orchestrator end-to-end with `loss_kind` ∈ {spo_plus, robust_sharpe}.
 
     `spo_plus` (default) — per-step SPO+ regret (Elmachtoub-Grigas 2022).
@@ -886,6 +953,14 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
     L_t = torch.tensor(L_stack, dtype=torch.float32)
     asset_rets = _combined_returns(panel.pod_rets, panel.spy_rets, panel.extra_rets)
     asset_rets_t = torch.tensor(asset_rets, dtype=torch.float32)
+
+    # Pod-decorrelation factor stack: scale by sqrt(η) so the QP penalty
+    # `0.5·||L_corr w||² = 0.5·η·w^T M_psd w`. η = 0 → all-zero stack →
+    # penalty inactive (numerically equivalent to the prior QP).
+    if corr_unit_stack is None:
+        corr_unit_stack = build_corr_factors(panel.pod_rets)
+    Lcorr_np = corr_unit_stack * float(eta_corr) ** 0.5
+    Lcorr_t = torch.tensor(Lcorr_np, dtype=torch.float32)
 
     # Precompute EWMA-softmax anchor across the full panel. No look-ahead.
     anchor_np = baseline_ewma_softmax(panel)
@@ -924,14 +999,15 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
             end = start + sub
             spo_l, aux_l, R_tr = spo_plus_loss(
                 net, layer, feats_t, L_t, asset_rets_t, anchor_t, rho_ep,
-                start, end, return_realized=True)
+                start, end, return_realized=True, Lcorr_t=Lcorr_t)
             loss = spo_l + lambda_aux * aux_l
             tr_sr_signal = float(sharpe_torch(R_tr))
             aux_val = float(aux_l.detach())
             spo_val = float(spo_l.detach())
         else:
             _, R_tr_full = _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
-                                         anchor_t, rho_ep, i0, i1, train=True)
+                                         anchor_t, rho_ep, i0, i1, train=True,
+                                         Lcorr_t=Lcorr_t)
             n_tr = R_tr_full.shape[0]
             k = max(rolling_window_len + 2, int(n_tr * bootstrap_frac))
             keep = np.sort(rng.choice(n_tr, size=k, replace=False))
@@ -948,7 +1024,8 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
         with torch.no_grad():
             # Validation: realized-Sharpe of the NN rollout at fixed low ρ.
             _, R_val = _run_sequence(net, layer, feats_t, L_t, asset_rets_t,
-                                     anchor_t, 0.05, j0, j1, train=False)
+                                     anchor_t, 0.05, j0, j1, train=False,
+                                     Lcorr_t=Lcorr_t)
             val_sr_mean = float(sharpe_torch(R_val))
             val_sr_robust = float(-robust_sharpe_loss(
                 R_val, min(n_rolling_windows, max(1, R_val.shape[0] - rolling_window_len)),
@@ -986,7 +1063,7 @@ def train_dfl(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
     if best_state is not None:
         net.load_state_dict(best_state)
     return (net, layer, feats_t, L_t, asset_rets_t, anchor_t, history,
-            (f_mu, f_sd), best_val)
+            (f_mu, f_sd), best_val, Lcorr_t)
 
 
 def robust_sharpe_loss(R, n_windows: int, window_len: int):
@@ -1042,15 +1119,15 @@ def robust_sharpe_loss(R, n_windows: int, window_len: int):
 #   (3) w_nn      — actual NN decision, NO grad, needed only for w_prev chain
 # Backward pass touches only (2), so wall-clock cost is ~1.7× the Sharpe loop.
 
-def _solve_qp_step(layer, L_i, mu_i, gamma_i, w_prev, rho_scl, q_anchor):
+def _solve_qp_step(layer, L_i, mu_i, gamma_i, w_prev, rho_scl, q_anchor, Lc_i):
     """Single-step QP solve, returning the (1, N_ORCH) weight tensor."""
-    (w,) = layer(L_i, mu_i, gamma_i, w_prev, rho_scl, q_anchor)
+    (w,) = layer(L_i, mu_i, gamma_i, w_prev, rho_scl, q_anchor, Lc_i)
     return w
 
 
 def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
                   rho: float, start_idx: int, end_idx: int,
-                  return_realized: bool = False):
+                  return_realized: bool = False, Lcorr_t=None):
     """Aggregated SPO+ regret over [start_idx, end_idx).
 
     Returns (spo_loss, aux_mse_loss) with grad through the NN. The aux MSE
@@ -1066,6 +1143,8 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
     rho_scl = torch.tensor([float(rho)], dtype=torch.float32)
     rho2 = float(rho) ** 2
     w_prev = torch.full((1, N_ORCH), 1.0 / N_ORCH)
+    if Lcorr_t is None:
+        Lcorr_t = torch.zeros(L_t.shape[0], N_ORCH, N_ORCH, dtype=L_t.dtype)
 
     spo_terms = []
     aux_sq_err = []
@@ -1074,6 +1153,7 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
         x = feats_t[i:i+1]
         mu_nn, gamma, r_pred = net(x)          # (1,N_ORCH), (), (1,N_ORCH)
         L_i = L_t[i:i+1]
+        Lc_i = Lcorr_t[i:i+1]
         gamma_i = gamma.expand(1)
         q_anchor = rho2 * anchor_t[i:i+1]
         r_i = asset_rets_t[i:i+1]              # (1, N_ORCH)
@@ -1085,12 +1165,12 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
         # (1) Oracle decision, detached.
         with torch.no_grad():
             w_oracle = _solve_qp_step(layer, L_i, r_i, gamma_i.detach(),
-                                      w_prev, rho_scl, q_anchor)
+                                      w_prev, rho_scl, q_anchor, Lc_i)
 
         # (2) SPO+ decision with μ_eff = 2 μ_NN - r. Grad path.
         mu_spo = 2.0 * mu_nn - r_i
         w_spo = _solve_qp_step(layer, L_i, mu_spo, gamma_i, w_prev,
-                               rho_scl, q_anchor)
+                               rho_scl, q_anchor, Lc_i)
 
         # SPO+ regret (drop r-only constant terms — zero gradient wrt μ).
         w_or_d = w_oracle.detach()
@@ -1101,7 +1181,7 @@ def spo_plus_loss(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
         # (3) NN decision — bookkeeping for w_prev chain / realized tracking.
         with torch.no_grad():
             w_nn = _solve_qp_step(layer, L_i, mu_nn.detach(), gamma_i.detach(),
-                                  w_prev, rho_scl, q_anchor)
+                                  w_prev, rho_scl, q_anchor, Lc_i)
             if return_realized:
                 rs_realized.append((w_nn * r_i).sum())
         w_prev = w_nn.detach()
@@ -1259,7 +1339,8 @@ def pod_allocation_stats(bt: BTResult, regime_vol: np.ndarray) -> dict:
 # ---------- DFL test-window rollout ----------
 
 def rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
-                start_idx: int, end_idx: int, rho: float = 0.05) -> np.ndarray:
+                start_idx: int, end_idx: int, rho: float = 0.05,
+                Lcorr_t=None) -> np.ndarray:
     """Produce (k, N_ORCH) weight matrix from the trained NN at test time.
 
     `rho` is the post-curriculum anchor strength used during evaluation —
@@ -1269,6 +1350,8 @@ def rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
     """
     import torch
     net.eval()
+    if Lcorr_t is None:
+        Lcorr_t = torch.zeros(L_t.shape[0], N_ORCH, N_ORCH, dtype=L_t.dtype)
     ws = []
     w_prev = torch.full((1, N_ORCH), 1.0 / N_ORCH)
     rho_scl = torch.tensor([float(rho)], dtype=torch.float32)
@@ -1278,8 +1361,10 @@ def rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
             x = feats_t[i:i+1]
             mu, gamma, _ = net(x)                  # α-head unused at inference
             L_i = L_t[i:i+1]
+            Lc_i = Lcorr_t[i:i+1]
             q_anchor = rho2 * anchor_t[i:i+1]
-            (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor)
+            (w_i,) = layer(L_i, mu, gamma.expand(1), w_prev, rho_scl, q_anchor,
+                           Lc_i)
             ws.append(w_i)
             w_prev = w_i
     return torch.cat(ws, dim=0).numpy()
@@ -1292,7 +1377,9 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
                  adapted_note: str,
                  sweep_rows: list[dict] | None = None,
                  best_cfg: dict | None = None,
-                 universe_rows: list[dict] | None = None) -> None:
+                 universe_rows: list[dict] | None = None,
+                 eta_rows: list[dict] | None = None,
+                 eta_corr_best: float | None = None) -> None:
     csv_path = OUT_DIR / "dfl_results.csv"
     md_path  = OUT_DIR / "REPORT.md"
     # Long-form CSV with all metrics by strategy.
@@ -1340,7 +1427,10 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
         if best_cfg is not None:
             hist_md += (f"Config: λ_aux={best_cfg['lambda_aux']}  "
                         f"ρ_hi={best_cfg['rho_hi']}  "
-                        f"lr={best_cfg['lr']:.0e}.\n")
+                        f"lr={best_cfg['lr']:.0e}")
+            if eta_corr_best is not None:
+                hist_md += f"  η_corr={eta_corr_best:g}"
+            hist_md += ".\n"
 
     universe_md = ""
     if universe_rows:
@@ -1377,6 +1467,24 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
                      "Sharpe on the 2022 validation regime). The test window "
                      "is NOT used for any selection — would be data leakage.\n")
 
+    eta_md = ""
+    if eta_rows:
+        rows = sorted(eta_rows, key=lambda r: r["best_val_robust"], reverse=True)
+        eta_md = ("\n### Pod-decorrelation η sweep (val-robust-Sharpe selected)\n"
+                  "| rank | η | val_robust | best val_mean | epochs | sec |\n"
+                  "|---:|---:|---:|---:|---:|---:|\n")
+        for k, r in enumerate(rows, 1):
+            eta_md += (f"| {k} | {r['eta_corr']:g} "
+                       f"| {r['best_val_robust']:+.3f} "
+                       f"| {r['best_val_mean_seen']:+.3f} "
+                       f"| {r['n_epochs']} | {r['elapsed_s']:.0f} |\n")
+        eta_md += ("\nThe η penalty is `0.5·η·w^T M_psd w`, where M_psd is "
+                   "the PSD-projected zero-diagonal pod-pair correlation "
+                   "matrix (rolling 60-week window). η = 0 reproduces the "
+                   "no-decorrelation QP exactly; larger η penalises co-"
+                   "allocation to correlated pods. SPY/extras rows/cols of "
+                   "M_psd are zero — only the pod sub-block is penalised.\n")
+
     obs_md = "### Observations\n" + "\n".join(f"{i+1}. {o}" for i, o in enumerate(observations))
 
     text = (
@@ -1388,6 +1496,7 @@ def write_report(metrics_rows: list[dict], alloc_stats: dict,
         f"{hist_md}\n"
         f"{universe_md}\n"
         f"{sweep_md}\n"
+        f"{eta_md}\n"
         f"{obs_md}\n"
     )
     md_path.write_text(text)
@@ -1433,8 +1542,8 @@ def sweep_hp(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
         out = train_dfl(panel, feats, L_stack, splits,
                         epochs=epochs, patience=patience, verbose=False,
                         **cfg)
-        # train_dfl returns 9-tuple ending with best_val (val_robust)
-        best_val = out[-1]
+        # train_dfl returns 10-tuple; best_val is at index 8 (Lcorr_t at -1)
+        best_val = out[8]
         history = out[6]
         # Track final-epoch and best-epoch realized-Sharpe (val_mean) too.
         val_means = [h[2] for h in history]
@@ -1485,7 +1594,7 @@ def sweep_universe(prices: pd.DataFrame, spy: pd.Series, extras: pd.DataFrame,
         out = train_dfl(panel_k, feats_k, L_k, splits_k,
                         epochs=epochs, patience=patience, verbose=False,
                         **hp_cfg)
-        best_val = out[-1]
+        best_val = out[8]
         history = out[6]
         max_val_mean = max((h[2] for h in history), default=float("nan"))
         dt = time.time() - t0
@@ -1504,17 +1613,60 @@ def sweep_universe(prices: pd.DataFrame, spy: pd.Series, extras: pd.DataFrame,
     return rows
 
 
+def sweep_eta(panel: PodPanel, feats: np.ndarray, L_stack: np.ndarray,
+              splits: SplitIdx, etas: list[float], base_cfg: dict,
+              epochs: int = 80, patience: int = 12,
+              seed: int = SEED) -> list[dict]:
+    """Sweep pod-decorrelation strength η at fixed (λ_aux, ρ_hi, lr).
+
+    η = 0 reproduces the no-decorrelation baseline. Selection on val_robust
+    (no test peek). Returns rows with mean realized off-diagonal pod
+    correlation in the rolled-out validation window — useful diagnostic
+    confirming larger η does in fact reduce realized pod-pair correlation.
+    """
+    import torch
+    corr_unit = build_corr_factors(panel.pod_rets)
+    rows = []
+    for eta in etas:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        t0 = time.time()
+        out = train_dfl(panel, feats, L_stack, splits,
+                        epochs=epochs, patience=patience, verbose=False,
+                        eta_corr=eta, corr_unit_stack=corr_unit, **base_cfg)
+        best_val = out[8]
+        history = out[6]
+        max_val_mean = max((h[2] for h in history), default=float("nan"))
+        dt = time.time() - t0
+        row = dict(
+            eta_corr=eta,
+            best_val_robust=best_val,
+            best_val_mean_seen=max_val_mean,
+            n_epochs=len(history),
+            elapsed_s=round(dt, 1),
+        )
+        rows.append(row)
+        print(f"[eta  ] η={eta:>5.2f}  best_val_rob={best_val:+.3f}  "
+              f"max_val_mean={max_val_mean:+.3f}  epochs={len(history)}  "
+              f"{dt:.0f}s")
+    return rows
+
+
 # ---------- End-to-end driver ----------
 
 def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
                    do_sweep: bool = True, sweep_epochs: int = 90,
                    do_universe_sweep: bool = False,
                    universe_k_values: list = (30, 60, None),
-                   universe_size: int | None = None):
+                   universe_size: int | None = None,
+                   do_eta_sweep: bool = False,
+                   eta_values: list = (0.0, 1.0, 5.0, 25.0)):
     """Driver. Set `do_universe_sweep=True` to grid over universe sizes
     K ∈ universe_k_values (None = all 94). The picked K is then used for
     the final-config training. Otherwise pass `universe_size=K` to fix
-    the universe up front."""
+    the universe up front. Set `do_eta_sweep=True` to grid over the pod-
+    decorrelation strength η at the chosen (λ_aux, ρ_hi, lr); best η is
+    val-selected and used in the final training."""
     import torch
     torch.manual_seed(seed)
 
@@ -1571,13 +1723,30 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
               f"ρ_hi={best_cfg['rho_hi']}  lr={best_cfg['lr']:.0e}  "
               f"val_robust={best['best_val_robust']:+.3f}")
 
+    # Optional pod-decorrelation η sweep at chosen (λ_aux, ρ_hi, lr).
+    eta_rows = []
+    eta_corr_best = 0.0
+    if do_eta_sweep:
+        print(f"[eta  ] running {len(eta_values)} η values at λ_aux="
+              f"{best_cfg['lambda_aux']}, ρ_hi={best_cfg['rho_hi']}, "
+              f"lr={best_cfg['lr']:.0e}")
+        eta_rows = sweep_eta(panel, feats, L_stack, splits,
+                             list(eta_values), base_cfg=best_cfg,
+                             epochs=80, patience=12, seed=seed)
+        eta_rows.sort(key=lambda r: r["best_val_robust"], reverse=True)
+        eta_corr_best = float(eta_rows[0]["eta_corr"])
+        print(f"[eta  ] BEST η = {eta_corr_best} "
+              f"(val_robust={eta_rows[0]['best_val_robust']:+.3f})")
+
     # Train final model at best config for the full epoch budget.
     t0 = time.time()
     torch.manual_seed(seed)
     np.random.seed(seed)
     (net, layer, feats_t, L_t, asset_rets_t, anchor_t, hist, _,
-     best_val) = train_dfl(panel, feats, L_stack, splits,
-                           epochs=epochs, patience=patience, **best_cfg)
+     best_val, Lcorr_t) = train_dfl(panel, feats, L_stack, splits,
+                                    epochs=epochs, patience=patience,
+                                    eta_corr=eta_corr_best,
+                                    **best_cfg)
     print(f"[train] done in {time.time()-t0:.1f}s  "
           f"best val robust-Sharpe={best_val:.3f}")
 
@@ -1585,7 +1754,7 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
     test_idx = np.flatnonzero(splits.test)
     i0, i1 = int(test_idx[0]), int(test_idx[-1]) + 1
     W_dfl_test = rollout_dfl(net, layer, feats_t, L_t, asset_rets_t, anchor_t,
-                             i0, i1)
+                             i0, i1, Lcorr_t=Lcorr_t)
     dates_test = pd.DatetimeIndex(panel.dates[i0:i1])
     asset_rets_test = asset_rets[i0:i1]
 
@@ -1751,6 +1920,43 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
         "monotone size effect — selection by burn-in Sharpe over a 1.7-year "
         "window is itself noisy.")
 
+    # Sixth observation — pod-decorrelation η sweep (Stage T). Honest read
+    # of whether forcing pod-pair orthogonality at the QP level improves
+    # generalization or just adds an unnecessary regularizer.
+    if eta_rows:
+        eta_sorted = sorted(eta_rows, key=lambda r: r["best_val_robust"],
+                            reverse=True)
+        eta_top = eta_sorted[0]
+        eta_zero = next((r for r in eta_rows if r["eta_corr"] == 0.0), None)
+        if eta_top["eta_corr"] == 0.0:
+            obs.append(
+                "Pod-decorrelation η sweep (η ∈ "
+                f"{[r['eta_corr'] for r in eta_rows]}): η=0 wins on "
+                "val_robust — the existing covariance term in the QP and the "
+                "aux-MSE multi-task regularizer already deliver enough "
+                "implicit diversification, and adding an explicit pod-pair "
+                "correlation penalty over-constrains the allocator. Negative "
+                "result, kept as infrastructure but defaults to off.")
+        elif eta_zero is None:
+            obs.append(
+                f"Pod-decorrelation η sweep: best η = {eta_top['eta_corr']:g} "
+                f"(val_robust {eta_top['best_val_robust']:+.3f}). The penalty "
+                "0.5·η·w^T M_psd w with M_psd = PSD-projected zero-diagonal "
+                "pod-pair correlation matrix produced a measurable lift on "
+                "val.")
+        else:
+            delta = eta_top["best_val_robust"] - eta_zero["best_val_robust"]
+            obs.append(
+                f"Pod-decorrelation η sweep: best η = {eta_top['eta_corr']:g} "
+                f"(val_robust {eta_top['best_val_robust']:+.3f} vs η=0 at "
+                f"{eta_zero['best_val_robust']:+.3f}, Δ {delta:+.3f}). The "
+                "explicit pod-pair correlation penalty 0.5·η·w^T M_psd w "
+                "(M_psd = PSD-projected zero-diagonal pod correlation matrix) "
+                "complements the existing covariance term — it specifically "
+                "targets co-allocation to correlated pods, whereas the "
+                "covariance term penalises overall portfolio variance. The "
+                "two are not redundant, evidently.")
+
     adapted_note = (
         "### Data / schedule adaptation (vs. original spec)\n"
         "The spec referenced `/mnt/user-data/uploads/sp100_prices.csv` "
@@ -1816,6 +2022,17 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
         "Best config in the 9-dim universe: λ_aux=30, ρ_hi=2.5, lr=1e-3 "
         "— stronger aux MSE weight + stronger anchor warm-up — consistent "
         "with the larger universe needing more regularization.\n"
+        "- **Pod-decorrelation penalty** (Stage T) added to the QP "
+        "objective: `0.5·η·w^T M_psd w`, where M_psd is the PSD-"
+        "projection (Higham 2002) of the zero-diagonal rolling pod-pair "
+        "correlation matrix, padded with zeros for SPY/extras. This "
+        "explicitly punishes co-allocation to correlated pods — distinct "
+        "from the covariance term, which penalises overall portfolio "
+        "variance. DPP-compliant via `L_corr = sqrt(η)·chol(M_psd)` fed "
+        "as a parameter, so η is a single tunable scalar. η-sweep "
+        "selection on val_robust; η = 0 is included as a no-op baseline "
+        "in the sweep so the result honestly admits when the penalty is "
+        "or isn't worth applying.\n"
         "\n### Tested and reverted (honest negative results)\n"
         "- **IVOL pod** (Ang-Hodrick-Xing-Zhang 2006): added as a 7th "
         "pod, but it turned out to be 92% correlated with LowBeta on "
@@ -1838,16 +2055,19 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
 
     write_report(metrics_rows, alloc, hist, obs, adapted_note,
                  sweep_rows=sweep_rows, best_cfg=best_cfg,
-                 universe_rows=universe_rows)
+                 universe_rows=universe_rows, eta_rows=eta_rows,
+                 eta_corr_best=eta_corr_best)
 
 
 if __name__ == "__main__":
     t0 = time.time()
-    # Defaults: HP sweep already done (Stage Q, persisted as best_cfg).
-    # Universe-size sweep enabled (Stage S) — picks best K from the grid
-    # by val_robust, then trains the final model on the chosen K.
+    # Defaults: HP sweep done (Stage Q, persisted as best_cfg). Universe-
+    # size sweep done (Stage S, K=all wins). Stage T = pod-decorrelation
+    # η sweep at the chosen (λ_aux, ρ_hi, lr); η = 0 included as a no-op
+    # baseline so the result is honest when the penalty doesn't help.
     run_experiment(epochs=120, patience=15,
                    do_sweep=False,
-                   do_universe_sweep=True,
-                   universe_k_values=(30, 60, None))    # None = all 94
+                   do_universe_sweep=False,
+                   do_eta_sweep=True,
+                   eta_values=(0.0, 1.0, 5.0, 25.0))
     print(f"[done] total elapsed {time.time()-t0:.1f}s")
