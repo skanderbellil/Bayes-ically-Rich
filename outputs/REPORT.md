@@ -18,7 +18,9 @@ All other spec details (6 pods + SPY — see below for the design improvements l
 - **Bootstrap sub-window** (85% of train weeks per epoch, contiguous random slice) for additional stochasticity.
 - Wider NN (hidden=64) + dropout=0.15 for capacity without overfit.
 - Release-aware early stopping: best-val tracking begins only after the anchor releases (ep ≥ 75), so we don't commit to the warmup-epoch policy (which is by construction ≈ EWMA).
-- Removed the per-pod cap (was 0.5). With the SPO+ + aux-MSE combo the allocator diversifies endogenously — the cap was binding on Momentum and costing 0.027 Sharpe for no risk benefit. With cap removed, ann return +2.5 pp, turnover DOWN to 0.19/yr.
+- Removed the per-pod cap (was 0.5). With the SPO+ + aux-MSE combo the allocator diversifies endogenously — the cap was binding on Momentum and costing 0.027 Sharpe for no risk benefit.
+- **Cross-asset slots** (TLT, GLD) added directly to the orchestrator universe. ETFs picked by SPY-correlation < 0.4 (TLT: -0.18, GLD: +0.08); EEM/VNQ rejected at 0.75/0.74. The orchestrator can hold these directly without any pod abstraction. On the 2023-24 test window this regressed test SR vs the prior 6-pod + SPY universe (see Observations); the slots are kept as infrastructure for longer / regime-richer training windows.
+- **Hyperparameter sweep** over `(λ_aux, ρ_hi, lr)` selected on val robust-Sharpe. Test window is never used for selection. Best config in the 9-dim universe: λ_aux=30, ρ_hi=2.5, lr=1e-3 — stronger aux MSE weight + stronger anchor warm-up — consistent with the larger universe needing more regularization.
 
 ### Tested and reverted (honest negative results)
 - **IVOL pod** (Ang-Hodrick-Xing-Zhang 2006): added as a 7th pod, but it turned out to be 92% correlated with LowBeta on train returns — added fittable noise without diversification. Dropped. `pod_ivol` retained in the module for anyone working with a wider, more heterogeneous universe where the two signals may decorrelate.
@@ -29,25 +31,28 @@ All other spec details (6 pods + SPY — see below for the design improvements l
 
 | Strategy | Ann. Return | Ann. Vol | Sharpe | Sortino | Max DD | Calmar | Turnover (ann) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| DFL-Orchestrator | 19.45% | 13.23% | 1.470 | 2.417 | -8.63% | 2.25 | 0.19 |
+| DFL-Orchestrator | 16.31% | 11.83% | 1.379 | 2.275 | -8.16% | 2.00 | 1.05 |
 | SPY-BuyHold | 23.01% | 12.79% | 1.799 | 2.854 | -9.80% | 2.35 | 0.00 |
-| EqualWeight-Pods | 15.48% | 11.56% | 1.340 | 2.134 | -8.39% | 1.85 | 0.00 |
-| EWMA-Softmax | 13.90% | 11.64% | 1.194 | 1.886 | -8.91% | 1.56 | 4.14 |
+| EqualWeight-Pods | 15.47% | 11.55% | 1.339 | 2.133 | -8.39% | 1.84 | 0.00 |
+| EWMA-Softmax | 13.89% | 11.64% | 1.193 | 1.885 | -8.91% | 1.56 | 4.14 |
 
 ### DFL allocation stats (test window)
-| regime | Momentum | MinVar | MeanRev | RiskParity | LowBeta | Trend | SPY |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| mean | 0.143 | 0.019 | 0.468 | 0.127 | 0.000 | 0.101 | 0.143 |
-| high-vol | 0.143 | 0.001 | 0.441 | 0.129 | 0.000 | 0.142 | 0.143 |
-| low-vol | 0.143 | 0.036 | 0.494 | 0.125 | 0.000 | 0.059 | 0.143 |
+| regime | Momentum | MinVar | MeanRev | RiskParity | LowBeta | Trend | SPY | TLT | GLD |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| mean | 0.004 | 0.137 | 0.184 | 0.203 | 0.014 | 0.381 | 0.052 | 0.024 | 0.000 |
+| high-vol | 0.009 | 0.128 | 0.184 | 0.200 | 0.029 | 0.389 | 0.062 | 0.000 | 0.000 |
+| low-vol | 0.000 | 0.145 | 0.185 | 0.207 | 0.000 | 0.372 | 0.043 | 0.048 | 0.000 |
 
 (Regime split at median SPY 20d vol = 0.116; hi=52, lo=52 weeks.)
 
 
 ### Training
-Epochs run: 104  Best val Sharpe at epoch 89: 0.189  (final train SR: 1.215).
+Epochs run: 90  Best val Sharpe at epoch 69: 0.277  (final train SR: 1.431).
+Config: λ_aux=30.0  ρ_hi=2.5  lr=1e-03.
+
 
 ### Observations
-1. DFL beats the EWMA baseline by +0.276 Sharpe on the test window, clearing the spec's >0.15 bar. The SPO+ surrogate also delivers materially better tail behaviour than EWMA: Sortino 2.42 vs 1.89, max-DD -8.6% vs -8.9%, and turnover 0.19 vs 4.14 per year — the bounded SPO+ gradient produces a much more parsimonious allocator than realized-Sharpe loss would.
-2. DFL does NOT beat naive SPY buy-and-hold (SR 1.80 vs DFL 1.47) on this test window. SPY in 2023-2024 delivered a mega-cap rally the pod universe cannot fully replicate. DFL's largest mean allocation is MeanRev (46.8%); the net allocation is broadly diversified. DFL does pay less drawdown cost (MDD -8.6% vs SPY -9.8%), offering a partial Sharpe/DD tradeoff.
-3. Regime-conditional tilt: DFL shifts Trend weight up by 0.084 in high-vol weeks (high-vol mean 0.142 vs low-vol 0.059). The orchestrator learned this rotation from the SPO+ regret objective alone — no hand-coded regime switch.
+1. DFL beats the EWMA baseline by +0.186 Sharpe on the test window, clearing the spec's >0.15 bar. The SPO+ surrogate also delivers materially better tail behaviour than EWMA: Sortino 2.27 vs 1.88, max-DD -8.2% vs -8.9%, and turnover 1.05 vs 4.14 per year — the bounded SPO+ gradient produces a much more parsimonious allocator than realized-Sharpe loss would.
+2. DFL does NOT beat naive SPY buy-and-hold (SR 1.80 vs DFL 1.38) on this test window. SPY in 2023-2024 delivered a mega-cap rally the pod universe cannot fully replicate. DFL's largest mean allocation is Trend (38.0%); the net allocation is broadly diversified. DFL does pay less drawdown cost (MDD -8.2% vs SPY -9.8%), offering a partial Sharpe/DD tradeoff.
+3. Regime-conditional tilt is minimal (largest shift is -0.048 on TLT). The NN converged to a near-static allocation, dominated by Trend (38.0%). Two likely causes: (a) the SPO+ regret signal over ~200 weekly points is still noisy enough to bias toward low-turnover solutions, (b) val robust-Sharpe was modest (+0.256), so early stopping selected a conservative checkpoint. A longer history or an explicit regime-conditioning input (HMM posterior, VIX) would likely produce a more dynamic allocator.
+4. Cross-asset extras (TLT, GLD) did NOT improve test SR over the prior 6-pod + SPY universe: 1.379 vs 1.470 (Δ -0.091). Mean usage: TLT 2.4%, GLD 0.0%. The 2023-2024 test window punished both — TLT held duration risk into a rate-cut-pricing-out regime (-0.06 Sharpe alone), and GLD had no edge over the equity tilt. Hyperparameter sweep over (λ_aux, ρ_hi, lr) recovered some ground but not enough; the 9-dim universe is harder to optimize on the same train data than the 7-dim version. Conclusion: cross-asset extras need a longer, regime-diverse training window to pay off.
