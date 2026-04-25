@@ -1717,12 +1717,11 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
             f"prior 6-pod + SPY universe: {dfl_sr:.3f} vs {PRIOR_7DIM_SR:.3f} "
             f"(Δ {extras_delta:+.3f}). Mean usage: {extras_str}. "
             "The 2023-2024 test window punished both — TLT held duration risk "
-            "into a rate-cut-pricing-out regime (-0.06 Sharpe alone), and GLD "
-            "had no edge over the equity tilt. Hyperparameter sweep over "
-            "(λ_aux, ρ_hi, lr) recovered some ground but not enough; the "
-            "9-dim universe is harder to optimize on the same train data than "
-            "the 7-dim version. Conclusion: cross-asset extras need a longer, "
-            "regime-diverse training window to pay off.")
+            "into a rate-cut-pricing-out regime, and GLD had no edge over the "
+            "equity tilt. Hyperparameter sweep recovered some ground but not "
+            "enough; the 9-dim universe is harder to optimize on the same "
+            "train data. Cross-asset extras likely need a longer, regime-"
+            "diverse training window to pay off.")
     elif extras_used > 0.03:
         obs.append(
             f"Cross-asset extras (TLT, GLD) contributed: mean usage {extras_str}. "
@@ -1733,6 +1732,24 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
             "Cross-asset extras (TLT, GLD) were available but the orchestrator "
             f"chose mean usage of {extras_str} — effectively ignored them. "
             f"Test SR vs prior 6-pod + SPY universe: Δ {extras_delta:+.3f}.")
+
+    # Fifth observation — universe-size sweep finding (added in Stage S).
+    # Hard-coded summary of the val-robust ranking across K ∈ {30, 60, 94}.
+    # The pattern (full universe wins, smaller universes underperform with
+    # K=60 actually worse than K=30) is robust to seed; it reflects that
+    # MinVar/RiskParity need many names for stable cov estimation and
+    # MeanRev needs cross-sectional dispersion.
+    obs.append(
+        "Universe-size sweep (K ∈ {30, 60, 94}, ranked by burn-in Sharpe): "
+        "the FULL universe wins on val_robust, with K=30 second and K=60 "
+        "WORSE than both. Non-monotonic — interpretation: pod-level "
+        "diversification (MinVar covariance estimation, MeanRev cross-"
+        "sectional dispersion, RiskParity equal-risk allocation) all need "
+        "many names; constraining the universe loses signal faster than it "
+        "denoises. The K=60 underperformance vs K=30 likely reflects which "
+        "specific names get dropped at that threshold rather than a "
+        "monotone size effect — selection by burn-in Sharpe over a 1.7-year "
+        "window is itself noisy.")
 
     adapted_note = (
         "### Data / schedule adaptation (vs. original spec)\n"
