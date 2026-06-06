@@ -69,6 +69,13 @@ def main():
     # --- Build signal panel ---
     print(f"\n[4] Building signal panel from {len(tickers_with_data)} tickers...")
     panel = signals.build_signal_panel(tickers_with_data, raw_dir, raw_dir)
+
+    # Ensure announcement_date is datetime
+    panel["announcement_date"] = pd.to_datetime(
+        panel["announcement_date"], utc=True, errors="coerce"
+    )
+    panel = panel.dropna(subset=["announcement_date"])
+
     print(f"  Panel shape: {panel.shape}")
     print(f"  Unique tickers: {panel['ticker'].nunique()}")
     print(f"  Date range: {panel['announcement_date'].min().date()} to "

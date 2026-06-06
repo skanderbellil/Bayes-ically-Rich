@@ -71,6 +71,12 @@ def align_earnings_to_prices(
         if len(future_prices) < 2:  # need t+1 and at least t+21
             continue
 
+        # Find last price on or before announcement.
+        past_prices = price_df[price_df.index <= ann_date]
+        if len(past_prices) == 0:
+            # Announcement is before price history starts
+            continue
+
         t1_idx = 1  # next trading day = index 1 into future_prices
         p_t1 = future_prices.iloc[t1_idx, 0]
 
@@ -79,7 +85,7 @@ def align_earnings_to_prices(
         fwd_ret["price_t1"] = p_t1
 
         # Return to t+1 (announcement day close to t+1 close).
-        p_t0 = price_df[price_df.index <= ann_date].iloc[-1, 0]
+        p_t0 = past_prices.iloc[-1, 0]
         fwd_ret["ret_t1"] = np.log(p_t1 / p_t0) * 100
 
         # Returns to t+21 and t+63 (log, %).
