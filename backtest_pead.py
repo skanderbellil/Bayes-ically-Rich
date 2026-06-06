@@ -69,12 +69,12 @@ def main():
 
     # --- Align dates for plotting ---
     print("\n[4] Preparing visualization...")
-    # Resample PEAD curve to daily (forward-fill) for smoother comparison.
-    pead_curve = result.equity_curve
-    pead_daily = pead_curve.resample("D").ffill()
+    # PEAD curve is already daily (interpolated by backtest module).
+    pead_daily = result.equity_curve.copy()
 
-    # Remove timezone info for comparison
-    pead_daily.index = pead_daily.index.tz_localize(None)
+    # Remove timezone info for comparison (if any)
+    if pead_daily.index.tz is not None:
+        pead_daily.index = pead_daily.index.tz_localize(None)
 
     # Align to common date range.
     common_start = max(pead_daily.index.min(), spy_equity.index.min())

@@ -96,8 +96,12 @@ def backtest_pead_simple(
     cumulative_rets = np.cumprod(1 + returns) - 1
     equity = initial_capital * (1 + cumulative_rets)
 
-    # Create series.
+    # Create series with quarterly points.
     eq_series = pd.Series(equity, index=dates, name="equity")
+
+    # Interpolate to daily for smoother appearance.
+    # This assumes the position's value evolves linearly through the quarter.
+    eq_series = eq_series.asfreq("D").interpolate(method="linear")
 
     # Metrics.
     total_return = cumulative_rets[-1]
