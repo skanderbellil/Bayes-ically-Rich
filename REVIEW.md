@@ -154,3 +154,42 @@ better (point-in-time, survivorship-free, broader) data.
 
 **Bottom line for a retail investor:** hold the index. The PEAD hustle does not pay
 for itself once taxes, turnover, robustness, and concentration are accounted for.
+
+---
+
+## Low-turnover factors & the survivorship benchmark (exploration #3)
+
+Since short-term tax sank PEAD, the only active strategy that could justify itself is
+low-turnover (annual rebalance → long-term cap gains, trivial hustle). Built 12-month
+forward returns from the raw daily price files (497 live names) and tested low-vol and
+momentum, annually rebalanced.
+
+| Annual-rebalanced (2000–2026) | Annual | Sharpe | Max DD |
+|---|---|---|---|
+| SPY | +10.0% | 0.64 | — |
+| **EW-universe (497 survivors)** | **+18.8%** | **0.92** | −50% |
+| Low-Vol quintile | +11.1% | 0.85 | −45% |
+| Momentum quintile | +18.1% | 0.83 | −56% |
+
+**The lesson:** equal-weighting the 497 *survivors* already returns +18.8%/yr (Sharpe
+0.92) vs SPY's +10.0% — that **+8.8%/yr is pure survivorship bias**, not skill. Any
+factor backtested on this universe inherits the free lift. The honest test is whether a
+factor beats the **survivorship-matched** EW-universe:
+
+- Low-Vol: Sharpe 0.85 − 0.92 = **−0.06** (no edge)
+- Momentum: Sharpe 0.83 − 0.92 = **−0.08** (no edge)
+
+Neither factor beats simply holding the survivor basket. **No real low-turnover edge is
+demonstrable on this data.** More importantly, this quantifies why every earlier "edge"
+looked good: benchmark against SPY on a survivor universe and you measure survivorship,
+not alpha. Always benchmark against the survivorship-matched universe.
+
+Tool: `research_factor_lowturnover.py` (reusable EW-universe control).
+
+### Overall conclusion across all explorations
+For this dataset and a retail taxable investor: **hold the index.** The PEAD edge is
+~85% an untradeable jump; the tradeable remainder is a modest risk-adjusted overlay that
+short-term taxes erase; and low-turnover factors show no edge once survivorship is
+controlled. The durable takeaways are methodological — trade at t+1, convert log→simple
+before averaging, use a real benchmark, select on trailing data, and **compare to a
+survivorship-matched universe.**
