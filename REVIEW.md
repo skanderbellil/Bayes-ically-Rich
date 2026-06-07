@@ -287,3 +287,40 @@ return-beater. Tools: `src/pead/bayesvol.py`, `research_bayesvol.py`.
   known to help there.
 - Noisier/higher-frequency assets where a 20-day window lags badly.
 Neither is single-stock return prediction, which remains a dead end on this data.
+
+---
+
+## Multi-pod ETF strategy (exploration #6) — best risk-adjusted result
+
+Combines the two robust findings into one system. Each ETF is a "pod"; three causal,
+monthly-rebalanced layers: (1) SELECT — pod ON only if price > its 10-month average
+(time-series momentum, robust for asset allocation); (2) WEIGHT — inverse-vol risk
+parity among ON pods; (3) SIZE — scale total exposure to a vol target, capped at 1.0
+(no leverage). 8 ETFs (SPY/TLT/IEF/GLD/DBC/VNQ/LQD/EEM), 2006–2026.
+
+| Strategy | Annual | Sharpe | Max DD |
+|---|---|---|---|
+| SPY (buy & hold) | +12.1% | 0.78 | −51% |
+| Multi-pod: no trend filter | +6.0% | 0.78 | −20% |
+| Multi-pod: no vol target | +7.0% | 0.83 | −24% |
+| **Multi-pod (full)** | +6.8% | **0.93** | **−13%** |
+
+Best risk-adjusted profile in the project: Sharpe 0.93 vs 0.78, and a **−13% worst
+drawdown vs SPY's −51% (4× smaller)**. Ablation is clean — trend filter and vol target
+each add and compound. Robust across halves (H1 Sharpe 1.03 / DD −9% vs SPY 0.53/−51%;
+H2 0.81/−13% vs SPY 1.03/−24%).
+
+**The wall, once more:** raising the vol target does NOT lift return — it saturates at
+~+7%/yr because, with no leverage, the diversified trend-filtered book can't deploy
+harder. So it is a lower-return, much-lower-risk, higher-Sharpe profile; matching SPY's
++12% needs leverage, which fails at 6% retail margin. Tool: `research_multipod.py`.
+
+### Overall, after six explorations
+Everything that tried to BEAT the index on absolute return failed honest accounting
+(untradeable jump, short-term tax, survivorship, retail margin). Everything that
+IMPROVES RISK-ADJUSTED return — cross-asset diversification, second-moment vol
+management, and the multi-pod that unifies them — works and is robust. The durable,
+honest product of this project is a **risk engine, not an alpha engine**: the multi-pod
+delivers SPY-like Sharpe-plus with a quarter of the drawdown, ideal for capital
+preservation / "sleep-well" money, while SPY remains best for raw wealth maximization
+by someone who can tolerate −50% drawdowns.
