@@ -193,3 +193,56 @@ short-term taxes erase; and low-turnover factors show no edge once survivorship 
 controlled. The durable takeaways are methodological — trade at t+1, convert log→simple
 before averaging, use a real benchmark, select on trailing data, and **compare to a
 survivorship-matched universe.**
+
+---
+
+## Other universes: ETFs / cross-asset (exploration #4)
+
+FinanceDatabase cannot supply delisted equities (the `delisted` flag is `False` for
+all 151k names, in both the bundled CSV and the live API; it has no price data). But
+its **ETF universe** (Fixed Income, Commodities, Alternatives, Real Estate, factors)
+opens a survivorship-clean path: ETFs barely delist, trade with tight spreads, and
+rebalance annually (LTCG, near-zero hustle). Built a multi-asset backtest from 8
+liquid ETFs (SPY, TLT, IEF, GLD, DBC, VNQ, LQD, EEM), 2005–2026.
+
+| Portfolio | Annual | Sharpe | Max DD |
+|---|---|---|---|
+| SPY (100% equity) | +12.3% | 0.78 | −51% |
+| 60/40 (SPY/IEF) | +8.7% | **0.92** | −29% |
+| Equal-weight (8) | +7.6% | 0.77 | −28% |
+| Risk-parity (inv-vol, annual) | +6.2% | 0.76 | −19% |
+
+This is the **one real, robust result** of the whole project: diversification lifts
+Sharpe (0.78→0.92) and roughly halves drawdown (−51%→−29%), and risk-parity is stable
+across both halves (Sharpe 0.76 / 0.75) — unlike PEAD's 0.61→1.59 instability.
+
+**But the catch that haunted every stage returns:** higher Sharpe, *lower absolute
+return*. The only way to convert Sharpe into beating SPY is leverage — and at the 6%
+Alpaca retail margin rate it fails:
+
+| Levered to SPY vol, net of 6% margin | Annual | Sharpe | Max DD |
+|---|---|---|---|
+| 60/40 levered 1.63× | +10.3% | 0.66 | −47% |
+| Risk-parity levered 1.86× | +6.2% | 0.41 | −39% |
+| SPY | +12.3% | 0.78 | −51% |
+
+Borrow cost is a pure Sharpe drag and leverage re-inflates drawdown, so the levered
+portfolios lose to SPY on both. Only institutions with ~1–2% financing can monetize
+the diversification edge; retail at 6% cannot.
+
+Tool: `research_crossasset.py`.
+
+### Final, complete conclusion
+Three honest negatives and one honest positive:
+1. **PEAD** — ~85% untradeable jump; tradeable remainder erased by short-term tax. ❌
+2. **Low-turnover stock factors** — no edge vs the survivorship-matched benchmark. ❌
+3. **Leverage to beat the index** — killed by 6% retail margin cost. ❌
+4. **Cross-asset diversification** — a real, robust risk-adjusted improvement (Sharpe
+   0.78→0.92, drawdown −51%→−29%), implementable with 2–8 ETFs and annual rebalancing.
+   It is a **risk-reducer, not a return-beater**. ✅
+
+**Recommendation by investor type:**
+- Maximize long-run wealth, can stomach −50% drawdowns → **hold SPY**.
+- Care about risk-adjusted return / drawdowns (near goals, want to sleep) → a
+  diversified ETF portfolio (60/40 or risk-parity-lite), annual rebalance. Real,
+  robust, low-hustle — the genuine improvement this whole investigation produced.
