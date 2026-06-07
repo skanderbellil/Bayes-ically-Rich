@@ -246,3 +246,44 @@ Three honest negatives and one honest positive:
 - Care about risk-adjusted return / drawdowns (near goals, want to sleep) → a
   diversified ETF portfolio (60/40 or risk-parity-lite), annual rebalance. Real,
   robust, low-hustle — the genuine improvement this whole investigation produced.
+
+---
+
+## Second moments, done right: dynamic Bayesian vol management (exploration #5)
+
+Prices fetched via the **recommended FinanceDatabase → Finance Toolkit path**
+(`Toolkit(tickers).get_historical_data()`), not a yfinance bypass. Returns are
+~unforecastable; variance is not (it clusters). So this trades the **second moment
+only**: a causal variance forecast scales SPY exposure to target constant vol — no
+price/direction prediction. The Bayesian forecaster models precision 1/σ² with a
+discounted Gamma posterior (West–Harrison) whose discount adapts after a surprising
+return (BOCPD-style regime signal).
+
+| De-risk only (cap 1.0) | Annual | Sharpe | Vol | Max DD |
+|---|---|---|---|---|
+| Buy & hold SPY | +13.0% | 0.65 | 19% | −55% |
+| Trailing-20d vol-managed | +10.0% | **0.84** | 11% | −29% |
+| Bayesian vol-managed | +9.2% | 0.80 | 11% | −27% |
+
+Crisis drawdowns (vs SPY): GFC −46%→−15/17%, COVID −34%→−13%, 2022 −25%→−15%.
+Robust across halves (strat Sharpe 0.62/0.99 vs SPY 0.43/0.89).
+
+**Two honest conclusions:**
+1. **Second-moment vol management is the most robust improvement in this project** —
+   Sharpe 0.65→0.84 and ~60–65% smaller crisis drawdowns, in both halves. This is the
+   real, dynamic, short-term edge.
+2. **The Bayesian elaboration does NOT beat naive trailing-20d vol** (0.80 vs 0.84);
+   even crisis reaction speed is identical (0.55 exposure in the first 10 GFC days for
+   both). Daily vol is so persistent a 20-day average is already near-optimal — Bayesian
+   shrinkage/changepoints add ~1–2% in the GFC and nothing elsewhere. Don't over-engineer.
+
+Same recurring caveat: it lowers average exposure → lower absolute return; levering to
+recover it (cap 1.5) fails at 6% retail margin (Sharpe 0.73). A risk-reducer, not a
+return-beater. Tools: `src/pead/bayesvol.py`, `research_bayesvol.py`.
+
+### Where a Bayesian/dynamic second-moment model might still earn its keep (untested)
+- Multivariate **covariance** estimation for the cross-asset risk-parity book (Bayesian
+  shrinkage genuinely helps when names ≫ history); the frequentist Ledoit–Wolf analog is
+  known to help there.
+- Noisier/higher-frequency assets where a 20-day window lags badly.
+Neither is single-stock return prediction, which remains a dead end on this data.
