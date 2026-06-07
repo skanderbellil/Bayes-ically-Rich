@@ -324,3 +324,43 @@ honest product of this project is a **risk engine, not an alpha engine**: the mu
 delivers SPY-like Sharpe-plus with a quarter of the drawdown, ideal for capital
 preservation / "sleep-well" money, while SPY remains best for raw wealth maximization
 by someone who can tolerate −50% drawdowns.
+
+---
+
+## Wide multi-pod + covariance shrinkage comparison (exploration #7)
+
+Widened the roster to 51 liquid ETFs spanning every asset-class group (US
+factors/sectors, international, fixed income, commodities; fetched via the
+FinanceDatabase→Toolkit/yfinance path). Dynamic trend selection + vol target as before;
+compared three ways to weight the selected pods.
+
+**Caveat found first:** with cash-like ETFs (BIL/SHY/MBB) in the roster, inverse-vol
+posts a spurious Sharpe 1.28 / −6% DD by hiding in T-bills. Removing them gives the fair
+test (48 ETFs):
+
+| Method | Annual | Sharpe | Max DD | Turnover |
+|---|---|---|---|---|
+| SPY | +12.3% | 0.78 | −51% | — |
+| A. Inverse-vol (diagonal) | +7.7% | 0.89 | −17% | 0.39 |
+| B. Min-var, sample cov | +7.5% | 0.89 | −16% | 0.98 |
+| **C. Min-var, Ledoit-Wolf shrinkage** | +6.9% | **0.92** | −15% | 0.54 |
+
+**Findings:**
+- **Bayesian/Ledoit-Wolf shrinkage wins** the fair comparison (Sharpe 0.92), beating
+  naive inverse-vol (0.89) and raw sample covariance (0.89), and robust across halves
+  (0.94 / 0.90). It earns its keep precisely because the 48×12 sample covariance is
+  singular — shrinkage stabilises it.
+- **Raw sample covariance is dominated**: same Sharpe as inverse-vol but ~2× turnover
+  (0.98 vs 0.39) → more cost, no benefit. Never use unshrunk sample cov in high dim.
+- **Widening + diversification + shrinkage** lifts Sharpe to 0.92 and cuts drawdown to
+  −15% (vs SPY 0.78 / −51%) — the best risk-adjusted, lowest-drawdown configuration
+  found, and robust.
+- The recurring wall persists: vol-targeted, no-leverage return (~+7%) trails SPY's
+  +12%. Risk engine, not alpha engine.
+
+Tools: `research_multipod_wide.py`, roster in `results/pead/etf_wide_monthly.csv`.
+
+**Practical takeaway:** the recommended retail-implementable configuration is the wide
+multi-pod with trend selection, **Ledoit-Wolf-shrunk min-variance** weights, and a vol
+target — a diversified, dynamically-managed risk engine with SPY-beating Sharpe and a
+quarter of its drawdown, runnable monthly on Alpaca across ~40–50 liquid ETFs.
