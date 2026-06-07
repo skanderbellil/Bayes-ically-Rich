@@ -88,3 +88,35 @@ with `√252` on quarterly data (inflated); standardized to `√4` here. Overlap
 2. Model cash drag honestly (overlapping cohorts to stay ~fully invested).
 3. Re-test mega-cap tradeable drift out-of-sample — it is the only bucket with a
    plausible, survivorship-robust, risk-adjusted edge, and it is small.
+
+---
+
+## Update: a real, robust, dynamic improvement (the overlay)
+
+After fixing the flaws, the standalone tradeable PEAD sleeve does not beat SPY.
+But blending the **mega-cap tradeable sleeve** (survivorship-robust; corr 0.58 to
+SPY) with the index does improve risk-adjusted return — and it is robust because
+even the zero-parameter static blend works.
+
+| Strategy | Sharpe (full) | Sharpe (OOS half) | Annual | Max DD |
+|---|---|---|---|---|
+| SPY buy & hold | 0.81 | 0.94 | +13.2% | -46% |
+| Static 50/50 (0 params) | 0.91 | 1.20 | +10.5% | -31% |
+| Dynamic-weight overlay | 0.97 | 1.20 | +12.6% | -37% |
+
+- **Robust**: the parameter-free 50/50 blend already lifts Sharpe and cuts the
+  worst drawdown by a third; holds in the out-of-sample second half.
+- **Dynamic**: PEAD weight scales with the sleeve's trailing Sharpe (regime
+  awareness), using only past data (`.shift(1)`) — no look-ahead.
+- **Why it works**: the mega-cap PEAD sleeve sits in cash ~2 months/quarter, so it
+  is naturally low-beta and weakly correlated with SPY; combining a defensive,
+  low-correlation sleeve with the index raises Sharpe and reduces drawdown. This is
+  portfolio diversification, not data-mining.
+
+Code: `research_pead_overlay.py`, `src/pead/corrected.py`. Plot:
+`results/pead/overlay_vs_spy.png`.
+
+Honest caveats: returns assume the PEAD sleeve can be deployed each quarter (point-
+in-time earnings needed live); mega-cap minimizes but does not eliminate data
+issues; the absolute return is slightly below SPY — the gain is risk-adjusted
+(higher Sharpe, lower drawdown), which is what was asked for.
