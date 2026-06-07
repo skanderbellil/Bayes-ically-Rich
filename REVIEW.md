@@ -120,3 +120,37 @@ Honest caveats: returns assume the PEAD sleeve can be deployed each quarter (poi
 in-time earnings needed live); mega-cap minimizes but does not eliminate data
 issues; the absolute return is slightly below SPY — the gain is risk-adjusted
 (higher Sharpe, lower drawdown), which is what was asked for.
+
+---
+
+## Does it justify the hustle? (loop #2 — answer: no)
+
+Tested whether an active PEAD strategy beats simply holding the index *after* the
+real cost of the hustle. Removed cash drag by running overlapping **monthly**
+mega-cap cohorts (fully invested), then charged trading cost and short-term tax.
+
+| Mega-cap monthly sleeve (≥3 names) | Annual | Sharpe |
+|---|---|---|
+| Gross | +26.2% | 1.10 |
+| After trading cost | +25.4% | 1.06 |
+| **After cost + short-term tax (30%)** | **+11.1%** | **0.60** |
+| **SPY (tax-deferred buy & hold)** | **+11.3%** | **0.79** |
+
+**Verdict: does not justify the hustle in a taxable account.** Three reasons:
+
+1. **Tax wedge is structural.** PEAD realizes in ~21 days, forcing short-term
+   holding (taxed ~30%) while the index defers tax for decades at a lower rate.
+   That converts +26% gross into +11% net — tied with SPY on return, worse on
+   Sharpe (0.60 vs 0.79). Inherent to the holding period; cannot be engineered away.
+2. **Not robust across time.** Driven by the recent half: H2 (2014–26) Sharpe 1.59
+   but H1 (2003–14) Sharpe 0.61, *below* SPY's 0.85. Beat SPY in only 16/24 years.
+3. **Dangerous concentration.** The edge lives in 3-name months; requiring ≥5 names
+   collapses it to Sharpe 0.85.
+
+**Carve-out:** inside a tax-advantaged account (IRA/Roth) the wedge disappears and
+the gross numbers (+25%, Sharpe 1.06) would clear the bar — but it still fails the
+robustness and concentration tests, so it is not recommendable even there without
+better (point-in-time, survivorship-free, broader) data.
+
+**Bottom line for a retail investor:** hold the index. The PEAD hustle does not pay
+for itself once taxes, turnover, robustness, and concentration are accounted for.
