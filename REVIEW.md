@@ -402,3 +402,49 @@ dynamic leverage for ~+8–9%/yr at Sharpe ~0.85 and ~−20% drawdown — better
 than SPY with far smaller drawdowns. On Alpaca, stay unlevered (Sharpe 0.92, −15% DD).
 
 Tool: `research_multipod_levered.py`.
+
+---
+
+## Beat SPY on BOTH return and Sharpe? (loop #3 — answer: not robustly)
+
+Attacked the financing wall with the one cheap leverage retail has: leveraged ETFs
+(SSO/UPRO/QLD/TQQQ/UBT/TMF), where the issuer finances at ~rf+0.5% (vs 6% retail
+margin). Combined roster (48 diversifiers + 9 leveraged), momentum-tilt weighting
+(return-seeking), trend filter + vol target to manage decay/crash risk. SSO/QLD exist
+from 2006, so the GFC is in-sample.
+
+In-sample, gross, several configs beat SPY on both. The strongest honest test
+(`momraw`, 16% vol target):
+
+| Accounting | Annual | Sharpe | vs SPY (+12.3% / 0.78) |
+|---|---|---|---|
+| Gross (2bps) | +12.6% | 0.82 | beats both ✓ |
+| + leveraged-ETF fees (0.95%) + 5bps | +12.2% | 0.79 | **ties/fails** |
+| + 30% short-term tax | +3.7% | 0.30 | destroyed |
+| H1 2005–15 | +10.8% / 0.67 | | beats SPY both ✓ |
+| H2 2015–26 | +13.7% / 0.93 | | loses (SPY 16.9% / 1.03) |
+| GFC drawdown | −22% | | vs SPY −51% ✓ |
+
+**Verdict: cannot beat SPY on both robustly.** Three independent honest filters kill it:
+1. **Leveraged-ETF expense (~0.95%/yr) erases the edge** — Sharpe 0.79 ≈ SPY 0.78. The
+   ETF fee is the financing cost in disguise; same wall as retail margin.
+2. **Short-term tax annihilates it** — momentum is high-turnover (+12% → +3.7% taxable);
+   SPY defers.
+3. **Regime-dependent** — only beats SPY in 2005–15 (trend-following's GFC edge); loses
+   the 2015–26 bull. The apparent win is crisis alpha, not durable.
+
+Structural reason (9th confirmation across the project): a long-only ETF book's Sharpe
+edge over SPY (~0.9 vs 0.78) is real but **too thin to lever** — at any retail-accessible
+financing or fund fee — into beating SPY's return while keeping Sharpe above it.
+
+Durable benefit remains crash protection (GFC −22% vs −51%); genuinely useful for crisis
+defense or a tax-advantaged account, but not a clean return+Sharpe win. Tool:
+`research_multipod_aggressive.py`.
+
+### Definitive bottom line
+Across 8 explorations + 3 search loops: **no strategy beats SPY on both return and Sharpe
+after honest costs, taxes, and out-of-sample testing.** What robustly works is
+risk-adjusted improvement and drawdown reduction (multi-pod with Ledoit-Wolf weights:
+Sharpe 0.92, −15% DD vs SPY 0.78 / −51%). For raw wealth → hold SPY. For risk-adjusted
+return / capital preservation → the diversified multi-pod. Beating the index outright
+needs institutional-cost leverage retail does not have.
