@@ -364,3 +364,41 @@ Tools: `research_multipod_wide.py`, roster in `results/pead/etf_wide_monthly.csv
 multi-pod with trend selection, **Ledoit-Wolf-shrunk min-variance** weights, and a vol
 target — a diversified, dynamically-managed risk engine with SPY-beating Sharpe and a
 quarter of its drawdown, runnable monthly on Alpaca across ~40–50 liquid ETFs.
+
+---
+
+## Cash interest + small dynamic leverage (exploration #8)
+
+Two refinements: (1) idle cash (the de-risked sleeve) earns the risk-free rate (BIL
+proxy) instead of 0% — holding cash is a paid decision; (2) the vol-target cap is raised
+above 1.0 so the book uses *dynamic* leverage (more when forecast vol is low, less when
+it spikes). Borrowing costs rf+spread; weights = long-only Ledoit-Wolf. 48-ETF roster
+(cash kept out of the optimizer, correctly, so inverse-vol can't hide in T-bills).
+
+| Config | Annual | Sharpe | Max DD |
+|---|---|---|---|
+| SPY | +12.3% | 0.78 | −51% |
+| Idle cash = 0% (old) | +6.9% | 0.92 | −15% |
+| Idle cash = rf (fix) | +6.9% | 0.92 | −15% |
+| Dynamic leverage 1.25× | +8.0% | 0.87 | −18% |
+| Dynamic leverage 1.50× | +9.1% | 0.85 | −22% |
+| Dynamic leverage 2.00× | +10.2% | 0.79 | −26% |
+
+**Cash:** crediting rf on idle cash is correct but empirically negligible here — rf
+averaged only ~1.2%/yr over 2005–2026 (ZIRP decade). It matters in today's ~5% regime,
+where the defensive sleeve earns real interest. Keeping cash out of the optimizer was
+still right.
+
+**Leverage:** small *dynamic* leverage genuinely lifts return (1.5× → +9.1%, Sharpe
+0.85 still > SPY 0.78, DD −22% still ≪ SPY −51%); the vol target de-levers in crises so
+even 2× only draws down −26%. Robust across halves (1.5×: H1 0.86, H2 0.84).
+
+**But it lives or dies on financing cost.** At Alpaca's ~rf+6% retail margin, 1.5×
+collapses to +7.0% / Sharpe 0.66 — leverage adds nothing. At IBKR-like rf+1.5% it is
+worthwhile. Same gate as the rest of the project: cheap leverage is the missing key.
+
+Recommendation: at a low-margin broker (IBKR), run the LW multi-pod at ~1.25–1.5×
+dynamic leverage for ~+8–9%/yr at Sharpe ~0.85 and ~−20% drawdown — better risk-adjusted
+than SPY with far smaller drawdowns. On Alpaca, stay unlevered (Sharpe 0.92, −15% DD).
+
+Tool: `research_multipod_levered.py`.
