@@ -1,16 +1,22 @@
 """
-Advanced regime detection models.
+Regime-detection models (strategy-research layer).
 
-BOCPD  — Bayesian Online Change Point Detection (Adams & MacKay 2007)
-         1D Normal-Gamma conjugate prior: exact, fast, no fixed state count.
-         "Soul of the idea": pure online Bayesian updating — at every step
-         it asks 'has the distribution changed?' and updates its belief.
-         Output: changepoint_prob, expected_run_length.
+Every change-point / regime model the backtest engines consume lives here.
 
-HMM3   — 3-state Gaussian HMM (bull / sideways / bear).
-         Captures normal bull, grinding/uncertain, and crisis regimes
-         that a 2-state model merges. Forward-filtered posteriors only
-         (no Viterbi backward pass → no lookahead bias).
+RegimeHMM — 2-state Gaussian HMM (bull / bear). Per-regime priors blended by
+            posterior regime probability. Forward-filtered (no Viterbi
+            lookahead). Consumed by the Bayesian backtest engine.
+
+BOCPD     — Bayesian Online Change Point Detection (Adams & MacKay 2007)
+            1D Normal-Gamma conjugate prior: exact, fast, no fixed state count.
+            "Soul of the idea": pure online Bayesian updating — at every step
+            it asks 'has the distribution changed?' and updates its belief.
+            Output: changepoint_prob, expected_run_length.
+
+HMM3      — 3-state Gaussian HMM (bull / sideways / bear).
+            Captures normal bull, grinding/uncertain, and crisis regimes
+            that a 2-state model merges. Forward-filtered posteriors only
+            (no Viterbi backward pass → no lookahead bias).
 """
 import logging
 from typing import Optional, Tuple
@@ -286,3 +292,114 @@ class HMM3:
         """Boolean masks (bull, sideways, bear) for each day."""
         s = self.state_sequence(returns)
         return s == self.BULL, s == self.SIDEWAYS, s == self.BEAR
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2-state HMM regime filter
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RegimeHMM:
+    """
+    2-state Gaussian HMM for bull / bear regime detection.
+
+    Extension from the original idea:
+      "HMM Regime Filter — instead of a single prior, have per-regime priors and
+       use the HMM to assign posterior regime probabilities, then mix regime-
+       specific Sharpe-optimal weights."
+
+    Design
+    ------
+      • 2-state Gaussian HMM fitted on the full available return history.
+      • States are labelled bull (higher mean return) and bear (lower / negative).
+      • At each rebalance we compute p_bull = P(regime = bull | returns up to t).
+      • The Bayesian backtest engine builds regime-specific portfolios and blends
+        them by p_bull, with an uncertainty penalty when p_bull ≈ 0.5.
+
+    Usage
+    -----
+    model  = RegimeHMM().fit(returns_array)
+    p_bull = model.bull_prob(returns_array)        # scalar in [0, 1]
+    states = model.state_sequence(returns_array)   # (T,) int array
+    """
+
+    def __init__(self, n_iter: int = 60, random_state: int = 42):
+        self.n_iter       = n_iter
+        self.random_state = random_state
+        self._model: Optional[object] = None
+        self.bull_state: int = 0
+        self.bear_state: int = 1
+
+    # ── Fitting ───────────────────────────────────────────────────────────
+
+    def fit(self, returns: np.ndarray) -> "RegimeHMM":
+        """
+        Fit a 2-state Gaussian HMM on (T, N) returns.
+        Identifies bull vs bear by comparing the mean return of the first asset.
+        """
+        try:
+            from hmmlearn import hmm as _hmm
+        except ImportError:
+            logger.warning("hmmlearn not available — RegimeHMM degrades gracefully.")
+            self._model = None
+            return self
+
+        model = _hmm.GaussianHMM(
+            n_components=2,
+            covariance_type="full",
+            n_iter=self.n_iter,
+            tol=1e-3,
+            random_state=self.random_state,
+        )
+        try:
+            model.fit(returns)
+            self._model = model
+            # Label states: higher mean on asset 0 → bull
+            mean0 = model.means_[:, 0]
+            self.bull_state = int(np.argmax(mean0))
+            self.bear_state = 1 - self.bull_state
+        except Exception as exc:
+            logger.debug(f"RegimeHMM fit failed: {exc}")
+            self._model = None
+
+        return self
+
+    @property
+    def is_fitted(self) -> bool:
+        return self._model is not None
+
+    # ── Inference ─────────────────────────────────────────────────────────
+
+    def bull_prob(self, returns: np.ndarray) -> float:
+        """
+        P(bull regime | observed returns) at the final timestep.
+        Returns 0.5 (maximum uncertainty) if model is not fitted.
+        """
+        if not self.is_fitted:
+            return 0.5
+        try:
+            _, posteriors = self._model.score_samples(returns)
+            return float(np.clip(posteriors[-1, self.bull_state], 0.0, 1.0))
+        except Exception:
+            return 0.5
+
+    def state_sequence(self, returns: np.ndarray) -> np.ndarray:
+        """
+        Most-likely state at each timestep via forward-filtered argmax.
+
+        Uses the forward pass only (no backward smoothing), so the state
+        assigned to day t depends only on data up to day t — zero lookahead bias.
+        Previously used Viterbi (model.predict) which runs a backward pass and
+        assigns states with full hindsight over the window.
+        """
+        if not self.is_fitted:
+            return np.zeros(len(returns), dtype=int)
+        try:
+            _, posteriors = self._model.score_samples(returns)
+            return np.argmax(posteriors, axis=1).astype(int)
+        except Exception:
+            return np.zeros(len(returns), dtype=int)
+
+    def regime_mask(self, returns: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Returns (bull_mask, bear_mask) boolean arrays of length T."""
+        states = self.state_sequence(returns)
+        return states == self.bull_state, states == self.bear_state

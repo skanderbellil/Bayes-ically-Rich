@@ -31,10 +31,11 @@ import pandas as pd
 import yfinance as yf
 from tabulate import tabulate
 
-from src.backtest import STRATEGIES, BacktestResult, run_all_strategies
-from src.data import download_returns, get_sp500_tickers, sample_tickers
-from src.metrics import compute_metrics
-from src.visualization import plot_lambda_heatmap, plot_multi_seed, plot_single_run
+import _bootstrap  # noqa: F401  (adds repo root to sys.path)
+from posterioralpha.backtest.bayesian import STRATEGIES, BacktestResult, run_all_strategies
+from posterioralpha.data.market import download_returns, get_sp500_tickers, sample_tickers
+from posterioralpha.validation.metrics import compute_metrics
+from posterioralpha.validation.plots import plot_lambda_heatmap, plot_multi_seed, plot_single_run
 
 # ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(

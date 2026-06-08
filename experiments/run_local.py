@@ -36,10 +36,12 @@ import matplotlib.gridspec as gridspec
 import matplotlib.ticker as mticker
 from tabulate import tabulate
 
-from src.backtest import STRATEGIES, run_all_strategies
-from src.amr import AMR_STRATEGIES, run_all_amr, sensitivity_sweep
-from src.metrics import compute_metrics
-from src.synthetic_data import expand_universe
+import _bootstrap  # noqa: F401  (adds repo root to sys.path)
+from posterioralpha.backtest.bayesian import STRATEGIES, run_all_strategies
+from posterioralpha.backtest.amr import AMR_STRATEGIES, run_all_amr, sensitivity_sweep
+from posterioralpha.data.loaders import load_portfolio_prices
+from posterioralpha.data.synthetic import expand_universe
+from posterioralpha.validation.metrics import compute_metrics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -93,7 +95,7 @@ print("""
 ║   PosteriorAlpha  ×  AMR  ·  Full Strategy Comparison        ║
 ╚══════════════════════════════════════════════════════════════╝""")
 
-df_raw = pd.read_csv("portfolio_data.csv", parse_dates=["Date"], index_col="Date").sort_index()
+df_raw = load_portfolio_prices()
 real_returns = df_raw.pct_change().dropna()
 
 logger.info(f"Real assets  : {real_returns.columns.tolist()}")

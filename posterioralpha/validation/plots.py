@@ -19,8 +19,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from src.backtest import BacktestResult
-from src.metrics import compute_metrics
+from posterioralpha.backtest.bayesian import BacktestResult
+from posterioralpha.validation.metrics import compute_metrics
 
 warnings.filterwarnings("ignore")
 

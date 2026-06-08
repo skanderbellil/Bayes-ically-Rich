@@ -7,4 +7,6 @@ venv/
 results/
 *.png
 *.csv
+# Bundled datasets are tracked despite the *.csv rule above
+!datasets/*.csv
 .DS_Store

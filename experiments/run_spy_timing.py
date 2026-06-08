@@ -28,9 +28,11 @@ import matplotlib.gridspec as gridspec
 import matplotlib.ticker as mticker
 from tabulate import tabulate
 
-from src.amr import compute_continuous_lam
-from src.metrics import compute_metrics
-from src.regime_models import precompute_bocpd
+import _bootstrap  # noqa: F401  (adds repo root to sys.path)
+from posterioralpha.research.amr import compute_continuous_lam
+from posterioralpha.research.regimes import precompute_bocpd
+from posterioralpha.data.loaders import load_portfolio_prices
+from posterioralpha.validation.metrics import compute_metrics
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -48,7 +50,7 @@ _ANN     = 252
 _EPS     = 1e-8
 
 # ── Data ───────────────────────────────────────────────────────────────────
-df     = pd.read_csv("portfolio_data.csv", parse_dates=["Date"], index_col="Date").sort_index()
+df     = load_portfolio_prices()
 spy    = df["SPY"].pct_change().dropna()
 spy_bt = spy.loc[BT_START:BT_END].rename("SPY")
 

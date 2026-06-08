@@ -26,9 +26,11 @@ import matplotlib.gridspec as gridspec
 import matplotlib.ticker as mticker
 from tabulate import tabulate
 
-from src.backtest import run_backtest
-from src.amr import run_amr_backtest
-from src.metrics import compute_metrics
+import _bootstrap  # noqa: F401  (adds repo root to sys.path)
+from posterioralpha.backtest.bayesian import run_backtest
+from posterioralpha.backtest.amr import run_amr_backtest
+from posterioralpha.data.loaders import load_portfolio_prices
+from posterioralpha.validation.metrics import compute_metrics
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -53,7 +55,7 @@ LABELS = {
 }
 
 # ── Data ───────────────────────────────────────────────────────────────────
-df = pd.read_csv("portfolio_data.csv", parse_dates=["Date"], index_col="Date").sort_index()
+df = load_portfolio_prices()
 returns = df.pct_change().dropna()
 
 BT_START = "2016-01-01"

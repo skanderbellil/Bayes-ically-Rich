@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.bayesian import (
+from posterioralpha.research.bayesian import (
     bayesian_posterior,
     compute_lambda,
     estimate_moments,
@@ -33,7 +33,7 @@ from src.bayesian import (
     max_sharpe_weights,
     min_variance_weights,
 )
-from src.hmm_filter import RegimeHMM
+from posterioralpha.research.regimes import RegimeHMM
 
 logger = logging.getLogger(__name__)
 
