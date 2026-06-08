@@ -3,38 +3,36 @@
 **Question:** after realistic Alpaca retail costs, is any strategy in this repo
 robust enough to deploy — and is there a real edge?
 
-**Answer (final, after full realism testing): No robust standalone edge survives.**
-The apparent market-neutral PEAD edge does not hold up once *all three* realism checks
-are applied together — realistic **t+1 entry**, realistic **stop fills**, and a
-**full-history (2001–2026) out-of-sample** window. Each check shrank the edge; together
-they remove it.
+**Answer (final, after full realism + walk-forward testing): a marginal, execution-
+sensitive edge — not a robust standalone alpha, possibly a weak diversifier.** The
+honest performance depends heavily on how well stop orders fill, which daily-close data
+cannot fully resolve. A proper rolling walk-forward lands it around Sharpe ~0.3 standalone.
 
-> ### 🛑 FINAL CORRECTION — the standalone edge is not real (supersedes everything below)
-> Three compounding optimisms inflated the earlier headline:
-> 1. **Entry:** measuring from the pre-announcement close `p_t0` captured the untradeable
->    announcement gap (~93% of the spread). Fixed by entering at t+1 → §3a.
-> 2. **Stop fills:** the backtest exited at *exactly* −stop%. But losers breach the stop on
->    down days and you fill at the worse close. Modelling that (exit at the breach-day
->    close) collapses the stop edge at every level: 3% stop OOS Sharpe **1.49 → 0.09**,
->    6% **1.08 → 0.03**. The "stop-loss triples the Sharpe" result was a fill artifact.
-> 3. **Window:** reporting only 2014+ flattered it. On the **full 2001–2026** history
->    (all OOS, since the rule has no fitted parameters) the realistically-filled strategy
->    **loses money** — 3% stop CAGR **−2.3%, Sharpe −0.31**; the fill-robust **no-stop**
->    version **−2.0%, Sharpe −0.17**. It was negative 2001–2015 and only marginally
->    positive post-2016 (rolling 3-yr Sharpe in the plot).
->
-> True tight-stop performance lies between the optimistic (exit-at-level, Sharpe ~1.1) and
-> pessimistic (exit-at-close, Sharpe ~−0.3) bounds — an execution-dominated range too wide
-> to trust. The only fill-insensitive number, the no-stop book, is **negative full-history
-> / ~+0.5 Sharpe in recent years** — marginal and regime-dependent, not a deployable alpha.
-> See `experiments/pead_3pct_vs_spy.py` and `results/pead/stop3_vs_spy.png`.
+> ### ⚖️ FINAL ASSESSMENT (supersedes the optimistic sections below)
+> Three realism checks each shrank the early headline (Sharpe ~1.0–1.5); honestly applied,
+> the edge is marginal and execution-bound:
+> 1. **Entry:** measuring from the pre-announcement close captured the untradeable
+>    announcement gap (~93% of the spread). Fixed by entering at t+1 (§3a).
+> 2. **Stop fills:** the backtest exited at *exactly* −stop%. With a realistic **intraday
+>    stop** on liquid large-caps you fill *near* the level on gradual crossings but worse on
+>    gaps. The 3% stop spans **Sharpe +1.08 (idealised) → ~0.2–0.7 (intraday, gap-assumption
+>    dependent) → −0.3 (act-at-close)** over 2009–2026. No stop width is fully fill-robust —
+>    the profit lives in the execution gap. Resolving it needs intraday/OHLC data; only daily
+>    closes were cached.
+> 3. **Walk-forward:** a rolling 8-yr-train → 2-yr-OOS test that *re-selects the stop each
+>    step* (`pead_walkforward.py`) consistently picks **wide stops (8–10%)** — tight stops
+>    don't survive training — and yields **OOS CAGR +2.5%, Sharpe 0.28** standalone
+>    (2009–2026), correlation +0.37 to SPY. A 60/40 SPY + sleeve blend gives Sharpe 0.91 vs
+>    SPY's 0.98 — better drawdown (−16% vs −24%) but it does not beat SPY.
 >
 > **Bottom line:** there is a real, statistically-significant PEAD *anomaly* (the IC tests
-> hold), but **no robustly-tradeable retail edge** once entry, stop fills, and full-history
-> OOS are all modelled honestly. The numbers in the sections below are retained for the
-> record but each rests on one of the optimistic assumptions above.
+> hold, t > 6). As a *retail-tradeable strategy* it is **marginal and execution-sensitive** —
+> plausibly Sharpe ~0.3–0.7 for a disciplined intraday-stop trader on liquid large-caps,
+> but not the robust 1.0+ the early backtests implied, and it does not beat SPY outright.
+> Treat it as a possible low-correlation diversifier worth paper-trading, not a sure edge.
+> See `experiments/pead_walkforward.py` and `results/pead/walkforward_vs_spy.png`.
 
-Reproduce with `python experiments/pead_3pct_vs_spy.py` (after `run_pead.py`).
+Reproduce with `python experiments/pead_walkforward.py` (after `run_pead.py`).
 
 > ### ⚠️ Realism correction (supersedes the first version of this doc)
 > An earlier version of this analysis reported **+10.3%/yr, Sharpe ~1.5** for the
