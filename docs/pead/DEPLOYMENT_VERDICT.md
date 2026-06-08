@@ -3,18 +3,38 @@
 **Question:** after realistic Alpaca retail costs, is any strategy in this repo
 robust enough to deploy — and is there a real edge?
 
-**Answer:** Yes, but the edge is smaller and more nuanced than a first pass suggests.
-The PEAD long-*short* in its raw form is **not** deployable (its edge lives in
-hard-to-borrow small/micro-caps Alpaca cannot short). A **market-neutral long-short
-in easy-to-borrow Mega+Large caps** *is* deployable — but only with a **realistic
-t+1 entry and an exit-losers (stop-loss) overlay**:
+**Answer (final, after full realism testing): No robust standalone edge survives.**
+The apparent market-neutral PEAD edge does not hold up once *all three* realism checks
+are applied together — realistic **t+1 entry**, realistic **stop fills**, and a
+**full-history (2001–2026) out-of-sample** window. Each check shrank the edge; together
+they remove it.
 
-> **Tradeable edge (t+1 entry, hold-to-next-earnings, 5–6% stop-from-entry): on a
-> representative 259-name Mega+Large universe, OOS (≥2014) ≈ +8–9%/yr, Sharpe ≈ 1.0–1.25,
-> beta ≈ 0, max drawdown ≈ −5 to −9%, commission-free, $0 borrow.** (Tighter 3–4% stops
-> backtest higher — Sharpe 1.3–1.5 — but lean on optimistic exact-at-stop fills.)
+> ### 🛑 FINAL CORRECTION — the standalone edge is not real (supersedes everything below)
+> Three compounding optimisms inflated the earlier headline:
+> 1. **Entry:** measuring from the pre-announcement close `p_t0` captured the untradeable
+>    announcement gap (~93% of the spread). Fixed by entering at t+1 → §3a.
+> 2. **Stop fills:** the backtest exited at *exactly* −stop%. But losers breach the stop on
+>    down days and you fill at the worse close. Modelling that (exit at the breach-day
+>    close) collapses the stop edge at every level: 3% stop OOS Sharpe **1.49 → 0.09**,
+>    6% **1.08 → 0.03**. The "stop-loss triples the Sharpe" result was a fill artifact.
+> 3. **Window:** reporting only 2014+ flattered it. On the **full 2001–2026** history
+>    (all OOS, since the rule has no fitted parameters) the realistically-filled strategy
+>    **loses money** — 3% stop CAGR **−2.3%, Sharpe −0.31**; the fill-robust **no-stop**
+>    version **−2.0%, Sharpe −0.17**. It was negative 2001–2015 and only marginally
+>    positive post-2016 (rolling 3-yr Sharpe in the plot).
+>
+> True tight-stop performance lies between the optimistic (exit-at-level, Sharpe ~1.1) and
+> pessimistic (exit-at-close, Sharpe ~−0.3) bounds — an execution-dominated range too wide
+> to trust. The only fill-insensitive number, the no-stop book, is **negative full-history
+> / ~+0.5 Sharpe in recent years** — marginal and regime-dependent, not a deployable alpha.
+> See `experiments/pead_3pct_vs_spy.py` and `results/pead/stop3_vs_spy.png`.
+>
+> **Bottom line:** there is a real, statistically-significant PEAD *anomaly* (the IC tests
+> hold), but **no robustly-tradeable retail edge** once entry, stop fills, and full-history
+> OOS are all modelled honestly. The numbers in the sections below are retained for the
+> record but each rests on one of the optimistic assumptions above.
 
-Reproduce with `python experiments/pead_dynamic_exit.py` (after `run_pead.py`).
+Reproduce with `python experiments/pead_3pct_vs_spy.py` (after `run_pead.py`).
 
 > ### ⚠️ Realism correction (supersedes the first version of this doc)
 > An earlier version of this analysis reported **+10.3%/yr, Sharpe ~1.5** for the
