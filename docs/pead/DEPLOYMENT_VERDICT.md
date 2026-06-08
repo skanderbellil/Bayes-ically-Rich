@@ -3,36 +3,32 @@
 **Question:** after realistic Alpaca retail costs, is any strategy in this repo
 robust enough to deploy — and is there a real edge?
 
-**Answer (final, after full realism + walk-forward testing): a marginal, execution-
-sensitive edge — not a robust standalone alpha, possibly a weak diversifier.** The
-honest performance depends heavily on how well stop orders fill, which daily-close data
-cannot fully resolve. A proper rolling walk-forward lands it around Sharpe ~0.3 standalone.
+**Answer (final, OHLC-resolved): no robustly-tradeable retail edge. A real PEAD anomaly
+exists, but as a strategy it is marginal at best, and the exit-losers stop — the
+centerpiece of earlier drafts — actively *hurts* once modelled with real intraday fills.**
 
-> ### ⚖️ FINAL ASSESSMENT (supersedes the optimistic sections below)
-> Three realism checks each shrank the early headline (Sharpe ~1.0–1.5); honestly applied,
-> the edge is marginal and execution-bound:
-> 1. **Entry:** measuring from the pre-announcement close captured the untradeable
->    announcement gap (~93% of the spread). Fixed by entering at t+1 (§3a).
-> 2. **Stop fills:** the backtest exited at *exactly* −stop%. With a realistic **intraday
->    stop** on liquid large-caps you fill *near* the level on gradual crossings but worse on
->    gaps. The 3% stop spans **Sharpe +1.08 (idealised) → ~0.2–0.7 (intraday, gap-assumption
->    dependent) → −0.3 (act-at-close)** over 2009–2026. No stop width is fully fill-robust —
->    the profit lives in the execution gap. Resolving it needs intraday/OHLC data; only daily
->    closes were cached.
-> 3. **Walk-forward:** a rolling 8-yr-train → 2-yr-OOS test that *re-selects the stop each
->    step* (`pead_walkforward.py`) consistently picks **wide stops (8–10%)** — tight stops
->    don't survive training — and yields **OOS CAGR +2.5%, Sharpe 0.28** standalone
->    (2009–2026), correlation +0.37 to SPY. A 60/40 SPY + sleeve blend gives Sharpe 0.91 vs
->    SPY's 0.98 — better drawdown (−16% vs −24%) but it does not beat SPY.
+> ### ✅ DEFINITIVE ASSESSMENT (real daily OHLC; supersedes all sections below)
+> The fill uncertainty is now resolved with actual open/high/low data
+> (`refetch_ohlc.py` + `pead_ohlc_stops.py`), not bounded:
+> - **Fill quality is good** (you were right): a 3% intraday stop fills at *exactly* −3%
+>   **67%** of the time, gaps through worse only **9%**, never fires 24%.
+> - **But the stop still hurts.** Net of exact fills, every stop is *worse* than no stop:
+>   no-stop OOS≥2014 Sharpe **0.55**; 3% **0.05**; 5% **−0.08**; 10% **0.13**. Full-history
+>   (2001–2026) all negative.
+> - **Why the earlier "+stop triples Sharpe" was an artifact:** the old backtest checked the
+>   *closing* price against the stop (rarely below it), but a real intraday stop triggers on
+>   the *intraday low* — and **76% of positions touch −3% intraday** at some point in the
+>   hold. Cutting them all at −3% forgoes the dips that close green. The stop only looked
+>   good because the close-based check almost never fired.
 >
-> **Bottom line:** there is a real, statistically-significant PEAD *anomaly* (the IC tests
-> hold, t > 6). As a *retail-tradeable strategy* it is **marginal and execution-sensitive** —
-> plausibly Sharpe ~0.3–0.7 for a disciplined intraday-stop trader on liquid large-caps,
-> but not the robust 1.0+ the early backtests implied, and it does not beat SPY outright.
-> Treat it as a possible low-correlation diversifier worth paper-trading, not a sure edge.
-> See `experiments/pead_walkforward.py` and `results/pead/walkforward_vs_spy.png`.
+> **Net:** the genuinely-tradeable, fill-robust version is **no-stop, hold-to-next-earnings**,
+> which is **OOS Sharpe ~0.55 (2014–2026) but negative over the full 2001–2026 history** —
+> marginal and regime-dependent, not a deployable alpha. The statistically-significant PEAD
+> *anomaly* is real (IC t > 6); a profitable retail *strategy* on Mega+Large with realistic
+> execution is not demonstrable here. Honest recommendation: **do not deploy**; if curious,
+> paper-trade the no-stop version and watch live IC.
 
-Reproduce with `python experiments/pead_walkforward.py` (after `run_pead.py`).
+Reproduce with `python experiments/pead_ohlc_stops.py` (after `run_pead.py` + `refetch_ohlc.py`).
 
 > ### ⚠️ Realism correction (supersedes the first version of this doc)
 > An earlier version of this analysis reported **+10.3%/yr, Sharpe ~1.5** for the
