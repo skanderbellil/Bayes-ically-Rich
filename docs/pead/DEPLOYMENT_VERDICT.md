@@ -147,6 +147,36 @@ Caveat on the stop: the backtest exits exactly at −stop%, which assumes no gap
 Earnings names can gap, so realised stop fills may be a little worse; size patiently and
 treat OOS Sharpe ~1.15 as indicative.
 
+## 3b. The entry signal — raw SUE wins; nothing improves it
+
+Tested whether combining/replacing the entry signal sharpens the market-neutral book
+(`pead_entry_signals.py`, Mega+Large, t+1 entry, 6% stop, hold-to-next-earnings, net):
+
+| Entry signal | OOS Ann | OOS Sharpe | OOS MaxDD |
+|--------------|---------|-----------|-----------|
+| **Raw SUE (analyst Surprise %)** | **+11.1%** | **1.25** | −11.2% |
+| Standardized SUE (vs firm's own surprise history) | +8.9% | 1.16 | −7.9% |
+| Announcement reaction (Brandt et al.) | +7.1% | 0.79 | −11.7% |
+| Reaction 0.5 + SUE 0.5 | +9.8% | 1.10 | −11.2% |
+| Momentum only | +9.3% | 0.83 | −9.8% |
+| SUE confirmed by momentum sign | +7.9% | 0.79 | −13.0% |
+| SUE within low-vol half | +2.7% | 0.36 | −22.2% |
+| Composite SUE + momentum (any weight) | +9–10% | 0.85–1.00 | −9 to −11% |
+
+**Raw SUE beats every alternative and every combination.** Momentum, the
+announcement-day reaction, firm-standardized SUE, a low-vol filter, and all blends
+dilute or underperform it in the large-cap universe. (Standardized SUE ties on a
+risk-adjusted basis with a shallower drawdown — the one defensible alternative — but
+does not raise the Sharpe.)
+
+**Meta-finding (entry + exit).** Across *both* sides of the trade, every elaboration —
+HMM/regime/trailing/vol-scaled exits, and momentum/reaction/standardized/composite
+entries — ties or underperforms the simplest rule: **rank on raw SUE, enter at t+1, cut
+losers with a fixed % stop, hold to the next earnings report.** The edge is real but
+modest, and is not enhanceable with the signals available here. The one lever that *did*
+help was **universe breadth** (going 184 → 414 names raised the Sharpe by cutting
+per-leg noise) — pointing to coverage, not signal engineering, as the remaining upside.
+
 ## 4. Recommended deployment — SPY core + market-neutral sleeve
 
 > The frontier below uses the §3 (p_t0) sleeve and is therefore an **upper bound**.
