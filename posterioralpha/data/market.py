@@ -32,10 +32,20 @@ STABLE_SP500 = [
 ]
 
 
+_WIKI_SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+# Wikipedia 403s the default urllib user-agent; send a browser-like one.
+_HTTP_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; PosteriorAlpha/1.0)"}
+
+
 def get_sp500_tickers() -> List[str]:
     """Fetch current S&P 500 tickers from Wikipedia. Falls back to curated list."""
     try:
-        tables = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+        import requests
+        from io import StringIO
+
+        resp = requests.get(_WIKI_SP500_URL, headers=_HTTP_HEADERS, timeout=15)
+        resp.raise_for_status()
+        tables = pd.read_html(StringIO(resp.text))
         tickers = tables[0]["Symbol"].str.replace(".", "-", regex=False).tolist()
         logger.info(f"Fetched {len(tickers)} tickers from Wikipedia")
         return tickers

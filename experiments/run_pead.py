@@ -14,6 +14,7 @@ panel is live-names only (0 delisted in 151k+). This is a structural limit
 of available APIs, not a design choice. We report this explicitly.
 """
 
+import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -22,7 +23,7 @@ import _bootstrap  # noqa: F401  (adds repo root to sys.path)
 from posterioralpha.pead import universe, fetch, signals, fama_macbeth, paths
 
 
-def main():
+def main(per_bucket: int = 150, seed: int = 42, sleep: float = 0.4):
     # --- Paths (repo-root-anchored; run from any working directory) ---
     paths.ensure_dirs()
     equities_csv = str(paths.EQUITIES_CSV)
@@ -38,17 +39,17 @@ def main():
     print(f"  Loaded {len(univ)} US primary-listed names.")
     print(f"  Market cap buckets:", dict(univ["market_cap"].value_counts()))
 
-    # --- Stratified sample: 150 per bucket for tractable pull ---
-    print("\n[2] Stratified sampling (150 per cap bucket)...")
-    sample = universe.stratified_sample(univ, per_bucket=150, seed=42)
+    # --- Stratified sample: per_bucket per cap bucket for a tractable pull ---
+    print(f"\n[2] Stratified sampling ({per_bucket} per cap bucket)...")
+    sample = universe.stratified_sample(univ, per_bucket=per_bucket, seed=seed)
     tickers = sorted(sample.index.tolist())
     print(f"  Sampled {len(tickers)} names across cap buckets.")
     print(f"  Buckets represented: {sample['market_cap'].unique()}")
 
     # --- Fetch prices + earnings (checkpoint/resume) ---
     print(f"\n[3] Fetching earnings surprises + adjusted prices...")
-    print(f"  (This may take 5-10min; will resume on restart if interrupted.)")
-    ledger = fetch.fetch_universe(tickers, raw_dir, ledger_path, sleep=0.4)
+    print(f"  (~{len(tickers) * 1.3 / 60:.0f}min; checkpoint/resume on restart.)")
+    ledger = fetch.fetch_universe(tickers, raw_dir, ledger_path, sleep=sleep)
 
     ok_count = (ledger["status"] == "OK").sum()
     cache_count = (ledger["status"] == "CACHED").sum()
@@ -198,4 +199,11 @@ def _print_fm_result(res: fama_macbeth.FamaMacbethResult, indent: int = 2):
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser(description="PEAD broad Fama-MacBeth IC test")
+    ap.add_argument("--per-bucket", type=int, default=150,
+                    help="Names sampled per market-cap bucket (default 150)")
+    ap.add_argument("--seed", type=int, default=42, help="Sampling seed")
+    ap.add_argument("--sleep", type=float, default=0.4,
+                    help="Seconds between yfinance fetches (rate-limit guard)")
+    args = ap.parse_args()
+    main(per_bucket=args.per_bucket, seed=args.seed, sleep=args.sleep)
