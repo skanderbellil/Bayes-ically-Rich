@@ -98,15 +98,27 @@ close** (`experiments/pead_dynamic_exit.py`), net of Alpaca costs:
 | HMM/regime hold (calm 63d / storm 21d) | +1.6% | 0.21 | +4.4% | 0.57 | −13.8% |
 | Regime hold + 8% stop | +5.0% | 0.65 | +8.6% | 1.02 | −6.4% |
 
-Findings (these two ideas were tested at the user's suggestion):
+Findings:
 
-- **Hold longer than 21 days.** Entering at t+1, the drift has barely started by day 21;
-  the LS spread keeps building to ~day 42–55. A 42-day hold is the sweet spot.
-- **Exit losers (stop-loss) is the real edge.** A 6–8% per-name stop on a 42-day hold
-  roughly triples the Sharpe of the naive book (OOS 0.19 → 1.18) and cuts drawdown to
-  ~−6%. It works because ~42% of 21-day losers keep deteriorating — capping them while
-  letting the ~79% of winners run is a genuine asymmetry. Robust across 6% and 8% (not a
-  knife-edge) and out-of-sample.
+- **Exit losers (stop-loss) is the real edge — and it's the only exit worth timing.**
+  A 6–8% per-name stop roughly triples the Sharpe of the naive book (OOS 0.19 → 1.18)
+  and cuts drawdown to ~−6%. It works because ~42% of early losers keep deteriorating —
+  capping them while letting the ~79% of winners run is a genuine asymmetry. Robust
+  across 6% and 8%, and out-of-sample.
+- **The hold cap is NOT a cherry-picked 42 days.** OOS Sharpe is a *plateau* across the
+  cap, not a spike: 25d→1.15, 35d→1.15, 42d→1.18, 50d→1.29, 55d→1.31, 63d→1.20. The exact
+  number doesn't matter. The natural, non-arbitrary cap is **"hold until the next earnings
+  report" (~63 trading days = one quarter)** — the SUE signal is about *this* event and
+  goes stale at the next one. That is a signal-decay horizon, not a tuned parameter.
+- **The holding period is already dynamic per position.** Under "6% stop, hold-to-next-
+  earnings," **58% of positions stop out early** (median hold 41d, **IQR 13–63d**) — the
+  losers exit when *they* signal it; only the winners ride to the cap. Nothing is pinned
+  to a fixed horizon.
+- **Timing the *winner* exit doesn't help** (this is what the HMM/trailing/regime ideas
+  tried). A horizon-free trailing stop gives OOS Sharpe 0.55–0.93; the per-position HMM
+  0.71; a market-regime hold 0.57 — all *below* "hold + cut losers." PEAD drift is a slow,
+  noisy grind, so any rule that exits winners on a pullback cuts the drift short. The data
+  rewards letting winners run to signal decay and only acting on losers.
 - **Neither HMM variant beats the stop.** Two were tried (`pead_hmm_drift.py`):
   *(a)* a market-wide vol-regime hold (OOS Sharpe 0.57), and *(b)* a **per-position**
   2-state Gaussian HMM that filters each name's own path to decide if the drift is
