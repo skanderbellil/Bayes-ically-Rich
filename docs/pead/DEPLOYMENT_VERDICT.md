@@ -115,3 +115,20 @@ SPY's Sharpe and more than halves its drawdown for the same return.
 **Bottom line:** a retail trader on Alpaca can deploy the market-neutral Mega+Large PEAD
 sleeve — commission-free, $0 borrow, beta-neutral — either standalone (Sharpe ~1.6) or
 blended with an SPY core to dial in a chosen risk level. This is the deployable edge.
+
+## 7. Other branch ideas tested (so this isn't re-litigated)
+
+Mined from the prior two days' work and stress-tested against the same Alpaca costs:
+
+| Idea (source branch) | Verdict |
+|----------------------|---------|
+| **Beta-hedged market-neutral residual** (`market-neutral-alpha-strategy`) | **Adopted** — the key unlock: hedge with shortable ETB names, not HTB small-caps. Became the deployable edge above. |
+| **"Beat the EW-survivor universe, not SPY"** (`pead` `factor_lowturnover`) | **Adopted as methodology.** Confirms SUE is the one signal clearing the survivorship bar; their low-vol/momentum factors did not. |
+| **Hurst-bull ×1.5 SPY timing** (`fix-lever-scaling`) | **Negative on return.** Honest IS/OOS (tune 2005–14, test 2015–24) with margin cost: OOS +9.0%/yr Sharpe 1.07 MaxDD −15% vs SPY +14.8%/0.79/−34%. Higher Sharpe + lower DD but **−5.8%/yr return** — a risk-reducer, not the "beats SPY on every metric" the branch claimed. Doesn't add a return edge the MN sleeve doesn't already provide. |
+| **Vol-targeting the sleeve** (`pead` `vol_targeting`) | **Promising lever.** Scaling the MN sleeve to an 8% causal vol target lifted Sharpe further in spot checks; left as a tuning knob, not yet hardened. |
+| **Signal-strength / top-decile thresholds** (`pead` `signal_filters`) | Concentrates the edge per-name; quintile used here for diversification. A knob, not a regime change. |
+
+The recurring repo-wide pattern: in the 2015–2024 bull, **defensive/timing overlays improve
+Sharpe and cut drawdown but trail SPY on raw return.** The market-neutral PEAD sleeve is
+different — it earns an *absolute, beta-neutral* return, which is why it is the one
+deployable edge rather than just a lower-beta SPY.
