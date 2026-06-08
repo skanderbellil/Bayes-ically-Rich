@@ -107,9 +107,17 @@ Findings (these two ideas were tested at the user's suggestion):
   ~−6%. It works because ~42% of 21-day losers keep deteriorating — capping them while
   letting the ~79% of winners run is a genuine asymmetry. Robust across 6% and 8% (not a
   knife-edge) and out-of-sample.
-- **HMM/regime-dependent holding does *not* add much.** Switching hold length by market
-  vol-regime alone is weak (OOS Sharpe 0.57) and adds nothing on top of the stop-loss.
-  The exit decision that matters is per-position (the stop), not a market-wide regime.
+- **Neither HMM variant beats the stop.** Two were tried (`pead_hmm_drift.py`):
+  *(a)* a market-wide vol-regime hold (OOS Sharpe 0.57), and *(b)* a **per-position**
+  2-state Gaussian HMM that filters each name's own path to decide if the drift is
+  "confirmed" → extend to day 63, else exit (best config decision-day 15: OOS Sharpe
+  0.71, better drawdown than fixed-hold but still < the stop's 1.18). The daily P&L path
+  is too noisy for an HMM to confirm drift in ~15 days, and the stop's value is mostly in
+  hard-cutting tail losers — which the HMM's extend-winners logic doesn't replicate. The
+  exit decision that matters is a simple per-position level stop, not a latent-state model.
+
+See `results/pead/hmm_vs_spy.png` for equity + drawdown curves vs SPY, including the
+recommended 60/40 SPY-core + MN-sleeve blend (SPY-like return at a much shallower drawdown).
 
 Caveat on the stop: the backtest exits exactly at −stop%, which assumes no gap-through.
 Earnings names can gap, so realised stop fills may be a little worse; size patiently and
