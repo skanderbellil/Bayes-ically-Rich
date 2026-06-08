@@ -143,6 +143,17 @@ engineering; the robust, simplest rule is the right one to deploy.
 See `results/pead/hmm_vs_spy.png` for equity + drawdown curves vs SPY, including the
 recommended 60/40 SPY-core + MN-sleeve blend (SPY-like return at a much shallower drawdown).
 
+Mechanics (how it runs live): the strategy is **continuous and self-renewing**. The
+−6% stop is measured **from entry** (not a trailing/drawdown stop — the trailing version
+was tested and lost). The hold cap is the **next earnings report**, which *refreshes* the
+signal: at each report you re-rank and roll (same side), flip, or exit. A continuous-roll
+backtest that charges turnover only on real trades (`pead_continuous_roll.py`) lands
+within +0.2%/yr of the batch number — because PEAD turnover is inherently high (only ~14%
+of position-quarters are rolls; a name's surprise rank rarely persists), so the batch
+"full round-trip per quarter" cost was already nearly right. Live stats: median holding
+**40 trading days (IQR 13–63)**, ~60% of positions stop out early, ~3–4 round-trips/yr per
+slot — cheap in liquid large-caps (~8 bps round-trip).
+
 Caveat on the stop: the backtest exits exactly at −stop%, which assumes no gap-through.
 Earnings names can gap, so realised stop fills may be a little worse; size patiently and
 treat OOS Sharpe ~1.15 as indicative.
