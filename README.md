@@ -37,12 +37,18 @@ posterioralpha/                # the framework package
 ├── backtest/                  # ── Stage 3: BACKTEST ENGINES ──
 │   ├── bayesian.py            #   monthly-rebalanced engine + BacktestResult
 │   └── amr.py                 #   weekly-rebalanced engine + AMRResult + sensitivity sweep
-└── validation/                # ── Stage 4: VALIDATION ──
-    ├── metrics.py             #   CAGR, Sharpe, Sortino, Max DD, Calmar, α/β/IR
-    └── plots.py               #   dashboards, multi-seed bars, λ heatmap
+├── validation/                # ── Stage 4: VALIDATION ──
+│   ├── metrics.py             #   CAGR, Sharpe, Sortino, Max DD, Calmar, α/β/IR
+│   └── plots.py               #   dashboards, multi-seed bars, λ heatmap
+└── pead/                      # ── PEAD strategy module (spans all 4 stages) ──
+    ├── universe.py·fetch.py   #   data:     equity universe + earnings/price fetch
+    ├── signals.py·momentum.py·bayesvol.py   # research: SUE, momentum, Bayes vol
+    ├── walk_forward.py·backtest.py·corrected.py·costs.py  # backtest engines
+    └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
 
 experiments/                   # reproducible studies that wire the stages together
 datasets/                      # bundled price data (5 ETFs + ~100 S&P 500 names)
+docs/pead/                     # PEAD research write-ups & headline results
 results/                       # generated plots & CSVs (gitignored)
 ```
 
@@ -112,6 +118,25 @@ print(compute_metrics(res.returns))                    # stage 4
 | `hmm3_amr` | 3-state HMM blends regime-specific AMR portfolios |
 
 ---
+
+### PEAD — Post-Earnings-Announcement-Drift (`pead`)
+
+A separate, **event-driven cross-sectional equity-anomaly** pipeline (distinct from
+the time-series portfolio strategies above, so it lives in its own subpackage that
+still follows the four-stage layering). It tests the analyst-surprise SUE signal
+across the market-cap spectrum.
+
+```bash
+python experiments/download_finance_data.py   # one-time: fetch universe (needs `pip install -e .[pead]`)
+python experiments/run_pead.py                # Fama-MacBeth IC test across cap buckets
+python experiments/walk_forward_pead.py       # walk-forward long-short backtest
+```
+
+Findings (`docs/pead/`) are deliberately self-critical: the signal is statistically
+significant (IC t-stats > 6, strongest in small/micro-cap) but a prior **+23.6%/yr**
+result was traced to a **winners-only calculation bug** and corrected to ~+11–15%/yr,
+and the live-names-only universe makes long-short returns **survivorship-biased upward**.
+Treat it as a research artefact, not a deployable edge.
 
 ## Methodology notes
 

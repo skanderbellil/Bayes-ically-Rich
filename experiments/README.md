@@ -21,7 +21,15 @@ python experiments/run_real_only.py
 | `run_bocpd_v4.py` | 5 real ETFs | BOCPD-AMR v4: ERL-adaptive EWMA halflife for Omega |
 | `run_spy_timing.py` | SPY only | Can a simple risk-on/risk-off rule on SPY beat buy-and-hold? |
 
-`main.py` requires network access (yfinance); all others run offline against the
-bundled `datasets/` files.
+### PEAD (Post-Earnings-Announcement-Drift) — run in order
+
+| script | what it does |
+|--------|--------------|
+| `download_finance_data.py` | One-time: download the FinanceDatabase equity universe → `financial_data/`. Requires `pip install -e .[pead]`. |
+| `run_pead.py` | Stratified-sample the universe, fetch earnings+prices (checkpoint/resume), build the SUE panel, run Fama-MacBeth IC tests overall + per cap bucket. Writes `results/pead/signal_panel.csv`. |
+| `walk_forward_pead.py` | Walk-forward long-short validation on the panel produced by `run_pead.py`. |
+
+`main.py` and the PEAD runners require network access (yfinance / FinanceDatabase);
+the other portfolio studies run offline against the bundled `datasets/` files.
 
 `_bootstrap.py` is a shared shim, not a study — import it first in every script.
