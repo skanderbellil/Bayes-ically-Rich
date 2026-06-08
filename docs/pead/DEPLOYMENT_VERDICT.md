@@ -119,6 +119,18 @@ Findings:
   0.71; a market-regime hold 0.57 — all *below* "hold + cut losers." PEAD drift is a slow,
   noisy grind, so any rule that exits winners on a pullback cuts the drift short. The data
   rewards letting winners run to signal decay and only acting on losers.
+- **Vol-scaling the stop is a wash** (`pead_volscaled_stop.py`). Setting each name's stop
+  to `k × its own monthly volatility` (to equalise stop-out probability) does not beat a
+  fixed % stop: at a matched ~6% average level, OOS Sharpe 1.19 vs 1.20 and a slightly
+  *worse* drawdown (−12.3% vs −11.2%); full-sample it is worse (0.71 vs 0.87). Within
+  Mega+Large the vol dispersion is modest and diversifies across ~26 names, and a fixed %
+  stop already equalises each name's *dollar* loss — which is what controls portfolio
+  drawdown. Vol-scaling actually widens stops on the high-vol names you most want to cut.
+
+**Meta-finding:** every elaboration of the exit rule — HMM, market regime, trailing stop,
+per-name vol-scaling — ties or underperforms a plain fixed % stop with a hold-to-next-
+earnings cap. The edge is real but modest, and is *not* improvable by clever exit
+engineering; the robust, simplest rule is the right one to deploy.
 - **Neither HMM variant beats the stop.** Two were tried (`pead_hmm_drift.py`):
   *(a)* a market-wide vol-regime hold (OOS Sharpe 0.57), and *(b)* a **per-position**
   2-state Gaussian HMM that filters each name's own path to decide if the drift is
