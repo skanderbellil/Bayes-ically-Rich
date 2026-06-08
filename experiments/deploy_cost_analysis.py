@@ -80,6 +80,30 @@ def abs_topq(df, top_q=0.8):
     return pd.Series(vals, index=idx)
 
 
+def market_neutral_ls(df, tiers=("Mega Cap", "Large Cap"), q=0.2):
+    """Per-quarter dollar-neutral long top-SUE / short bottom-SUE within ETB tiers.
+
+    Deployable on Alpaca: both legs are easy-to-borrow large/mega caps ($0 borrow),
+    commission-free; each leg charged a round-trip spread. Beta ~ 0. Survivorship
+    bias is *conservative* here — delisted bottom-SUE names (the best shorts) are
+    absent from the live-only panel, so the realised edge is if anything understated.
+    """
+    out = []
+    for _, g in df.groupby("season"):
+        legs = []
+        for tier in tiers:
+            gt = g[g["market_cap"] == tier]
+            if len(gt) < 8:
+                continue
+            hi, lo = gt["sue"].quantile(1 - q), gt["sue"].quantile(q)
+            longs = gt[gt["sue"] >= hi]["ret_t21"].mean() / 100
+            shorts = gt[gt["sue"] <= lo]["ret_t21"].mean() / 100
+            legs.append((longs - shorts) - 2 * AC.roundtrip_cost(tier))
+        if legs:
+            out.append(np.mean(legs))
+    return np.array(out)
+
+
 def main():
     p = load_panel()
     liq = p[p["market_cap"].isin(LIQUID)].copy()
@@ -123,6 +147,22 @@ def main():
     print(f"    SPY buy & hold:    {sa['annual']:+.1%}/yr  Sharpe {sa['sharpe']:.2f}")
     print(f"    → Excess vs SPY: {ta['annual'] - sa['annual']:+.1%}/yr return, "
           f"{ta['sharpe'] - sa['sharpe']:+.2f} Sharpe  ({len(common)} quarters)")
+
+    # 4. HEADLINE: deployable market-neutral long-short (ETB names only)
+    print("\n[4] *** DEPLOYABLE MARKET-NEUTRAL *** long top-SUE / short bottom-SUE,")
+    print("    Mega+Large only (ETB, $0 borrow, $0 commission, beta~0):")
+    mn = market_neutral_ls(p)
+    m = _ann(mn)
+    eq = np.cumprod(1 + mn)
+    mdd = ((eq - np.maximum.accumulate(eq)) / np.maximum.accumulate(eq)).min()
+    print(f"    Net {m['annual']:+.1%}/yr  Sharpe {m['sharpe']:.2f}  t={m['t']:.1f}  "
+          f"MaxDD {mdd:+.1%}  ({m['winq']:.0%} of {m['nq']} quarters positive)")
+    print("    OOS walk-forward:")
+    for cut in (2011, 2015, 2018):
+        a = _ann(market_neutral_ls(p[p["year"] <= cut]))
+        b = _ann(market_neutral_ls(p[p["year"] > cut]))
+        print(f"      train≤{cut}: {a['annual']:+.1%}/yr (t={a['t']:.1f})   "
+              f"test>{cut}: {b['annual']:+.1%}/yr (t={b['t']:.1f}, {b['winq']:.0%} win)")
 
 
 if __name__ == "__main__":
