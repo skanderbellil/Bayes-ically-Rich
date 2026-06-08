@@ -3,15 +3,28 @@
 **Question:** after realistic Alpaca retail costs, is any strategy in this repo
 robust enough to deploy — and is there a real edge?
 
-**Answer:** Yes. The PEAD long-*short* in its raw form is **not** deployable (its
-edge lives in hard-to-borrow small/micro-caps that Alpaca cannot short). But a
-**market-neutral long-short confined to easy-to-borrow Mega+Large caps** is fully
-deployable and carries a robust, regime-stable edge:
+**Answer:** Yes, but the edge is smaller and more nuanced than a first pass suggests.
+The PEAD long-*short* in its raw form is **not** deployable (its edge lives in
+hard-to-borrow small/micro-caps Alpaca cannot short). A **market-neutral long-short
+in easy-to-borrow Mega+Large caps** *is* deployable — but only with a **realistic
+t+1 entry and an exit-losers (stop-loss) overlay**:
 
-> **+10.3%/yr (2010–2026), Sharpe ≈ 1.5, beta ≈ 0, max drawdown ≈ −6 to −11%,
-> commission-free, $0 borrow.** Positive in every 5-year sub-period and out-of-sample.
+> **Tradeable edge (t+1 entry, 42-day hold, 6–8% stop-loss): OOS (≥2014) ≈ +8%/yr,
+> Sharpe ≈ 1.15, beta ≈ 0, max drawdown ≈ −6%, commission-free, $0 borrow.**
 
-Reproduce with `python experiments/deploy_cost_analysis.py` (after `run_pead.py`).
+Reproduce with `python experiments/pead_dynamic_exit.py` (after `run_pead.py`).
+
+> ### ⚠️ Realism correction (supersedes the first version of this doc)
+> An earlier version of this analysis reported **+10.3%/yr, Sharpe ~1.5** for the
+> plain 21-day market-neutral book. That number is **overstated**: the signal panel
+> measures returns from `p_t0` = the *pre-announcement* close, so it captures the
+> announcement-day jump (`p_t0 → t+1`) — **which a retail trader cannot trade**, since
+> the surprise isn't public until the release. That untradeable gap is **~93%** of the
+> Mega+Large LS spread (`ret_t1` LS ≈ `ret_t21` LS). Entering at the t+1 close — the
+> first transactable price — the plain 21-day drift is **~0% after costs**. The
+> genuinely tradeable edge comes from holding longer (drift peaks ~day 42–55) **and**
+> cutting losers with a stop. See §3a. `deploy_cost_analysis.py` still reports the
+> p_t0-based (optimistic) numbers and is labelled accordingly.
 
 ---
 
@@ -40,11 +53,13 @@ Half-spreads (one-way, bps) by tier: ETF 1 · Mega 2 · Large 4 · Mid 10 · Sma
   cap-weighted SPY on raw return by ~2.6%/yr in the mega-tech era (Sharpe 0.76 vs 0.71).
   A risk-improver, not a return-beater.
 
-## 3. The deployable edge — market-neutral PEAD (Mega + Large, ETB)
+## 3. Upper-bound (p_t0 entry) — OPTIMISTIC, includes the untradeable gap
 
 Long top-quintile SUE / short bottom-quintile SUE, **within Mega+Large caps only** (all
 easy-to-borrow), dollar-neutral, rebalanced quarterly, each leg charged a round-trip
-spread. Net of all Alpaca costs:
+spread. **These returns are measured from the pre-announcement close, so they include
+the untradeable announcement-day jump (see the realism correction above). Treat as an
+upper bound, not a deployable result.** Net of all Alpaca costs:
 
 | Window | Ann | Sharpe | MaxDD | Quarters |
 |--------|-----|--------|-------|----------|
@@ -68,7 +83,44 @@ spread. Net of all Alpaca costs:
 - Well-diversified: ~26 names per leg (min ~21) in the modern era — not concentrated.
 - Correlation to SPY **+0.17** → a genuine diversifier, not a levered-beta proxy.
 
+## 3a. The actually-deployable edge — t+1 entry + exit-losers stop
+
+Rebuilding each position's daily path from the cached prices and entering at the **t+1
+close** (`experiments/pead_dynamic_exit.py`), net of Alpaca costs:
+
+| Tradeable strategy (Mega+Large, market-neutral) | Full Ann | Full Sharpe | OOS≥2014 Ann | OOS Sharpe | OOS MaxDD |
+|---|---|---|---|---|---|
+| Fixed 21d (the naive book) | +0.0% | 0.00 | +1.1% | 0.19 | −19.6% |
+| Fixed 42d | +3.2% | 0.41 | +5.5% | 0.84 | −8.7% |
+| Fixed 63d | +3.1% | 0.32 | +7.0% | 0.90 | −11.7% |
+| **Exit-losers: 6% stop, 42d hold** | **+6.4%** | **0.89** | **+8.1%** | **1.18** | **−5.9%** |
+| Exit-losers: 8% stop, 42d hold | +6.2% | 0.77 | +8.8% | 1.14 | −5.4% |
+| HMM/regime hold (calm 63d / storm 21d) | +1.6% | 0.21 | +4.4% | 0.57 | −13.8% |
+| Regime hold + 8% stop | +5.0% | 0.65 | +8.6% | 1.02 | −6.4% |
+
+Findings (these two ideas were tested at the user's suggestion):
+
+- **Hold longer than 21 days.** Entering at t+1, the drift has barely started by day 21;
+  the LS spread keeps building to ~day 42–55. A 42-day hold is the sweet spot.
+- **Exit losers (stop-loss) is the real edge.** A 6–8% per-name stop on a 42-day hold
+  roughly triples the Sharpe of the naive book (OOS 0.19 → 1.18) and cuts drawdown to
+  ~−6%. It works because ~42% of 21-day losers keep deteriorating — capping them while
+  letting the ~79% of winners run is a genuine asymmetry. Robust across 6% and 8% (not a
+  knife-edge) and out-of-sample.
+- **HMM/regime-dependent holding does *not* add much.** Switching hold length by market
+  vol-regime alone is weak (OOS Sharpe 0.57) and adds nothing on top of the stop-loss.
+  The exit decision that matters is per-position (the stop), not a market-wide regime.
+
+Caveat on the stop: the backtest exits exactly at −stop%, which assumes no gap-through.
+Earnings names can gap, so realised stop fills may be a little worse; size patiently and
+treat OOS Sharpe ~1.15 as indicative.
+
 ## 4. Recommended deployment — SPY core + market-neutral sleeve
+
+> The frontier below uses the §3 (p_t0) sleeve and is therefore an **upper bound**.
+> With the realistic §3a tradeable sleeve (OOS Sharpe ~1.15, ~+8%/yr, ~0 beta) the
+> *shape* is the same — a low-correlation diversifier that lifts a SPY portfolio's
+> Sharpe and cuts its drawdown — but the gains are more modest than shown here.
 
 Because the sleeve earns ~SPY-like returns at ~0 beta, blending it with SPY traces an
 efficient frontier at **constant ~11.5% return** (2005–2024, unlevered, no margin drag):
@@ -113,8 +165,11 @@ SPY's Sharpe and more than halves its drawdown for the same return.
   the Sharpe as indicative, not exact.
 
 **Bottom line:** a retail trader on Alpaca can deploy the market-neutral Mega+Large PEAD
-sleeve — commission-free, $0 borrow, beta-neutral — either standalone (Sharpe ~1.6) or
-blended with an SPY core to dial in a chosen risk level. This is the deployable edge.
+sleeve — commission-free, $0 borrow, beta-neutral — **provided it is run realistically:
+enter at t+1, hold ~42 days, and cut losers with a 6–8% stop.** So run, it delivers OOS
+~+8%/yr at Sharpe ~1.15 with a ~−6% drawdown (§3a). The naive 21-day book is ~zero once
+the untradeable announcement gap is excluded. Blend the sleeve with an SPY core to dial
+in a chosen risk level. This is the honest deployable edge.
 
 ## 7. Other branch ideas tested (so this isn't re-litigated)
 
