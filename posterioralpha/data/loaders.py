@@ -26,6 +26,7 @@ ETF_UNIVERSE_CSV      = DATASETS_DIR / "etf_universe_prices.csv.gz"
 ETF_UNIVERSE_INFO_CSV = DATASETS_DIR / "etf_universe_info.csv"
 EQUITY_UNIVERSE_CSV      = DATASETS_DIR / "equity_universe_prices.csv.gz"
 EQUITY_UNIVERSE_INFO_CSV = DATASETS_DIR / "equity_universe_info.csv"
+NET_LIQUIDITY_CSV        = DATASETS_DIR / "net_liquidity.csv"
 
 
 def load_portfolio_prices() -> pd.DataFrame:
@@ -100,3 +101,14 @@ def load_equity_universe_info() -> pd.DataFrame:
     """financedatabase instrument info for the equity universe (+ median ADV)."""
     path = _require(EQUITY_UNIVERSE_INFO_CSV, "python experiments/build_equity_universe.py")
     return pd.read_csv(path, index_col="symbol")
+
+
+def load_net_liquidity() -> pd.DataFrame:
+    """
+    Fed net liquidity (WALCL − TGA − RRP) in $bn, daily, with components.
+
+    Built from FRED; see ``posterioralpha.data.macro.build_net_liquidity`` or
+    ``experiments/run_net_liquidity.py`` to (re)generate.
+    """
+    path = _require(NET_LIQUIDITY_CSV, "python experiments/run_net_liquidity.py --build")
+    return pd.read_csv(path, parse_dates=["date"], index_col="date").sort_index()

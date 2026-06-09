@@ -29,6 +29,13 @@ from posterioralpha.research.intramonth import (
     intramonth_window_mask,
     wml_formation,
 )
+from posterioralpha.research.gamma import (
+    GammaSnapshot,
+    bs_gamma,
+    chain_gex,
+    fetch_gamma_snapshot,
+    zero_gamma_level,
+)
 
 __all__ = [
     # Bayesian machinery
@@ -59,4 +66,10 @@ __all__ = [
     # Intramonth momentum primitives
     "intramonth_window_mask",
     "wml_formation",
+    # Dealer gamma exposure (GEX)
+    "bs_gamma",
+    "chain_gex",
+    "zero_gamma_level",
+    "fetch_gamma_snapshot",
+    "GammaSnapshot",
 ]

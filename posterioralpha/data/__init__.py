@@ -9,6 +9,11 @@ from posterioralpha.data.loaders import (
     load_equity_universe_prices,
     load_equity_universe_returns,
     load_equity_universe_info,
+    load_net_liquidity,
+)
+from posterioralpha.data.macro import (
+    build_net_liquidity,
+    fetch_fred,
 )
 from posterioralpha.data.market import (
     download_returns,
@@ -39,6 +44,9 @@ __all__ = [
     "load_equity_universe_prices",
     "load_equity_universe_returns",
     "load_equity_universe_info",
+    "load_net_liquidity",
+    "build_net_liquidity",
+    "fetch_fred",
     "build_etf_universe",
     "build_equity_universe",
     "etf_info",

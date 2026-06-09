@@ -30,6 +30,8 @@ python experiments/run_real_only.py
 | `run_intramonth_momentum.py` | 5 real ETFs | Nathan-Suominen-Tasa (2026): does WML momentum concentrate in the T-9→T-4 intramonth window? |
 | `run_intramonth_bayesian.py` | 5 real ETFs | Learns the intramonth allocation per T-k position via an online Normal-Normal model (no hardcoded window) |
 | `dfl_orchestrator.py` | S&P 100 + ETFs | Decision-focused multi-pod orchestrator: 6 asset-level pods + a differentiable mean-variance QP layer. Requires `pip install -e .[dfl]` |
+| `run_net_liquidity.py` | SPY + FRED | Net liquidity (Fed assets − TGA − RRP) vs equities: lead-lag correlation + a liquidity-regime timing rule (publication-lag respected). `--build` refreshes FRED. |
+| `run_gamma_exposure.py` | SPY options | Dealer GEX snapshot from the live options chain: total gamma, long/short-gamma regime, zero-gamma flip level, per-strike profile. Network (live chain). Snapshot only — backtest needs historical OI. |
 
 ### PEAD (Post-Earnings-Announcement-Drift) — run in order
 
