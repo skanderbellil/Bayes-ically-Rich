@@ -43,6 +43,7 @@ RF = 0.04
 PUB_LAG = 5          # business days: FRED release delay (avoid lookahead)
 CHG_WIN = 65         # ~13-week change horizon for the liquidity signal
 DAILY_RF = RF / 252
+SPLIT = "2018-01-01"  # in-sample boundary for calibrating the sizing scale
 
 
 def main() -> None:
@@ -110,6 +111,28 @@ def main() -> None:
     rot = pd.Series(np.where(expanding > 0, spy_ret, tlt_ret),
                     index=idx, name="rotation")
 
+    # (d) Predicted-return sizing: expanding OLS of the realised next-H-day SPY
+    # return on the H-day Δliquidity, then size by mean-variance (Merton):
+    # exposure ∝ predicted excess return / variance.  The regression's value-add
+    # over z-scaling is using the *level* of the forecast, not just its rank.
+    H = CHG_WIN
+    yf = spy.pct_change(H).shift(-H)          # realised next-H return, labelled at s
+    xf = d_nl                                  # Δliquidity at s
+    W = 756                                     # ≥3y of complete pairs before trading
+    ex = xf.expanding(W).mean(); ey = yf.expanding(W).mean()
+    exx = (xf * xf).expanding(W).mean(); exy = (xf * yf).expanding(W).mean()
+    beta = (exy - ex * ey) / (exx - ex * ex)
+    alpha = ey - beta * ex
+    # pairs are only complete H days after s, so lag the fitted coefs by H.
+    pred = alpha.shift(H) + beta.shift(H) * d_nl          # predicted next-H return
+    pred_excess_ann = pred * (252.0 / H) - RF
+    sigma2 = (spy_ret.rolling(252).std() * np.sqrt(252)) ** 2
+    raw = pred_excess_ann / sigma2
+    lam = raw[idx < SPLIT].abs().median()                  # calibrate scale in-sample
+    pexpo = causal((raw / (lam if lam else 1.0)).clip(0.0, 1.5)).fillna(0.0)
+    predsz = pd.Series(pexpo * spy_ret + (1 - pexpo) * DAILY_RF,
+                       index=idx, name="pred_sized")
+
     bh = spy_ret
 
     keys = ["CAGR", "Volatility", "Sharpe", "Sortino", "Max DD", "Calmar"]
@@ -117,6 +140,7 @@ def main() -> None:
         ["Binary on/off (SPY/cash)", binary],
         ["Scaled exposure (centred 1.0)", scaled],
         ["Rotation (SPY↔TLT)", rot],
+        ["Predicted-return sized (OLS+MV)", predsz],
         ["SPY buy & hold", bh],
     ]
     table = [[name] + [f"{compute_metrics(r.dropna(), rf=RF).get(k, float('nan')):.2f}" for k in keys]
@@ -127,17 +151,18 @@ def main() -> None:
     print(tabulate(table, headers=["strategy"] + keys, tablefmt="github"))
     print(f"\n  binary: {float((expanding > 0).mean()):.0%} invested  |  "
           f"scaled: {float(expo.mean()):.2f}x avg exposure  |  "
-          f"rotation: {float((expanding > 0).mean()):.0%} in SPY / rest in TLT   "
+          f"pred-sized: {float(pexpo.mean()):.2f}x avg exposure   "
           f"(signal lagged {PUB_LAG}d)")
-    strat, scaled = binary, scaled   # for the plot section below
 
     # ── Plot ──────────────────────────────────────────────────────────────────
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True,
                                    gridspec_kw={"height_ratios": [2, 1]})
     eq_s = (1 + binary.fillna(0)).cumprod(); eq_z = (1 + scaled.fillna(0)).cumprod()
+    eq_p = (1 + predsz.fillna(0)).cumprod()
     eq_r = (1 + rot.fillna(0)).cumprod(); eq_b = (1 + bh.fillna(0)).cumprod()
     ax1.plot(eq_s.index, eq_s, label="Binary on/off", lw=1.1)
     ax1.plot(eq_z.index, eq_z, label="Scaled exposure (1.0)", lw=1.2)
+    ax1.plot(eq_p.index, eq_p, label="Predicted-return sized", lw=1.4)
     ax1.plot(eq_r.index, eq_r, label="Rotation SPY↔TLT", lw=1.4)
     ax1.plot(eq_b.index, eq_b, label="SPY buy & hold", lw=1.3, color="black", alpha=0.8)
     ax1.set_yscale("log"); ax1.set_ylabel("growth of $1 (log)")

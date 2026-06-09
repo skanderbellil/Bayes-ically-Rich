@@ -32,6 +32,7 @@ from tabulate import tabulate
 import _bootstrap  # noqa: F401
 from posterioralpha.data import (
     load_net_liquidity, load_etf_universe_prices, load_etf_universe_info,
+    load_equity_universe_prices, load_equity_universe_info,
 )
 from posterioralpha.validation import compute_metrics
 
@@ -134,6 +135,29 @@ def main() -> None:
           "where predicted, out-of-sample.")
     print("  (Overlapping windows inflate significance — read correlations as "
           "descriptive ranking, not t-tested alpha.)")
+
+    # ── 3. Same map on the 500-equity universe, by GICS sector ───────────────
+    try:
+        epx = load_equity_universe_prices().reindex(idx)
+        einfo = load_equity_universe_info()
+        erec = []
+        for c in epx.columns:
+            r = epx[c]
+            if r.notna().sum() < MIN_DAYS:
+                continue
+            erec.append((c, _corr(d_nl, r.pct_change(H).shift(-H))))
+        E = (pd.DataFrame(erec, columns=["symbol", "lead"]).set_index("symbol")
+             .join(einfo[["sector"]]).dropna(subset=["lead"]))
+        by_sector = (E.groupby("sector")["lead"]
+                     .agg(["mean", "count"]).sort_values("mean", ascending=False))
+        print("\n" + "=" * 78)
+        print(f"  EQUITY UNIVERSE ({E.shape[0]} stocks): liquidity sensitivity by sector")
+        print("  (survivorship-biased current-membership universe — exploratory)")
+        print("=" * 78)
+        print(tabulate(by_sector.round(3),
+                       headers=["sector", "mean lead corr", "n"], tablefmt="github"))
+    except FileNotFoundError:
+        logger.warning("equity universe not built; skipping sector section")
 
     # ── Plot: sensitivity by asset class ─────────────────────────────────────
     fig, ax = plt.subplots(figsize=(10, 5))
