@@ -36,6 +36,7 @@ python experiments/run_real_only.py
 | `run_liquidity_trend.py` | SPY + FRED | Net liquidity × 200-day price trend: each signal alone, an AND gate, and a vote (0/½/1 exposure). The vote blend tops both standalone signals and SPY on Sharpe/Sortino. Offline. |
 | `run_liquidity_predictive.py` | SPY + FRED + VIX/HYG | Net liquidity × *forward-looking* layers (VIX term structure, HYG−IEF credit appetite) instead of the lagging MA: pairwise and three-way votes vs the trend baseline and SPY. Best blend of the thread (3-way vote Sharpe 0.75, DD −20%). Offline. |
 | `run_liquidity_continuous.py` | SPY + cyclical basket | Continuous fit-free vote (soft-sign strengths, no thresholds) on SPY and the XLY/XLK/XLF/XLE/XLI sleeve, with rolling 3y OOS win rates and per-year edge table. Best drawdown/Calmar of the thread; overlay beats its underlying in 60–68% of windows. Offline. |
+| `run_liquidity_levered.py` | SPY + QQQ | Levering the vote for absolute return: four exposure mappings (vol-target, 2×vote, convex, vol-braked) with honest financing/TC. 2×vote on QQQ beats SPY's CAGR in 84% of 3y windows (median +8.4pp/yr) and QQQ's in 78% — at −48% max DD. Offline. Uses `research.overlay.liquidity_vote`. |
 
 ### PEAD (Post-Earnings-Announcement-Drift) — run in order
 
