@@ -1,4 +1,5 @@
 yfinance>=0.2.36
+financedatabase>=2.0    # investable ETF/equity universe + instrument info (data layer)
 pandas>=2.2.0
 numpy>=1.24.0
 scipy>=1.11.0

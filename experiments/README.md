@@ -12,6 +12,8 @@ python experiments/run_real_only.py
 
 | script | universe | what it studies |
 |--------|----------|-----------------|
+| `build_etf_universe.py` | ~1,300 → top-250 ETFs | **Builds the large universe.** financedatabase (universe + info) + yfinance (history), screened for coverage & dollar-volume liquidity → `datasets/etf_universe_*`. Network; run once. |
+| `run_large_universe.py` | 250 liquid US ETFs | Universe summary from fd info + diversified cross-asset allocation on a basket built from that info (most-liquid ETF per asset class) vs SPY. Offline. |
 | `main.py` | S&P 500 (live download) | Multi-seed robustness of the Bayesian family vs. SPY; saves dashboards, multi-seed bars, λ heatmap |
 | `run_local.py` | 5 ETFs + 9 synthetic = 14 | Full Bayesian × AMR comparison on an expanded factor-model universe |
 | `run_real_only.py` | 5 real ETFs | Headline comparison on real data only — no synthetic assets |

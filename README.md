@@ -27,6 +27,7 @@ traced cleanly from idea to validated result:
 ```
 posterioralpha/                # the framework package
 ├── data/                      # ── Stage 1: DATA ──
+│   ├── universe.py            #   large liquid ETF universe: financedatabase (info) + yfinance (history)
 │   ├── market.py              #   live download + S&P 500 universe (yfinance)
 │   ├── synthetic.py           #   factor-model synthetic universe expansion
 │   └── loaders.py             #   robust loaders for bundled datasets
@@ -47,7 +48,7 @@ posterioralpha/                # the framework package
     └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
 
 experiments/                   # reproducible studies that wire the stages together
-datasets/                      # bundled price data (5 ETFs + ~100 S&P 500 names)
+datasets/                      # bundled price data (250-ETF liquid universe + info, 5 ETFs, ~100 S&P 500)
 docs/pead/                     # PEAD research write-ups & headline results
 results/                       # generated plots & CSVs (gitignored)
 ```
@@ -72,23 +73,34 @@ Requires Python ≥ 3.10.
 
 ## Quickstart
 
-Run a self-contained study on the bundled real-ETF dataset (no network needed):
+Work on the **large universe** — 250 liquid US ETFs (2010–today) bundled in
+`datasets/`, no network needed:
 
 ```bash
-python experiments/run_real_only.py     # SPY/TLT/GLD/EEM/VNQ, 2016–2024
+python experiments/run_large_universe.py   # universe summary + cross-asset allocation vs SPY
 ```
-
-Or use the framework directly:
 
 ```python
-from posterioralpha.data import load_portfolio_returns
-from posterioralpha.backtest import run_amr_backtest, run_backtest
+from posterioralpha.data import load_etf_universe_returns, load_etf_universe_info
+from posterioralpha.backtest import run_market_neutral, MNParams
 from posterioralpha.validation import compute_metrics
 
-returns = load_portfolio_returns()                     # stage 1
-res     = run_amr_backtest(returns, strategy="bocpd_amr_v4")   # stages 2+3
+returns = load_etf_universe_returns()                  # 250 ETFs  (stage 1)
+info    = load_etf_universe_info()                     # financedatabase metadata + median ADV
+res     = run_market_neutral(returns, MNParams(market="SPY"))   # stages 2+3
 print(compute_metrics(res.returns))                    # stage 4
 ```
+
+The universe is assembled by **financedatabase** (investable ETF universe +
+instrument info) and **yfinance** (adjusted price history), screened for
+coverage and dollar-volume liquidity. Rebuild / refresh it with:
+
+```bash
+python experiments/build_etf_universe.py --start 2010-01-01 --top-n 250   # needs network
+```
+
+Smaller bundled datasets remain available (`load_portfolio_returns` — 5 ETFs;
+`load_sp500_prices` — ~100 S&P 500 names) for quick checks.
 
 ---
 

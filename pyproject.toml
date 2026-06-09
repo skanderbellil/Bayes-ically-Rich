@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "yfinance>=0.2.36",
+    "financedatabase>=2.0",
     "pandas>=2.2.0",
     "numpy>=1.24.0",
     "scipy>=1.11.0",
@@ -24,8 +25,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Only needed to (re)download the PEAD universe via experiments/download_finance_data.py
-pead = ["financedatabase>=2.0"]
 # Only needed for the differentiable multi-pod orchestrator (experiments/dfl_orchestrator.py)
 dfl = ["torch>=2.0", "cvxpy>=1.4", "cvxpylayers>=0.1.6"]
 
