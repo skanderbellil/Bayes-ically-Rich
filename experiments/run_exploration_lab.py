@@ -260,6 +260,38 @@ def main() -> None:
                                   "2022", "CAGRwin", "SRwin"], tablefmt="github"))
     rets["2×5-layer + debt-ceiling ×½"] = r_stack
 
+    # ── Round 3: fresh-sample validation of the tug signal ───────────────────
+    # The lab's live window starts 2014, but SPY OHLC reaches back to 1993 and
+    # QQQ to 1999 — data the layer-selection never saw.  If the tug spread is
+    # real it should exist there too; if it only appears post-2014/2020 it is
+    # a recent-clientele artifact and must not be promoted.
+    print("\n" + "=" * 96)
+    print("  ROUND 3  ·  fresh-sample check: next-day return by causal tug tercile")
+    print("=" * 96)
+    rows = []
+    for t in ["SPY", "QQQ"]:
+        o = panel[f"{t}_Open"].dropna()
+        c = panel[f"{t}_Close"].dropna()
+        on = o / c.shift(1) - 1.0
+        iday = c / o - 1.0
+        ret1 = c.pct_change()
+        t_raw = ((1 + on).rolling(21).apply(np.prod, raw=True)
+                 - (1 + iday).rolling(21).apply(np.prod, raw=True))
+        sig = soft_sign(t_raw).shift(1)
+        rk = sig.rolling(756, min_periods=252).apply(
+            lambda x: (x < x[-1]).mean(), raw=True).shift(1)
+        for lab, a, b in [("1994-2003", "1994", "2003"), ("2004-2013", "2004", "2013"),
+                          ("2014-2026", "2014", "2026")]:
+            r_, k_ = ret1.loc[a:b], rk.loc[a:b]
+            if k_.notna().sum() < 252:
+                continue
+            hi_ = float(r_[k_ >= 0.67].mean()) * 252
+            lo_ = float(r_[k_ <= 0.33].mean()) * 252
+            rows.append([t, lab, f"{lo_:+.1%}", f"{hi_:+.1%}", f"{hi_ - lo_:+.1%}",
+                         int(k_.notna().sum())])
+    print(tabulate(rows, headers=["ticker", "period", "low tercile",
+                                  "high tercile", "spread", "days"], tablefmt="github"))
+
     # ── Graph ─────────────────────────────────────────────────────────────────
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 9))
     show = ["QQQ buy & hold", "2×champion (4-layer)", "2×A. +tug-of-war layer",
