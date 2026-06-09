@@ -20,6 +20,7 @@ business-day index, and caches the result under ``datasets/`` for offline use.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Dict
@@ -31,7 +32,13 @@ logger = logging.getLogger(__name__)
 DATASETS_DIR = Path(__file__).resolve().parents[2] / "datasets"
 NET_LIQUIDITY_CSV = DATASETS_DIR / "net_liquidity.csv"
 
+# FRED deprecated unauthenticated access in Nov 2025: the no-key CSV endpoint
+# now returns 503/4xx, and the v2 API requires a free key.  We try the keyed
+# v2 JSON API first (set FRED_API_KEY — free at https://fred.stlouisfed.org/
+# docs/api/api_key.html), then fall back to the legacy CSV for older envs.
+_FRED_API = "https://api.stlouisfed.org/fred/series/observations"
 _FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}"
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; PosteriorAlpha/1.0)"}
 
 # series id -> unit scale to convert into $ billions
 NET_LIQUIDITY_SERIES: Dict[str, float] = {
@@ -41,32 +48,62 @@ NET_LIQUIDITY_SERIES: Dict[str, float] = {
 }
 
 
-def fetch_fred(series_id: str, retries: int = 6, timeout: int = 30) -> pd.Series:
-    """Download one FRED series via the public CSV endpoint (no API key)."""
+def _fred_via_api(series_id: str, api_key: str, timeout: int) -> pd.Series:
+    import requests
+
+    params = {"series_id": series_id, "api_key": api_key, "file_type": "json"}
+    resp = requests.get(_FRED_API, params=params, headers=_HEADERS, timeout=timeout)
+    resp.raise_for_status()
+    obs = resp.json()["observations"]
+    s = pd.Series(
+        {pd.Timestamp(o["date"]): pd.to_numeric(o["value"], errors="coerce")
+         for o in obs},
+    ).dropna()
+    s.index.name = "date"; s.name = series_id
+    return s
+
+
+def _fred_via_csv(series_id: str, timeout: int) -> pd.Series:
     import io
     import requests
 
-    url = _FRED_CSV.format(sid=series_id)
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; PosteriorAlpha/1.0)"}
+    resp = requests.get(_FRED_CSV.format(sid=series_id), headers=_HEADERS, timeout=timeout)
+    resp.raise_for_status()
+    df = pd.read_csv(io.StringIO(resp.text), parse_dates=[0], index_col=0)
+    s = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna()
+    s.index.name = "date"; s.name = series_id
+    return s
+
+
+def fetch_fred(series_id: str, retries: int = 4, timeout: int = 30) -> pd.Series:
+    """
+    Download one FRED series.
+
+    Uses the keyed v2 JSON API when ``FRED_API_KEY`` is set (the supported path
+    since FRED's Nov-2025 auth change), otherwise the legacy no-key CSV
+    endpoint (often 503 now).  Retries with exponential backoff.
+    """
+    api_key = os.environ.get("FRED_API_KEY")
     last_exc = None
     for attempt in range(retries):
         try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
-            resp.raise_for_status()
-            df = pd.read_csv(io.StringIO(resp.text), parse_dates=[0], index_col=0)
-            s = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna()
-            s.index.name = "date"
-            s.name = series_id
-            logger.info("FRED %s: %d obs [%s … %s]", series_id, len(s),
-                        s.index.min().date(), s.index.max().date())
+            s = (_fred_via_api(series_id, api_key, timeout) if api_key
+                 else _fred_via_csv(series_id, timeout))
+            logger.info("FRED %s: %d obs [%s … %s]%s", series_id, len(s),
+                        s.index.min().date(), s.index.max().date(),
+                        "" if api_key else "  (no-key CSV — set FRED_API_KEY if this fails)")
             return s
-        except Exception as exc:  # network/HTTP errors are transient on FRED
+        except Exception as exc:
             last_exc = exc
             wait = min(5 * 2 ** attempt, 60)
             logger.warning("FRED %s attempt %d failed (%s); retry in %ds",
                            series_id, attempt + 1, type(exc).__name__, wait)
             time.sleep(wait)
-    raise RuntimeError(f"FRED fetch failed for {series_id}: {last_exc}")
+    hint = "" if api_key else (
+        "  FRED now requires a (free) API key — set FRED_API_KEY "
+        "(https://fred.stlouisfed.org/docs/api/api_key.html)."
+    )
+    raise RuntimeError(f"FRED fetch failed for {series_id}: {last_exc}.{hint}")
 
 
 def build_net_liquidity(

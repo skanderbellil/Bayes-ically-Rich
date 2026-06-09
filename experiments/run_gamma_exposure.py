@@ -92,10 +92,11 @@ def main() -> None:
     fig.savefig(out, dpi=150, bbox_inches="tight")
     logger.info("Saved: %s", out)
 
-    print("\n  Note: this is a point-in-time snapshot. To backtest GEX → equity")
-    print("  dynamics, feed a history of option chains (strike, OI, IV, expiry)")
-    print("  into research.gamma.chain_gex to build a daily GEX series, then")
-    print("  study next-day realised vol / returns conditioned on the regime.")
+    print("\n  Note: this is a point-in-time snapshot. To BACKTEST GEX → equity")
+    print("  dynamics you need historical option chains (strike, OI, IV, expiry).")
+    print("  Free sources: OptionsDX (EOD SPX/SPY w/ OI+IV), DoltHub options DB,")
+    print("  CBOE EOD. Load them long-format and call research.gamma.gex_time_series")
+    print("  to get a daily GEX series, then condition next-day vol/returns on it.")
     print("\n✓  Done.")
 
 

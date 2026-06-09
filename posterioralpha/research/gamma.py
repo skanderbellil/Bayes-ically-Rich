@@ -102,6 +102,47 @@ def zero_gamma_level(
     return float(x0 - y0 * (x1 - x0) / (y1 - y0)) if y1 != y0 else float(x0)
 
 
+def gex_time_series(
+    chains: pd.DataFrame,
+    r: float = 0.0,
+    date_col: str = "date",
+    strike_col: str = "strike",
+    oi_col: str = "open_interest",
+    iv_col: str = "iv",
+    type_col: str = "type",
+    expiry_col: str = "expiry",
+    spot_col: str = "spot",
+) -> pd.Series:
+    """
+    Build a daily total-GEX series from a history of option chains.
+
+    ``chains`` is long-format: one row per (date, expiry, strike, option type)
+    with open interest, implied vol, and the underlying spot for that date.
+    This is the bridge for free historical-options datasets (e.g. OptionsDX,
+    DoltHub, CBOE EOD) — load them into this shape and get a backtestable GEX
+    series that conditions equity returns/vol on the gamma regime.
+
+    ``type_col`` values starting with 'c'/'C' are treated as calls.  Returns a
+    Series indexed by date (total dealer GEX, $ per 1% move).
+    """
+    df = chains.copy()
+    df[date_col] = pd.to_datetime(df[date_col])
+    df["_t"] = (pd.to_datetime(df[expiry_col]) - df[date_col]).dt.days.clip(lower=1) / 365.0
+    df["_call"] = df[type_col].astype(str).str.lower().str.startswith("c")
+
+    out = {}
+    for dt, g in df.groupby(date_col):
+        spot = float(g[spot_col].iloc[0])
+        gex = chain_gex(
+            g[strike_col].values, g[oi_col].values, g[iv_col].values,
+            g["_call"].values, spot, g["_t"].values, r,
+        )
+        out[dt] = float(gex.sum())
+    s = pd.Series(out).sort_index()
+    s.name = "gex"
+    return s
+
+
 @dataclass
 class GammaSnapshot:
     spot: float

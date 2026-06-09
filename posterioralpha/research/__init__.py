@@ -34,6 +34,7 @@ from posterioralpha.research.gamma import (
     bs_gamma,
     chain_gex,
     fetch_gamma_snapshot,
+    gex_time_series,
     zero_gamma_level,
 )
 
@@ -71,5 +72,6 @@ __all__ = [
     "chain_gex",
     "zero_gamma_level",
     "fetch_gamma_snapshot",
+    "gex_time_series",
     "GammaSnapshot",
 ]
