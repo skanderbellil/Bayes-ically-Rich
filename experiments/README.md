@@ -32,7 +32,8 @@ python experiments/run_real_only.py
 | `dfl_orchestrator.py` | S&P 100 + ETFs | Decision-focused multi-pod orchestrator: 6 asset-level pods + a differentiable mean-variance QP layer. Requires `pip install -e .[dfl]` |
 | `run_net_liquidity.py` | SPY/TLT + FRED | Net liquidity (Fed assets − TGA − RRP) vs equities: horizon lead-lag scan + three liquidity-driven strategies (binary on/off, scaled exposure, SPY↔TLT rotation) vs SPY. Offline (cached); `--build` refreshes FRED (needs `FRED_API_KEY`). |
 | `run_gamma_exposure.py` | SPX/SPY options | Dealer GEX snapshot via the CBOE CDN (exchange greeks + OI, no key; SPX default) or yfinance: total gamma, long/short-gamma regime, zero-gamma flip, per-strike profile. Network. `--log` appends to `datasets/gex_snapshots.csv` (run daily to accumulate a GEX history, since free historical OI is scarce). |
-| `run_net_liquidity_universe.py` | 250 ETFs + FRED | Where the net-liquidity effect lives: per-asset and per-asset-class sensitivity (forward-return correlation to Δ net-liquidity), most/least-sensitive ETFs, and an out-of-sample regime-spread check (rank IS, measure OOS). Offline. |
+| `run_net_liquidity_universe.py` | 250 ETFs + 500 equities + FRED | Where the net-liquidity effect lives: per-asset & per-asset-class sensitivity (ETF universe) + per-sector sensitivity (equity universe), most/least-sensitive names, and an out-of-sample regime-spread check. Offline. |
+| `run_liquidity_trend.py` | SPY + FRED | Net liquidity × 200-day price trend: each signal alone, an AND gate, and a vote (0/½/1 exposure). The vote blend tops both standalone signals and SPY on Sharpe/Sortino. Offline. |
 
 ### PEAD (Post-Earnings-Announcement-Drift) — run in order
 
