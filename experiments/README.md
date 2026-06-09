@@ -30,8 +30,8 @@ python experiments/run_real_only.py
 | `run_intramonth_momentum.py` | 5 real ETFs | Nathan-Suominen-Tasa (2026): does WML momentum concentrate in the T-9→T-4 intramonth window? |
 | `run_intramonth_bayesian.py` | 5 real ETFs | Learns the intramonth allocation per T-k position via an online Normal-Normal model (no hardcoded window) |
 | `dfl_orchestrator.py` | S&P 100 + ETFs | Decision-focused multi-pod orchestrator: 6 asset-level pods + a differentiable mean-variance QP layer. Requires `pip install -e .[dfl]` |
-| `run_net_liquidity.py` | SPY + FRED | Net liquidity (Fed assets − TGA − RRP) vs equities: lead-lag correlation + binary & z-scaled liquidity-driven SPY exposure (publication-lag respected). Offline (cached); `--build` refreshes FRED (needs `FRED_API_KEY`). |
-| `run_gamma_exposure.py` | SPX/SPY options | Dealer GEX snapshot via the CBOE CDN (exchange greeks + OI, no key; SPX by default) or yfinance: total gamma, long/short-gamma regime, zero-gamma flip, per-strike profile. Network (live chain). Snapshot only — backtest needs historical OI (feed `gex_time_series`). |
+| `run_net_liquidity.py` | SPY/TLT + FRED | Net liquidity (Fed assets − TGA − RRP) vs equities: horizon lead-lag scan + three liquidity-driven strategies (binary on/off, scaled exposure, SPY↔TLT rotation) vs SPY. Offline (cached); `--build` refreshes FRED (needs `FRED_API_KEY`). |
+| `run_gamma_exposure.py` | SPX/SPY options | Dealer GEX snapshot via the CBOE CDN (exchange greeks + OI, no key; SPX default) or yfinance: total gamma, long/short-gamma regime, zero-gamma flip, per-strike profile. Network. `--log` appends to `datasets/gex_snapshots.csv` (run daily to accumulate a GEX history, since free historical OI is scarce). |
 
 ### PEAD (Post-Earnings-Announcement-Drift) — run in order
 

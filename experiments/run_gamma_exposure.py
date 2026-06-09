@@ -45,6 +45,9 @@ def main() -> None:
                     help="cboe = exchange greeks+OI (no key); yfinance = fallback")
     ap.add_argument("--max-expiries", type=int, default=12, help="(yfinance only)")
     ap.add_argument("--moneyness", type=float, default=0.10)
+    ap.add_argument("--log", action="store_true",
+                    help="append this snapshot to datasets/gex_snapshots.csv "
+                         "(run daily to accumulate a backtestable GEX history)")
     args = ap.parse_args()
 
     logger.info("Fetching %s options chain (%s) and computing dealer GEX …",
@@ -97,11 +100,32 @@ def main() -> None:
     fig.savefig(out, dpi=150, bbox_inches="tight")
     logger.info("Saved: %s", out)
 
-    print("\n  Note: this is a point-in-time snapshot. To BACKTEST GEX → equity")
-    print("  dynamics you need historical option chains (strike, OI, IV, expiry).")
-    print("  Free sources: OptionsDX (EOD SPX/SPY w/ OI+IV), DoltHub options DB,")
-    print("  CBOE EOD. Load them long-format and call research.gamma.gex_time_series")
-    print("  to get a daily GEX series, then condition next-day vol/returns on it.")
+    if args.log:
+        # Free historical GEX isn't easily available, so the practical path is
+        # to log one snapshot per (trading) day and let a history accumulate.
+        import pandas as pd
+        hist_csv = _bootstrap.ROOT / "datasets" / "gex_snapshots.csv"
+        row = pd.DataFrame([{
+            "date": pd.Timestamp.utcnow().normalize().tz_localize(None),
+            "ticker": args.ticker, "source": args.source, "spot": snap.spot,
+            "total_gex": snap.total_gex, "flip_level": snap.flip_level,
+            "regime": snap.regime.split()[0], "n_contracts": snap.n_contracts,
+        }])
+        if hist_csv.exists():
+            prev = pd.read_csv(hist_csv)
+            # one row per ticker per day — overwrite a same-day re-run
+            prev = prev[~((prev["date"] == str(row["date"].iloc[0])) &
+                          (prev["ticker"] == args.ticker))]
+            row = pd.concat([prev, row], ignore_index=True)
+        row.to_csv(hist_csv, index=False)
+        logger.info("Logged snapshot → %s (%d rows)", hist_csv, len(row))
+
+    print("\n  Note: this is a point-in-time snapshot — free *historical* options")
+    print("  data is scarce. Two ways to get a backtestable GEX series:")
+    print("   • run this daily with --log to accumulate datasets/gex_snapshots.csv;")
+    print("   • or load a historical chain dataset (OptionsDX / CBOE EOD) and call")
+    print("     research.gamma.gex_time_series to build a daily GEX series, then")
+    print("     condition next-day vol / returns on the gamma regime.")
     print("\n✓  Done.")
 
 

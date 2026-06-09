@@ -1,0 +1,2 @@
+date,ticker,source,spot,total_gex,flip_level,regime,n_contracts
+2026-06-09,SPX,cboe,7430.3901,-1200365703.4282522,7432.3163600866465,short-gamma,16340
