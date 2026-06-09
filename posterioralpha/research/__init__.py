@@ -29,6 +29,7 @@ from posterioralpha.research.intramonth import (
     intramonth_window_mask,
     wml_formation,
 )
+from posterioralpha.research.overlay import liquidity_vote, soft_sign
 from posterioralpha.research.gamma import (
     GammaSnapshot,
     bs_gamma,
@@ -68,6 +69,9 @@ __all__ = [
     # Intramonth momentum primitives
     "intramonth_window_mask",
     "wml_formation",
+    # Macro risk overlay (liquidity × VIX-TS × credit vote)
+    "liquidity_vote",
+    "soft_sign",
     # Dealer gamma exposure (GEX)
     "bs_gamma",
     "chain_gex",
