@@ -37,9 +37,19 @@ logger = logging.getLogger(__name__)
 DATASETS_DIR = Path(__file__).resolve().parents[2] / "datasets"
 ETF_PRICES_CSV = DATASETS_DIR / "etf_universe_prices.csv.gz"
 ETF_INFO_CSV = DATASETS_DIR / "etf_universe_info.csv"
+EQUITY_PRICES_CSV = DATASETS_DIR / "equity_universe_prices.csv.gz"
+EQUITY_INFO_CSV = DATASETS_DIR / "equity_universe_info.csv"
 
 # Major US ETF listing venues (financedatabase ``exchange`` codes).
 US_ETF_EXCHANGES: Tuple[str, ...] = ("PCX", "NMS", "NGM", "BTS", "ASE")
+
+# Primary US *equity* listing venues — NYSE (NYQ), NASDAQ (NMS/NGM), NYSE
+# American (ASE).  fd lists many foreign cross-listings (FRA, STU, …) for the
+# same companies; restricting to these keeps the universe US-traded.
+US_EQUITY_EXCHANGES: Tuple[str, ...] = ("NYQ", "NMS", "NGM", "ASE")
+
+# Market-cap buckets to include for the equity universe by default.
+LARGE_CAPS: Tuple[str, ...] = ("Mega Cap", "Large Cap")
 
 # US-domiciled issuers whose ETFs are the liquid, tradeable ones.  (European
 # issuers such as Xtrackers/Lyxor/Amundi/UBS are deliberately excluded — their
@@ -93,6 +103,42 @@ def etf_info(
     df = df[df.index.notna() & ~sym.str.contains(r"[.\-]", regex=True)]
     df = df[~df.index.duplicated(keep="first")]
     logger.info("financedatabase universe: %d ETFs after filters", len(df))
+    return df.sort_index()
+
+
+def equity_info(
+    country: str = "United States",
+    market_caps: Optional[Sequence[str]] = LARGE_CAPS,
+    exchanges: Sequence[str] = US_EQUITY_EXCHANGES,
+    sectors: Optional[Sequence[str]] = None,
+) -> pd.DataFrame:
+    """
+    Investable equity universe **with instrument info**, from financedatabase.
+
+    Returns a DataFrame indexed by ticker symbol with fd metadata (name,
+    sector, industry, market_cap, country, exchange, …), filtered to clean
+    US-listed tickers of the requested market-cap buckets and sectors.
+
+    ⚠️ Survivorship bias: this is *current* membership — the large/mega-cap
+    names as of today.  Backtesting their history therefore excludes companies
+    that were delisted, shrank, or went bankrupt, biasing long-only and
+    equal-weight results upward.  Treat equity-universe studies as exploratory.
+    """
+    import financedatabase as fd
+
+    df = fd.Equities().select(country=country)
+    df = df[df["exchange"].isin(list(exchanges))]
+    if market_caps:
+        df = df[df["market_cap"].isin(list(market_caps))]
+    if sectors:
+        df = df[df["sector"].isin(list(sectors))]
+
+    # Keep clean tickers (drop NaN and foreign/dotted symbols; '-' class shares
+    # such as BRK-B are kept — that's yfinance's own convention).
+    sym = df.index.to_series().astype(str)
+    df = df[df.index.notna() & ~sym.str.contains(r"[.]", regex=True)]
+    df = df[~df.index.duplicated(keep="first")]
+    logger.info("financedatabase equity universe: %d names after filters", len(df))
     return df.sort_index()
 
 
@@ -188,11 +234,55 @@ def build_etf_universe(
     panel; ``info`` is the fd metadata for those names plus ``median_adv_usd``.
     """
     info = etf_info(**info_kwargs)
+    return _assemble_universe(
+        info, start, end, top_n, min_coverage, save,
+        prices_path=ETF_PRICES_CSV, info_path=ETF_INFO_CSV, label="ETF",
+    )
+
+
+def build_equity_universe(
+    start: str = "2010-01-01",
+    end: Optional[str] = None,
+    top_n: int = 500,
+    min_coverage: float = 0.9,
+    save: bool = True,
+    **info_kwargs,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Assemble a large, liquid US equity universe (prices + info) and cache it.
+
+    Same pipeline as :func:`build_etf_universe` but over financedatabase
+    equities (``equity_info``): discover US large/mega-cap names + info,
+    download history + volume, screen by coverage and dollar-volume liquidity,
+    and persist to ``datasets/equity_universe_{prices,info}``.
+
+    Returns ``(prices, info)``; ``info`` carries fd sector/industry/market_cap
+    plus ``median_adv_usd``.
+    """
+    info = equity_info(**info_kwargs)
+    return _assemble_universe(
+        info, start, end, top_n, min_coverage, save,
+        prices_path=EQUITY_PRICES_CSV, info_path=EQUITY_INFO_CSV, label="equity",
+    )
+
+
+def _assemble_universe(
+    info: pd.DataFrame,
+    start: str,
+    end: Optional[str],
+    top_n: int,
+    min_coverage: float,
+    save: bool,
+    prices_path: Path,
+    info_path: Path,
+    label: str,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Shared discover→fetch→screen→cache backend for the universe builders."""
     symbols = info.index.astype(str).tolist()
 
     close, volume = fetch_prices_volume(symbols, start=start, end=end)
     if close.empty:
-        raise RuntimeError("yfinance returned no data for the ETF universe")
+        raise RuntimeError(f"yfinance returned no data for the {label} universe")
 
     prices, adv = screen_liquidity(
         close, volume, min_coverage=min_coverage, top_n=top_n
@@ -204,10 +294,10 @@ def build_etf_universe(
 
     if save:
         DATASETS_DIR.mkdir(exist_ok=True)
-        prices.to_csv(ETF_PRICES_CSV, index_label="Date", compression="gzip")
-        info.to_csv(ETF_INFO_CSV, index_label="symbol")
+        prices.to_csv(prices_path, index_label="Date", compression="gzip")
+        info.to_csv(info_path, index_label="symbol")
         logger.info(
-            "saved %d×%d prices → %s  and info → %s",
-            prices.shape[0], prices.shape[1], ETF_PRICES_CSV.name, ETF_INFO_CSV.name,
+            "saved %d×%d %s prices → %s  and info → %s",
+            prices.shape[0], prices.shape[1], label, prices_path.name, info_path.name,
         )
     return prices, info

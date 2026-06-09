@@ -24,6 +24,8 @@ PORTFOLIO_CSV = DATASETS_DIR / "portfolio_data.csv"
 SP500_CSV     = DATASETS_DIR / "sp500_top100_adj_close.csv"
 ETF_UNIVERSE_CSV      = DATASETS_DIR / "etf_universe_prices.csv.gz"
 ETF_UNIVERSE_INFO_CSV = DATASETS_DIR / "etf_universe_info.csv"
+EQUITY_UNIVERSE_CSV      = DATASETS_DIR / "equity_universe_prices.csv.gz"
+EQUITY_UNIVERSE_INFO_CSV = DATASETS_DIR / "equity_universe_info.csv"
 
 
 def load_portfolio_prices() -> pd.DataFrame:
@@ -74,4 +76,27 @@ def load_etf_universe_returns() -> pd.DataFrame:
 def load_etf_universe_info() -> pd.DataFrame:
     """financedatabase instrument info for the ETF universe (+ median ADV)."""
     path = _require(ETF_UNIVERSE_INFO_CSV, "python experiments/build_etf_universe.py")
+    return pd.read_csv(path, index_col="symbol")
+
+
+def load_equity_universe_prices() -> pd.DataFrame:
+    """
+    Adjusted-close prices for the large liquid US equity universe.
+
+    Built from financedatabase (universe + info) + yfinance (history); see
+    ``posterioralpha.data.universe.build_equity_universe`` or
+    ``experiments/build_equity_universe.py`` to (re)generate.
+    """
+    path = _require(EQUITY_UNIVERSE_CSV, "python experiments/build_equity_universe.py")
+    return pd.read_csv(path, parse_dates=["Date"], index_col="Date").sort_index()
+
+
+def load_equity_universe_returns() -> pd.DataFrame:
+    """Daily arithmetic returns for the large equity universe (NaNs dropped)."""
+    return load_equity_universe_prices().pct_change().dropna(how="all")
+
+
+def load_equity_universe_info() -> pd.DataFrame:
+    """financedatabase instrument info for the equity universe (+ median ADV)."""
+    path = _require(EQUITY_UNIVERSE_INFO_CSV, "python experiments/build_equity_universe.py")
     return pd.read_csv(path, index_col="symbol")

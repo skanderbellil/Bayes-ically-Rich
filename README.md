@@ -48,7 +48,7 @@ posterioralpha/                # the framework package
     └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
 
 experiments/                   # reproducible studies that wire the stages together
-datasets/                      # bundled price data (250-ETF liquid universe + info, 5 ETFs, ~100 S&P 500)
+datasets/                      # bundled price data (250-ETF + 500-equity liquid universes + info, 5 ETFs, ~100 S&P 500)
 docs/pead/                     # PEAD research write-ups & headline results
 results/                       # generated plots & CSVs (gitignored)
 ```
