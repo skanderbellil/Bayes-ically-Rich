@@ -35,6 +35,7 @@ python experiments/run_real_only.py
 | `run_net_liquidity_universe.py` | 250 ETFs + 500 equities + FRED | Where the net-liquidity effect lives: per-asset & per-asset-class sensitivity (ETF universe) + per-sector sensitivity (equity universe), most/least-sensitive names, and an out-of-sample regime-spread check. Offline. |
 | `run_liquidity_trend.py` | SPY + FRED | Net liquidity × 200-day price trend: each signal alone, an AND gate, and a vote (0/½/1 exposure). The vote blend tops both standalone signals and SPY on Sharpe/Sortino. Offline. |
 | `run_liquidity_predictive.py` | SPY + FRED + VIX/HYG | Net liquidity × *forward-looking* layers (VIX term structure, HYG−IEF credit appetite) instead of the lagging MA: pairwise and three-way votes vs the trend baseline and SPY. Best blend of the thread (3-way vote Sharpe 0.75, DD −20%). Offline. |
+| `run_liquidity_continuous.py` | SPY + cyclical basket | Continuous fit-free vote (soft-sign strengths, no thresholds) on SPY and the XLY/XLK/XLF/XLE/XLI sleeve, with rolling 3y OOS win rates and per-year edge table. Best drawdown/Calmar of the thread; overlay beats its underlying in 60–68% of windows. Offline. |
 
 ### PEAD (Post-Earnings-Announcement-Drift) — run in order
 
