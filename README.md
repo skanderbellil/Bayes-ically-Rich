@@ -35,7 +35,7 @@ posterioralpha/                # the framework package
 ├── research/                  # ── Stage 2: STRATEGY RESEARCH ──
 │   ├── bayesian.py            #   moments, λ via Mahalanobis, posterior blend, optimisers
 │   ├── amr.py                 #   AMR/CVaR/HRP optimisers, Ω-ratio λ, vol-targeting overlay
-│   ├── gamma.py               #   dealer gamma exposure (GEX): BS gamma × OI, zero-gamma flip
+│   ├── gamma.py               #   dealer gamma exposure (GEX): CBOE/yfinance chains, zero-gamma flip, GEX series
 │   └── regimes.py             #   RegimeHMM (2-state), BOCPD, HMM3 (3-state)
 ├── backtest/                  # ── Stage 3: BACKTEST ENGINES ──
 │   ├── bayesian.py            #   monthly-rebalanced engine + BacktestResult

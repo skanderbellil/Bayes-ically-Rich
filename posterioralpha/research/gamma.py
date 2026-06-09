@@ -157,19 +157,56 @@ class GammaSnapshot:
             else "short-gamma (vol-amplifying)"
 
 
-def fetch_gamma_snapshot(
-    ticker: str = "SPY",
-    max_expiries: int = 12,
-    r: float = 0.0,
-    moneyness: float = 0.25,
-) -> GammaSnapshot:
-    """
-    Compute a current dealer-GEX snapshot from yfinance's live options chain.
+# Index roots that CBOE serves under a leading underscore (e.g. _SPX.json).
+_CBOE_INDICES = {"SPX", "NDX", "RUT", "VIX", "DJX", "OEX", "XSP"}
+_CBOE_URL = "https://cdn.cboe.com/api/global/delayed_quotes/options/{sym}.json"
+_OSI_RE = __import__("re").compile(r"^([A-Z]+)(\d{6})([CP])(\d{8})$")
 
-    Aggregates up to ``max_expiries`` expirations, keeps strikes within
-    ``moneyness`` of spot, and returns total GEX, the zero-gamma flip level,
-    and the per-strike profile.  Requires network access.
+
+def fetch_cboe_chain(symbol: str = "SPX") -> "pd.DataFrame":
     """
+    Current option chain from the public CBOE delayed-quotes CDN (no key).
+
+    Returns a normalised long-format DataFrame (strike, expiry, is_call,
+    openInterest, impliedVolatility, gamma, t_years) plus a ``spot`` attribute
+    in ``df.attrs``.  Covers indices (SPX/NDX/RUT/VIX…) and ETFs (SPY/QQQ…)
+    with CBOE's own exchange-computed greeks — a richer, more authoritative
+    source than yfinance, and the right instrument (SPX) for market-wide GEX.
+    """
+    import requests
+
+    sym = symbol.upper().lstrip("_")
+    cboe_sym = f"_{sym}" if sym in _CBOE_INDICES else sym
+    url = _CBOE_URL.format(sym=cboe_sym)
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (PosteriorAlpha/1.0)"},
+                        timeout=30)
+    resp.raise_for_status()
+    data = resp.json()["data"]
+    spot = float(data.get("current_price") or data.get("close"))
+
+    now = pd.Timestamp.utcnow().normalize().tz_localize(None)
+    recs = []
+    for o in data.get("options", []):
+        m = _OSI_RE.match(o["option"])
+        if not m:
+            continue
+        _, ymd, cp, strike = m.groups()
+        expiry = pd.to_datetime(ymd, format="%y%m%d")
+        t_years = max((expiry - now).days, 0) / 365.0 or 1 / 365.0
+        recs.append((
+            int(strike) / 1000.0, expiry, cp == "C",
+            float(o.get("open_interest") or 0.0),
+            float(o.get("iv") or 0.0), float(o.get("gamma") or 0.0), t_years,
+        ))
+    df = pd.DataFrame(recs, columns=["strike", "expiry", "is_call",
+                                     "openInterest", "impliedVolatility",
+                                     "gamma_cboe", "t_years"])
+    df.attrs["spot"] = spot
+    df.attrs["symbol"] = sym
+    return df
+
+
+def _yfinance_chain(ticker: str, max_expiries: int) -> "pd.DataFrame":
     import yfinance as yf
 
     tk = yf.Ticker(ticker)
@@ -177,25 +214,29 @@ def fetch_gamma_snapshot(
     exps = list(tk.options or [])[:max_expiries]
     if not exps:
         raise RuntimeError(f"no options chain available for {ticker}")
-
     now = pd.Timestamp.utcnow().normalize().tz_localize(None)
     rows = []
     for e in exps:
-        t_years = max((pd.Timestamp(e) - now).days, 0) / 365.0
-        if t_years <= 0:
-            t_years = 1 / 365.0
+        t_years = max((pd.Timestamp(e) - now).days, 0) / 365.0 or 1 / 365.0
         oc = tk.option_chain(e)
-        for df, call in ((oc.calls, True), (oc.puts, False)):
-            d = df[["strike", "openInterest", "impliedVolatility"]].copy()
-            d["is_call"] = call
-            d["t_years"] = t_years
-            rows.append(d)
+        for d, call in ((oc.calls, True), (oc.puts, False)):
+            x = d[["strike", "openInterest", "impliedVolatility"]].copy()
+            x["is_call"] = call
+            x["t_years"] = t_years
+            rows.append(x)
+    df = pd.concat(rows, ignore_index=True)
+    df.attrs["spot"] = spot
+    return df
 
-    chain = pd.concat(rows, ignore_index=True)
+
+def _snapshot_from_chain(chain: pd.DataFrame, r: float, moneyness: float) -> GammaSnapshot:
+    spot = float(chain.attrs["spot"])
     chain = chain[(chain["strike"] >= spot * (1 - moneyness)) &
-                  (chain["strike"] <= spot * (1 + moneyness))]
+                  (chain["strike"] <= spot * (1 + moneyness))].copy()
     chain["impliedVolatility"] = chain["impliedVolatility"].replace(0, np.nan)
     chain = chain.dropna(subset=["impliedVolatility"])
+    if chain.empty:
+        raise RuntimeError("no usable contracts after filtering (check IV/moneyness)")
 
     gex = chain_gex(
         chain["strike"].values, chain["openInterest"].values,
@@ -203,7 +244,6 @@ def fetch_gamma_snapshot(
         spot, chain["t_years"].values, r,
     )
     chain = chain.assign(gex=gex)
-
     by_strike = chain.groupby("strike").agg(
         gex=("gex", "sum"),
         call_oi=("openInterest", lambda s: s[chain.loc[s.index, "is_call"]].sum()),
@@ -218,3 +258,27 @@ def fetch_gamma_snapshot(
         spot=spot, total_gex=float(gex.sum()), flip_level=flip,
         by_strike=by_strike, n_contracts=len(chain),
     )
+
+
+def fetch_gamma_snapshot(
+    ticker: str = "SPX",
+    source: str = "cboe",
+    max_expiries: int = 12,
+    r: float = 0.0,
+    moneyness: float = 0.10,
+) -> GammaSnapshot:
+    """
+    Current dealer-GEX snapshot for ``ticker``.
+
+    ``source="cboe"`` (default) uses the public CBOE CDN — exchange greeks +
+    open interest, indices and ETFs, no key; ``source="yfinance"`` is the
+    fallback.  Keeps strikes within ``moneyness`` of spot and returns total
+    GEX, the zero-gamma flip level, and the per-strike profile.  Network needed.
+    """
+    if source == "cboe":
+        chain = fetch_cboe_chain(ticker)
+    elif source == "yfinance":
+        chain = _yfinance_chain(ticker, max_expiries)
+    else:
+        raise ValueError(f"unknown source: {source!r} (use 'cboe' or 'yfinance')")
+    return _snapshot_from_chain(chain, r, moneyness)

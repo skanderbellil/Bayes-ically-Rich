@@ -14,7 +14,8 @@ chain (Black-Scholes gamma × open interest, calls long / puts short):
 strike, which yfinance does not provide — see the note at the end for how to
 extend it with a historical options dataset via ``research.gamma.chain_gex``.
 
-    python experiments/run_gamma_exposure.py --ticker SPY     # network (live chain)
+    python experiments/run_gamma_exposure.py                  # SPX via CBOE CDN (no key)
+    python experiments/run_gamma_exposure.py --ticker SPY --source yfinance
 """
 import argparse
 import logging
@@ -39,14 +40,18 @@ RESULTS_DIR.mkdir(exist_ok=True)
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ticker", default="SPY")
-    ap.add_argument("--max-expiries", type=int, default=12)
-    ap.add_argument("--moneyness", type=float, default=0.25)
+    ap.add_argument("--ticker", default="SPX", help="SPX (index, drives market GEX) or an ETF like SPY")
+    ap.add_argument("--source", default="cboe", choices=["cboe", "yfinance"],
+                    help="cboe = exchange greeks+OI (no key); yfinance = fallback")
+    ap.add_argument("--max-expiries", type=int, default=12, help="(yfinance only)")
+    ap.add_argument("--moneyness", type=float, default=0.10)
     args = ap.parse_args()
 
-    logger.info("Fetching %s options chain and computing dealer GEX …", args.ticker)
+    logger.info("Fetching %s options chain (%s) and computing dealer GEX …",
+                args.ticker, args.source)
     snap = fetch_gamma_snapshot(
-        args.ticker, max_expiries=args.max_expiries, moneyness=args.moneyness
+        args.ticker, source=args.source,
+        max_expiries=args.max_expiries, moneyness=args.moneyness,
     )
 
     gex_bn = snap.total_gex / 1e9

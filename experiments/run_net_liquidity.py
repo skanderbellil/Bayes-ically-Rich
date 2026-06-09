@@ -81,39 +81,54 @@ def main() -> None:
     print(f"  next 13 weeks   : {corr(d_nl, fwd_ret):+.3f}   (predictive lead)")
 
     # ── 2. Liquidity-regime timing on SPY ────────────────────────────────────
-    # Signal: is net liquidity expanding? (13wk change > 0).  Lag by the
-    # publication delay, then use yesterday's reading to set today's position.
-    expanding = (d_nl > 0).astype(float)
-    signal = expanding.shift(PUB_LAG).shift(1).fillna(0.0)   # causal
+    # All signals are lagged by the publication delay, then by one more day, so
+    # today's position only uses data that was actually known yesterday.
+    def causal(s):
+        return s.shift(PUB_LAG).shift(1)
 
+    # (a) Binary: long equities when net liquidity is expanding (13wk change > 0).
+    signal = causal((d_nl > 0).astype(float)).fillna(0.0)
     strat_ret = np.where(signal > 0, spy_ret, DAILY_RF)       # equities on / cash off
     strat = pd.Series(strat_ret, index=common, name="liq_timing").dropna()
+
+    # (b) Continuous: scale exposure by the standardised liquidity momentum
+    # (causal rolling z-score of the 13wk change), to exploit the +0.25 lead
+    # rather than throw it away with an on/off switch.  Long-only, 0–1.5x.
+    z = (d_nl - d_nl.rolling(756, min_periods=252).mean()) / \
+        d_nl.rolling(756, min_periods=252).std()
+    expo = causal((0.5 + 0.5 * z).clip(0.0, 1.5)).fillna(0.0)
+    scaled_ret = expo * spy_ret + (1 - expo) * DAILY_RF       # cash/borrow at RF
+    scaled = pd.Series(scaled_ret, index=common, name="liq_scaled").dropna()
+
     bh = spy_ret.reindex(strat.index)
 
     keys = ["CAGR", "Volatility", "Sharpe", "Sortino", "Max DD", "Calmar"]
     rows = [
-        ["Net-liquidity timing", strat],
+        ["Net-liquidity timing (binary)", strat],
+        ["Net-liquidity scaled (z-exposure)", scaled],
         ["SPY buy & hold", bh],
     ]
     table = [[name] + [f"{compute_metrics(r.dropna(), rf=RF).get(k, float('nan')):.2f}" for k in keys]
              for name, r in rows]
     print("\n" + "=" * 74)
-    print("  LIQUIDITY-REGIME TIMING ON SPY  (long when net liquidity expanding)")
+    print("  LIQUIDITY-DRIVEN EXPOSURE ON SPY  (signal lagged for publication delay)")
     print("=" * 74)
     print(tabulate(table, headers=["strategy"] + keys, tablefmt="github"))
-    exposure = float((signal > 0).mean())
-    print(f"\n  time invested in equities: {exposure:.0%}   "
-          f"(signal lagged {PUB_LAG}d for publication delay)")
+    print(f"\n  binary: {float((signal > 0).mean()):.0%} of days invested  |  "
+          f"scaled: {float(expo.mean()):.2f}x avg exposure   "
+          f"(signal lagged {PUB_LAG}d)")
 
     # ── Plot ──────────────────────────────────────────────────────────────────
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True,
                                    gridspec_kw={"height_ratios": [2, 1]})
-    eq_s = (1 + strat).cumprod(); eq_b = (1 + bh.fillna(0)).cumprod()
-    ax1.plot(eq_s.index, eq_s, label="Net-liquidity timing", lw=1.3)
+    eq_s = (1 + strat).cumprod(); eq_z = (1 + scaled).cumprod()
+    eq_b = (1 + bh.fillna(0)).cumprod()
+    ax1.plot(eq_s.index, eq_s, label="Net-liq timing (binary)", lw=1.2)
+    ax1.plot(eq_z.index, eq_z, label="Net-liq scaled (z-exposure)", lw=1.4)
     ax1.plot(eq_b.index, eq_b, label="SPY buy & hold", lw=1.3, color="black", alpha=0.8)
     ax1.set_yscale("log"); ax1.set_ylabel("growth of $1 (log)")
     ax1.legend(); ax1.grid(alpha=0.3)
-    ax1.set_title("Net-liquidity regime timing vs SPY")
+    ax1.set_title("Net-liquidity-driven SPY exposure vs buy & hold")
     ax2.plot(nl.index, nl / 1000, color="tab:green", lw=1.0)
     ax2.set_ylabel("net liquidity ($T)"); ax2.grid(alpha=0.3)
     fig.tight_layout()
