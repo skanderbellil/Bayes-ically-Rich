@@ -191,7 +191,11 @@ def precompute_bocpd_multi(
     if weights is None:
         w = np.ones(len(available)) / len(available)
     else:
-        w = np.array(weights[: len(available)], dtype=float)
+        # Select the weight for each *surviving* asset by its position in the
+        # requested `assets` list — never truncate, which would silently
+        # reassign a missing asset's weight to a different one.
+        pos = {a: i for i, a in enumerate(assets)}
+        w = np.array([weights[pos[a]] for a in available], dtype=float)
         w /= w.sum()
 
     all_cp, all_erl = [], []

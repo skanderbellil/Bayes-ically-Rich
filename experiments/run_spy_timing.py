@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s  %(levelname)-8s  %(message)s",
                     datefmt="%H:%M:%S", stream=sys.stdout)
 logger = logging.getLogger(__name__)
-RESULTS_DIR = Path("results"); RESULTS_DIR.mkdir(exist_ok=True)
+RESULTS_DIR = _bootstrap.ROOT / "results"; RESULTS_DIR.mkdir(exist_ok=True)
 
 RF       = 0.04
 BT_START = "2016-01-01"

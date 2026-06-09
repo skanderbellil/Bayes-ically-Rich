@@ -40,7 +40,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
-RESULTS_DIR = Path("results")
+RESULTS_DIR = _bootstrap.ROOT / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 # ── Configuration ──────────────────────────────────────────────────────────────
@@ -111,16 +111,12 @@ def run_wml_backtest(rets: pd.DataFrame) -> dict:
         if len(hist) < min_obs:
             continue
 
-        formation = hist.iloc[-(MOMENTUM_LONG + MOMENTUM_SKIP):-MOMENTUM_SKIP]
-        cum_ret   = (1.0 + formation).prod() - 1.0
-        cum_ret   = cum_ret.dropna()
-
-        if len(cum_ret) < N_LONG + N_SHORT + 1:
+        winners, losers = wml_formation(
+            hist, long_n=N_LONG, short_n=N_SHORT,
+            lookback=MOMENTUM_LONG, skip=MOMENTUM_SKIP,
+        )
+        if not winners or not losers:
             continue
-
-        ranked  = cum_ret.sort_values()
-        losers  = ranked.index[:N_SHORT].tolist()
-        winners = ranked.index[-N_LONG:].tolist()
 
         # ── Holding period ─────────────────────────────────────────────────────
         next_me      = month_ends[i + 1]

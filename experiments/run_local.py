@@ -49,7 +49,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S", stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
-RESULTS_DIR = Path("results")
+RESULTS_DIR = _bootstrap.ROOT / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 RF = 0.04

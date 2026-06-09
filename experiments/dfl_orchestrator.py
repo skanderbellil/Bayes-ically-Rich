@@ -1292,7 +1292,7 @@ def _max_drawdown(r: np.ndarray) -> float:
     return float(dd.min())
 
 
-def compute_metrics(bt: BTResult, freq: int = 52) -> dict:
+def _weekly_metrics(bt: BTResult, freq: int = 52) -> dict:
     r = bt.net_rets
     if r.size == 0:
         return {}
@@ -1771,7 +1771,7 @@ def run_experiment(epochs: int = 120, patience: int = 15, seed: int = SEED,
         backtest_with_tc("EqualWeight-Pods", W_eq,       asset_rets_test, dates_test),
         backtest_with_tc("EWMA-Softmax",     W_ewma,     asset_rets_test, dates_test),
     ]
-    metrics_rows = [compute_metrics(bt) for bt in bts]
+    metrics_rows = [_weekly_metrics(bt) for bt in bts]
     print("\n[test] Net-of-TC results:")
     for m in metrics_rows:
         print(f"  {m['strategy']:<18} ret={m['ann_ret']:+.2%}  "

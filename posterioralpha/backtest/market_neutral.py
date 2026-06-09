@@ -204,7 +204,7 @@ def _bear_posterior(mkt: np.ndarray, refit_points: list[int]) -> np.ndarray:
 
     T = len(mkt)
     post = np.zeros(T)
-    current: Optional[HMM3] = None
+    first_fill = True
     for i, rp in enumerate(refit_points):
         if rp < 60:            # need minimum history to fit a 3-state HMM
             continue
@@ -217,9 +217,13 @@ def _bear_posterior(mkt: np.ndarray, refit_points: list[int]) -> np.ndarray:
         bear_internal = [
             k for k, v in hmm._state_map.items() if v == HMM3.BEAR
         ][0]
-        # Only fill indices [rp, end) so each slice uses the model
-        # that was fit on data up to its own rebalance window.
-        post[rp:end] = raw_post[rp:end, bear_internal]
+        # Each refit owns its [rp, end) slice (using data up to its own
+        # window).  The first successful fit also back-fills the warm-up
+        # prefix [0, rp) so early rebalances don't see an artificial
+        # P(bear)=0 — those posteriors use the first model, fit on data ≤ rp.
+        start = 0 if first_fill else rp
+        post[start:end] = raw_post[start:end, bear_internal]
+        first_fill = False
     return post
 
 
@@ -310,6 +314,11 @@ def run_market_neutral(
         raise ValueError("no residual assets available")
 
     idx = returns.index
+    if not idx.is_unique:
+        raise ValueError(
+            "returns index has duplicate timestamps; de-duplicate before "
+            "backtesting (idx.get_loc must return a scalar position)"
+        )
     T   = len(idx)
     k   = len(assets)
     mkt = returns[p.market].values
@@ -378,11 +387,15 @@ def run_market_neutral(
         # The weight computed at t is applied to returns on t (via ffill),
         # so the window must END at t-1 to avoid same-day lookahead.
         window = residuals[t - p.z_window : t, :]
+        n_obs  = np.sum(np.isfinite(window), axis=0)
         sd     = np.nanstd(window, axis=0, ddof=1)
         sd     = np.where(sd > 1e-8, sd, 1.0)
         z      = (np.nansum(window, axis=0) / np.sqrt(p.z_window)) / sd
 
-        if not np.all(np.isfinite(z)):
+        # Reject the rebalance if any asset can't be fully scored: nansum/
+        # nanstd would otherwise return a finite, count-biased z from a
+        # partial-NaN window and slip past the isfinite guard.
+        if not np.all(np.isfinite(z)) or np.any(n_obs < p.z_window):
             w_prev = np.zeros_like(w_prev)
             weights.loc[reb_t] = w_prev
             gates.loc[reb_t]   = 0.0
@@ -409,8 +422,10 @@ def run_market_neutral(
             beta_now = np.nan_to_num(beta_now, nan=0.0)
         w_mkt = -float(np.sum(w_res * beta_now))
 
-        # Apply BOCPD gating
-        g = float(gate[t])
+        # Apply BOCPD gating — use gate[t-1] so the exposure on day t depends
+        # only on data through t-1 (precompute_bocpd records erl[t] *after*
+        # observing the day-t return, so gate[t] would leak that day's move).
+        g = float(gate[t - 1])
 
         full = np.concatenate([w_res, [w_mkt]]) * g
 
@@ -425,32 +440,38 @@ def run_market_neutral(
 
     weights = weights.fillna(0.0)
 
-    # ── 5. Day-by-day portfolio returns (forward-filled weights) ─────────
+    # ── 5. Day-by-day gross book return (forward-filled weights) ─────────
     w_daily = weights.reindex(idx).ffill().fillna(0.0)
-    # Gross returns before TC
-    port_gross = (w_daily[cols].values * returns[cols].values).sum(axis=1)
+    # Gross return of the unscaled (pre-leverage, pre-cost) book.
+    port_gross = pd.Series(
+        (w_daily[cols].values * returns[cols].values).sum(axis=1),
+        index=idx, name="market_neutral",
+    )
 
-    # Transaction costs: sum |Δw| on rebalance days only
+    # ── 6. Ex-post volatility targeting (causal rolling scalar) ──────────
+    # Derive the leverage from the unscaled strategy's realised vol, then
+    # apply it (shifted, so it is causal) to lever toward the vol target.
+    roll_vol = port_gross.rolling(p.vol_window, min_periods=p.vol_window // 2).std()
+    ann_vol  = roll_vol * np.sqrt(252)
+    scale    = (p.target_vol / ann_vol).clip(upper=p.leverage_cap).shift(1).fillna(0.0)
+
+    # Weights actually traded after vol-targeting.
+    weights_scaled = weights.mul(scale.reindex(weights.index).fillna(0.0), axis=0)
+
+    # Transaction costs: sum |Δw| on rebalance days, charged on the *scaled*
+    # (actually-traded) book at face value — not re-multiplied by `scale`.
     turnover = np.zeros(T)
     prev = np.zeros(len(cols))
     for reb_t in reb_dates:
         t = idx.get_loc(reb_t)
-        cur = weights.loc[reb_t].values
+        cur = weights_scaled.loc[reb_t].values
         turnover[t] = np.sum(np.abs(cur - prev))
         prev = cur
-    port_net = port_gross - p.tc * turnover
 
-    port_ret = pd.Series(port_net, index=idx, name="market_neutral")
-
-    # ── 6. Ex-post volatility targeting (causal rolling scalar) ──────────
-    roll_vol = port_ret.rolling(p.vol_window, min_periods=p.vol_window // 2).std()
-    ann_vol  = roll_vol * np.sqrt(252)
-    scale    = (p.target_vol / ann_vol).clip(upper=p.leverage_cap).shift(1)
-    scale    = scale.fillna(0.0)
-    port_vt  = port_ret * scale
-
-    # Apply scaling to stored weights for transparency
-    weights_scaled = weights.mul(scale.reindex(weights.index).fillna(0.0), axis=0)
+    port_vt = pd.Series(
+        port_gross.values * scale.values - p.tc * turnover,
+        index=idx, name="market_neutral",
+    )
 
     return BacktestResult(
         strategy   = "market_neutral",

@@ -53,7 +53,7 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s  %(levelname)-5s  %(message)s",
                     datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
-RESULTS_DIR = Path("results"); RESULTS_DIR.mkdir(exist_ok=True)
+RESULTS_DIR = _bootstrap.ROOT / "results"; RESULTS_DIR.mkdir(exist_ok=True)
 
 # ── Config ─────────────────────────────────────────────────────────────────
 RF         = 0.04

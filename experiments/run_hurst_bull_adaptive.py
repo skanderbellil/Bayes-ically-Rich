@@ -46,7 +46,7 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s  %(levelname)-5s  %(message)s",
                     datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
-RESULTS_DIR = Path("results"); RESULTS_DIR.mkdir(exist_ok=True)
+RESULTS_DIR = _bootstrap.ROOT / "results"; RESULTS_DIR.mkdir(exist_ok=True)
 
 RF, BT_START, BT_END = 0.04, "2016-01-01", "2024-12-31"
 LOOKBACK, VOL_WIN, _ANN, _EPS = 252, 21, 252, 1e-8

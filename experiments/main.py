@@ -46,7 +46,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-RESULTS_DIR = Path("results")
+RESULTS_DIR = _bootstrap.ROOT / "results"
 WARMUP_YEARS = 2    # years of history before backtest window (prior warm-up)
 
 
