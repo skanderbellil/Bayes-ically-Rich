@@ -34,6 +34,7 @@ python experiments/run_real_only.py
 | `run_gamma_exposure.py` | SPX/SPY options | Dealer GEX snapshot via the CBOE CDN (exchange greeks + OI, no key; SPX default) or yfinance: total gamma, long/short-gamma regime, zero-gamma flip, per-strike profile. Network. `--log` appends to `datasets/gex_snapshots.csv` (run daily to accumulate a GEX history, since free historical OI is scarce). |
 | `run_net_liquidity_universe.py` | 250 ETFs + 500 equities + FRED | Where the net-liquidity effect lives: per-asset & per-asset-class sensitivity (ETF universe) + per-sector sensitivity (equity universe), most/least-sensitive names, and an out-of-sample regime-spread check. Offline. |
 | `run_liquidity_trend.py` | SPY + FRED | Net liquidity × 200-day price trend: each signal alone, an AND gate, and a vote (0/½/1 exposure). The vote blend tops both standalone signals and SPY on Sharpe/Sortino. Offline. |
+| `run_liquidity_predictive.py` | SPY + FRED + VIX/HYG | Net liquidity × *forward-looking* layers (VIX term structure, HYG−IEF credit appetite) instead of the lagging MA: pairwise and three-way votes vs the trend baseline and SPY. Best blend of the thread (3-way vote Sharpe 0.75, DD −20%). Offline. |
 
 ### PEAD (Post-Earnings-Announcement-Drift) — run in order
 
