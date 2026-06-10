@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "posterioralpha"
+version = "1.0.0"
+description = "Bayesian adaptive portfolio research framework: data → research → backtest → validation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "yfinance>=0.2.36",
+    "financedatabase>=2.0",
+    "pandas>=2.2.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "scikit-learn>=1.3.0",
+    "hmmlearn>=0.3.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "tqdm>=4.65.0",
+    "tabulate>=0.9.0",
+    "lxml>=4.9.0",
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+# Only needed for the differentiable multi-pod orchestrator (experiments/dfl_orchestrator.py)
+dfl = ["torch>=2.0", "cvxpy>=1.4", "cvxpylayers>=0.1.6"]
+
+[tool.setuptools]
+packages = [
+    "posterioralpha",
+    "posterioralpha.data",
+    "posterioralpha.research",
+    "posterioralpha.backtest",
+    "posterioralpha.validation",
+    "posterioralpha.pead",
+]
