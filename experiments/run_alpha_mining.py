@@ -110,6 +110,10 @@ def main():
     ap.add_argument("--population", type=int, default=40)
     ap.add_argument("--generations", type=int, default=6)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--seeds", type=int, default=1,
+                    help="run N seeds (seed, seed+1, …) and aggregate: "
+                         "families that recur near the top across seeds are "
+                         "evidence; one-seed wonders are noise")
     ap.add_argument("--tc-bps", type=float, default=10.0)
     ap.add_argument("--no-macro", action="store_true",
                     help="disable the FRED-panel macro-gated families")
@@ -141,12 +145,26 @@ def main():
         except FileNotFoundError:
             print("Macro panel not found (run experiments/build_fred_macro.py) "
                   "— price-only families")
+    seeds = [args.seed + i for i in range(args.seeds)]
     print(f"Mining: population={cfg.population}, generations={cfg.generations}, "
-          f"seed={cfg.seed}\n")
+          f"seeds={seeds}\n")
 
-    miner = AlphaMiner(prices, cfg, macro=macro)
-    leaderboard, _ = miner.run()
-    history = pd.DataFrame(miner.history)
+    boards, histories = [], []
+    n_trials_total = 0
+    for s in seeds:
+        cfg.seed = s
+        miner = AlphaMiner(prices, cfg, macro=macro)
+        lb, _ = miner.run()
+        lb.insert(0, "seed", s)
+        n_trials_total += lb.attrs.get("n_trials", 0)
+        boards.append(lb)
+        h = pd.DataFrame(miner.history)
+        h.insert(0, "seed", s)
+        histories.append(h)
+
+    leaderboard = pd.concat(boards, ignore_index=True)
+    leaderboard.attrs["n_trials"] = n_trials_total
+    history = pd.concat(histories, ignore_index=True)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     leaderboard.to_csv(OUT_DIR / f"leaderboard_{args.universe}.csv", index=False)
@@ -155,9 +173,24 @@ def main():
     (OUT_DIR / f"report_{args.universe}.md").write_text(report)
 
     print(f"\n{'=' * 100}\nHOLDOUT LEADERBOARD "
-          f"({leaderboard.attrs.get('n_trials')} candidates examined; "
-          "DSR is charged for all of them)\n" + "=" * 100)
+          f"({n_trials_total} candidates examined across {len(seeds)} seed(s); "
+          "DSR is charged per seed)\n" + "=" * 100)
     print(leaderboard.to_string(index=False))
+
+    if len(seeds) > 1:
+        # recurrence: how often each family makes a seed's top 5 by holdout
+        top5 = leaderboard.sort_values("holdout_sharpe", ascending=False) \
+                          .groupby("seed").head(5)
+        rec = (top5.groupby("family")
+                   .agg(seeds_in_top5=("seed", "nunique"),
+                        median_holdout_sharpe=("holdout_sharpe", "median"))
+                   .sort_values(["seeds_in_top5", "median_holdout_sharpe"],
+                                ascending=False))
+        print(f"\nFAMILY RECURRENCE (top-5 by holdout Sharpe, per seed) — "
+              f"recurring families are evidence, one-seed wonders are noise")
+        print(rec.to_string())
+        rec.to_csv(OUT_DIR / f"family_recurrence_{args.universe}.csv")
+
     print(f"\nSaved to {OUT_DIR}/: leaderboard_{args.universe}.csv, "
           f"search_history_{args.universe}.csv, report_{args.universe}.md")
 
