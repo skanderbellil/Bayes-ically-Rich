@@ -462,35 +462,43 @@ class TimingMiner:
           (others unchanged)
         """
         fctx = TimingContext(prices=fresh_prices, macro=self.ctx.macro)
-        fresh_bh = sharpe(fctx.returns.values)
 
-        fresh_sr: Dict[str, float] = {}
+        # dial Sharpe and B&H Sharpe are compared over the SAME span: from the
+        # dial's first valid value — otherwise a dial whose inputs start late
+        # (e.g. DFII10 from 2003) silently skips an early crash and gets
+        # credit for sitting in cash through it
+        fresh_sr: Dict[str, Tuple[float, float]] = {}
         for c in finalists:
             func, _ = DIAL_FAMILIES[c.family]
             try:
                 e = func(fctx, **c.params).clip(0.0, 1.0)
             except Exception:
                 continue
-            if float(e.iloc[260:].notna().mean()) < 0.60:
+            valid = e.dropna()
+            if len(valid) < 500:
                 continue                      # inputs not available pre-sample
+            start = valid.index[0]
+            e = e.loc[start:]
             if c.smooth > 1:
                 e = e.ewm(span=c.smooth, adjust=False).mean()
+            rets = fctx.returns.loc[start:]
             held = e.shift(1).fillna(0.0)
             turnover = held.diff().abs().fillna(0.0)
-            net = held * fctx.returns.fillna(0.0) - self.cfg.tc * turnover
-            fresh_sr[c.key] = sharpe(net.values)
+            net = held * rets.fillna(0.0) - self.cfg.tc * turnover
+            fresh_sr[c.key] = (sharpe(net.values), sharpe(rets.values))
 
         lb = leaderboard.copy()
         lb["fresh_sharpe"] = lb["dial"].map(
-            lambda k: round(fresh_sr[k], 3) if k in fresh_sr else np.nan)
-        lb["fresh_bh"] = round(fresh_bh, 3)
+            lambda k: round(fresh_sr[k][0], 3) if k in fresh_sr else np.nan)
+        lb["fresh_bh"] = lb["dial"].map(
+            lambda k: round(fresh_sr[k][1], 3) if k in fresh_sr else np.nan)
 
         def final(row):
             if row["verdict"] != "VALIDATED":
                 return row["verdict"]
             if pd.isna(row["fresh_sharpe"]):
                 return "VALIDATED*"
-            return ("PROMOTED" if row["fresh_sharpe"] > fresh_bh
+            return ("PROMOTED" if row["fresh_sharpe"] > row["fresh_bh"]
                     else "ARTIFACT")
 
         lb["final"] = lb.apply(final, axis=1)
