@@ -26,11 +26,24 @@ class SignalContext:
     """Precomputed inputs shared by every candidate (computed once)."""
     prices:  pd.DataFrame          # adjusted close, T × N
     returns: pd.DataFrame          # daily arithmetic returns, T × N
+    macro:   Optional[pd.DataFrame] = None   # FRED panel (publication-lagged)
     market:  pd.Series = field(init=False)   # equal-weight market return
     _erl: Optional[pd.Series] = field(default=None, init=False)
 
     def __post_init__(self):
         self.market = self.returns.mean(axis=1)
+
+    def macro_z(self, column: str, window: int) -> pd.Series:
+        """
+        Causal rolling z-score of a macro series, aligned to the price index.
+
+        The bundled panel is already publication-lagged, so values at t were
+        knowable at t; the evaluator's 1-day execution lag adds further slack.
+        """
+        m = self.macro[column].reindex(self.prices.index).ffill()
+        mu = m.rolling(window, min_periods=window // 2).mean()
+        sd = m.rolling(window, min_periods=window // 2).std()
+        return (m - mu) / (sd + 1e-9)
 
     @property
     def erl(self) -> pd.Series:
@@ -114,6 +127,34 @@ def regime_gated_momentum(
     return mom.mul(gate, axis=0)
 
 
+def credit_gated_momentum(
+    ctx: SignalContext, lookback: int, skip: int, z_window: int
+) -> pd.DataFrame:
+    """
+    Momentum gated by the credit cycle (Moody's Baa − 10y spread from the
+    FRED panel).  Tight/tightening spreads (low z) → trend-following at full
+    weight; spread blowouts (high z) flip the book toward reversion, when
+    momentum crashes typically happen.  Gate = tanh(−z) ∈ [-1, 1].
+    """
+    mom  = momentum(ctx, lookback, skip)
+    gate = np.tanh(-ctx.macro_z("BAA10Y", z_window))
+    return mom.mul(gate, axis=0)
+
+
+def vix_gated_reversal(
+    ctx: SignalContext, lookback: int, z_window: int
+) -> pd.DataFrame:
+    """
+    Short-term reversal sized by the vol state (VIX z-score from the FRED
+    panel): liquidity provision pays most when vol is elevated.  The sigmoid
+    gate ∈ [0, 1] mutes the book in calm tape instead of flipping it.
+    """
+    rev  = mean_reversion(ctx, lookback)
+    z    = ctx.macro_z("VIXCLS", z_window)
+    gate = 1.0 / (1.0 + np.exp(-z))
+    return rev.mul(gate, axis=0)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameter search space
 # ─────────────────────────────────────────────────────────────────────────────
@@ -157,7 +198,24 @@ FAMILIES: Dict[str, Tuple[Callable, ParamSpec]] = {
         "skip":       (0, 21, "int"),
         "erl_thresh": (20, 150, "float"),
     }),
+    "credit_gated_momentum": (credit_gated_momentum, {
+        "lookback": (20, 252, "int"),
+        "skip":     (0, 21, "int"),
+        "z_window": (40, 252, "int"),
+    }),
+    "vix_gated_reversal": (vix_gated_reversal, {
+        "lookback": (2, 15, "int"),
+        "z_window": (40, 252, "int"),
+    }),
 }
+
+# Families that need ctx.macro (the FRED panel) to compute
+MACRO_FAMILIES = frozenset({"credit_gated_momentum", "vix_gated_reversal"})
+
+
+def families_for(ctx: SignalContext) -> list:
+    """Family names available given the context (macro families need ctx.macro)."""
+    return [f for f in FAMILIES if ctx.macro is not None or f not in MACRO_FAMILIES]
 
 
 def sample_param(spec: Tuple[float, float, str], rng: np.random.Generator):

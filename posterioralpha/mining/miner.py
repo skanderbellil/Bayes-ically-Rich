@@ -25,6 +25,7 @@ from posterioralpha.mining.signals import (
     FAMILIES,
     SignalContext,
     compute_scores,
+    families_for,
     mutate_param,
     sample_param,
 )
@@ -68,8 +69,9 @@ class Candidate:
         return self.key
 
 
-def random_candidate(rng: np.random.Generator) -> Candidate:
-    family = str(rng.choice(list(FAMILIES.keys())))
+def random_candidate(rng: np.random.Generator,
+                     families: Optional[List[str]] = None) -> Candidate:
+    family = str(rng.choice(families or list(FAMILIES.keys())))
     _, space = FAMILIES[family]
     params = {name: sample_param(spec, rng) for name, spec in space.items()}
     return Candidate(
@@ -127,12 +129,14 @@ class MinerConfig:
 
 
 class AlphaMiner:
-    def __init__(self, prices: pd.DataFrame, config: Optional[MinerConfig] = None):
+    def __init__(self, prices: pd.DataFrame, config: Optional[MinerConfig] = None,
+                 macro: Optional[pd.DataFrame] = None):
         self.cfg = config or MinerConfig()
         self.rng = np.random.default_rng(self.cfg.seed)
 
         returns = prices.pct_change(fill_method=None)
-        self.ctx = SignalContext(prices=prices, returns=returns)
+        self.ctx = SignalContext(prices=prices, returns=returns, macro=macro)
+        self.families = families_for(self.ctx)
 
         T = len(prices)
         self.holdout_start = int(T * (1.0 - self.cfg.holdout_frac))
@@ -184,7 +188,7 @@ class AlphaMiner:
 
     def evolve(self) -> List[Candidate]:
         cfg = self.cfg
-        pop = [random_candidate(self.rng) for _ in range(cfg.population)]
+        pop = [random_candidate(self.rng, self.families) for _ in range(cfg.population)]
         n_elite = max(1, int(cfg.population * cfg.elite_frac))
         n_immig = max(1, int(cfg.population * cfg.immigrant_frac))
 
@@ -232,7 +236,7 @@ class AlphaMiner:
                 if child.key not in seen:
                     seen.add(child.key)
                     children.append(child)
-            immigrants = [random_candidate(self.rng) for _ in range(n_immig)]
+            immigrants = [random_candidate(self.rng, self.families) for _ in range(n_immig)]
             pop = elites + children + immigrants
 
         # finalists: best by fitness, capped per family — otherwise the search
