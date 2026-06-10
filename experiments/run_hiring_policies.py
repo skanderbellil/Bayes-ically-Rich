@@ -76,7 +76,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from posterioralpha.data import load_etf_universe_prices, load_fred_macro
+from posterioralpha.data import (
+    load_etf_universe_prices,
+    load_fred_macro,
+    load_net_liquidity,
+)
 from posterioralpha.mining.evaluation import sharpe
 from posterioralpha.mining.pod import POD_FAMILIES, PodConfig, QuantPod
 from posterioralpha.mining.timing import TimingConfig, TimingMiner
@@ -108,11 +112,12 @@ class PolicyPod(QuantPod):
     """
 
     def __init__(self, prices, macro=None, config=None, families=None,
-                 policy: str = "raw",
+                 policy: str = "raw", min_dsr: float = 0.0,
                  research_cache: Optional[Dict[int, List[dict]]] = None):
         super().__init__(prices, macro=macro, config=config, families=families)
         assert policy in POLICIES, policy
         self.policy = policy
+        self.min_dsr = min_dsr        # strict gate: DSR floor on hires
         self.research_cache = research_cache if research_cache is not None else {}
 
     # ── gate-passers per review (cached, policy-independent) ───────────────
@@ -138,7 +143,8 @@ class PolicyPod(QuantPod):
         for _, row in leaderboard.iterrows():
             gate = (row["holdout_sharpe"] > row["bh_sharpe"]
                     and row["perm_p"] <= self.cfg.gate_perm_p
-                    and row["boot_p"] <= self.cfg.gate_boot_p)
+                    and row["boot_p"] <= self.cfg.gate_boot_p
+                    and row["dsr"] >= self.min_dsr)
             if gate and row["dial"] in by_key:
                 passers.append({
                     "cand": by_key[row["dial"]],
@@ -394,13 +400,33 @@ def main():
     ap.add_argument("--extended", action="store_true",
                     help="widen the search space with short-horizon, lagged "
                          "and combination dial families")
+    ap.add_argument("--gate", choices=["base", "strict"], default="base",
+                    help="strict: perm/boot p <= 0.10 and DSR >= 0.5 — fewer, "
+                         "better-evidenced hires; idle book sits in cash")
+    ap.add_argument("--with-liquidity", action="store_true",
+                    help="add the Fed net-liquidity complex (WALCL, TGA, RRP, "
+                         "net) to the searchable macro panel")
     args = ap.parse_args()
 
-    prices = load_etf_universe_prices()[args.underlying].dropna()
+    uni = load_etf_universe_prices()
+    if args.underlying in uni.columns:
+        prices = uni[args.underlying].dropna()
+    else:                       # levered vehicles (SSO/QLD) live in their own file
+        lev = pd.read_csv(_bootstrap.ROOT / "datasets" / "levered_etfs.csv.gz",
+                          index_col=0, parse_dates=True)
+        prices = lev[args.underlying].dropna()
     macro = load_fred_macro()
+    if args.with_liquidity:
+        macro = macro.join(load_net_liquidity(), how="left")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     families = EXTENDED_FAMILIES if args.extended else None
-    tag = f"{args.underlying}_ext" if args.extended else args.underlying
+    gate_kw, min_dsr = {}, 0.0
+    if args.gate == "strict":
+        gate_kw = dict(gate_perm_p=0.10, gate_boot_p=0.10)
+        min_dsr = 0.5
+    tag = (args.underlying + ("_ext" if args.extended else "")
+           + ("_strict" if args.gate == "strict" else "")
+           + ("_liq" if args.with_liquidity else ""))
 
     print(f"Underlying: {args.underlying} | seats: {args.seats} | seed: "
           f"{args.seed} | policies: {', '.join(POLICIES)} + sized overlay"
@@ -414,8 +440,9 @@ def main():
     for policy in POLICIES:
         print(f"── policy: {policy}")
         pod = PolicyPod(prices, macro=macro,
-                        config=PodConfig(seed=args.seed, seats=args.seats),
-                        policy=policy, research_cache=cache,
+                        config=PodConfig(seed=args.seed, seats=args.seats,
+                                         **gate_kw),
+                        policy=policy, min_dsr=min_dsr, research_cache=cache,
                         families=families)
         res = pod.run()
         results[policy], books[policy] = res, res["book"]
@@ -448,9 +475,10 @@ def main():
                  "mean_live_sharpe": round(float(done_raw.live_sharpe.mean()), 2),
                  "haircut_corr": round(
                      float(done_raw.research_sharpe.corr(done_raw.live_sharpe)), 2)})
-    rows.append({"policy": f"{args.underlying} half-exposure (benchmark)",
-                 **metrics(half), "hires": np.nan,
-                 "mean_live_sharpe": np.nan, "haircut_corr": np.nan})
+    for label, r in ((f"{args.underlying} half-exposure (benchmark)", half),
+                     (f"{args.underlying} buy & hold", bench)):
+        rows.append({"policy": label, **metrics(r), "hires": np.nan,
+                     "mean_live_sharpe": np.nan, "haircut_corr": np.nan})
     summary = pd.DataFrame(rows)
 
     print("\n" + "=" * 70)
