@@ -279,3 +279,46 @@ this repo's own evidence:
    changed nothing. The pod's value is the haircut measurement itself —
    it prices the winner's curse at roughly −0.7 live Sharpe per unit of
    research Sharpe — not the book it trades.
+
+## Epilogue 3: justifying the QLD pod against its own bench
+
+Once the vehicle is levered, the benchmark is QLD itself — and the fair
+null is stricter than buy & hold: a **constant static QLD exposure matched
+to the strategy's own risk** (`run_qld_justification.py`). Sharpe is
+scale-invariant, so beating "half-QLD" means nothing unless the strategy
+also beats the static weight with its *own* vol or drawdown.
+
+| | cagr | vol | sharpe | max_dd | calmar | wealth |
+|---|---|---|---|---|---|---|
+| pod raw (base) | 0.176 | 0.207 | 0.89 | −0.341 | 0.52 | 7.5× |
+| static 0.49× QLD (vol-matched) | 0.169 | 0.207 | 0.86 | −0.354 | 0.48 | 6.9× |
+| static 0.47× QLD (DD-matched) | 0.162 | 0.199 | 0.86 | −0.341 | 0.48 | 6.5× |
+| pod raw (rich) | 0.158 | 0.175 | 0.93 | −0.370 | 0.43 | 6.2× |
+| static 0.41× QLD (vol-matched) | 0.144 | 0.175 | 0.86 | −0.304 | 0.47 | 5.3× |
+| static 0.51× QLD (DD-matched) | **0.177** | 0.218 | 0.86 | −0.370 | 0.48 | **7.5×** |
+| QLD buy & hold | 0.315 | 0.426 | 0.86 | −0.637 | 0.49 | 29.9× |
+| QQQ buy & hold | 0.194 | 0.213 | **0.94** | −0.351 | **0.55** | 9.0× |
+
+(2013-12-31 → 2026-06-09; sized variants in the script output, same story.)
+
+Verdict — **not worth the hustle**, on three counts:
+
+1. **The timing edge is ~1pp/yr at P ≈ 0.6–0.7.** Vol-matched, the pod
+   adds +0.7pp (base) to +1.4pp (rich) CAGR over the static weight, with
+   P(beat) = 0.61–0.72 in the joint bootstrap. DD-matched, the rich
+   variants *lose outright* (15.8% vs 17.7%): their drawdown per unit of
+   vol is worse than static exposure.
+2. **The whole QLD frame is dominated by unlevered QQQ.** Daily-reset 2×
+   decay puts QLD's own Sharpe at 0.86 vs QQQ's 0.94; any static fraction
+   of QLD is a strictly worse QQQ. QQQ B&H tops every pod variant and
+   every static mix on Sharpe (0.94), Calmar (0.55) and wealth (9.0×) at
+   the −35% drawdown level.
+3. **A levered vehicle is only rational given real timing skill** (to
+   harvest upside while dodging the −64% tail) — and 13 configurations of
+   this mining machinery produced none distinguishable from luck.
+
+So the absolute-return frontier on this data is the static one: QQQ B&H
+(19.4%, −35%) → QLD B&H (31.5%, −64%); pick the drawdown you can hold
+through. Any dial proposed for the levered vehicle must first pass this
+exact vol/DD-matched static test decisively — including the council/
+champion fixed dial, before it is trusted with leverage.
