@@ -120,6 +120,7 @@ class MinerConfig:
     purge_gap:      int   = 21     # days between in-sample and holdout
     tc:             float = 0.001  # 10 bps per unit one-way turnover
     n_finalists:    int   = 10
+    max_per_family: int   = 2      # finalist diversity: cap per signal family
     n_boot:         int   = 400
     n_perm:         int   = 200
     seed:           int   = 7
@@ -234,8 +235,19 @@ class AlphaMiner:
             immigrants = [random_candidate(self.rng) for _ in range(n_immig)]
             pop = elites + children + immigrants
 
+        # finalists: best by fitness, capped per family — otherwise the search
+        # converges and the gauntlet tests one idea n times instead of n ideas
         ranked = sorted(best.values(), key=lambda c: c.fitness, reverse=True)
-        return ranked[: cfg.n_finalists]
+        finalists: List[Candidate] = []
+        per_family: Dict[str, int] = {}
+        for c in ranked:
+            if per_family.get(c.family, 0) >= cfg.max_per_family:
+                continue
+            per_family[c.family] = per_family.get(c.family, 0) + 1
+            finalists.append(c)
+            if len(finalists) >= cfg.n_finalists:
+                break
+        return finalists
 
     def _tournament(self, pop: List[Candidate], k: int = 3) -> Candidate:
         picks = [pop[int(i)] for i in self.rng.integers(0, len(pop), size=k)]
