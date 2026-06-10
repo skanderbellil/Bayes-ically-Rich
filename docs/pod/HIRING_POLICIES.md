@@ -32,6 +32,8 @@ order in which gate-passers fill free seats?
 | `dsr` | highest Deflated Sharpe Ratio first (theory-driven shrinkage, no meta-fitting) |
 | `shrunk` | regress live-vs-research on the pod's own completed sleeves so far; order by predicted live Sharpe (the negative slope is *learned*, not assumed) |
 | `median` | start at the median-ranked passer and expand outward; the top pick is hired last |
+| `inverse` | *lowest* research Sharpe first — the pure exploit of the negative slope (⚠️ hard-codes a fact learned from this sample; the walk-forward-honest versions are `shrunk`/`veto`) |
+| `veto` | `shrunk` with teeth: same learned predicted-live ranking, but a passer with predicted live Sharpe ≤ 0 is not hired at all (an idle seat earns cash); unlike reordering, the veto can act at single-passer reviews |
 
 Gate, seats, retirement rules, and costs are unchanged.
 
@@ -42,7 +44,9 @@ Gate, seats, retirement rules, and costs are unchanged.
 | raw | 0.87 | 0.110 | −0.242 | 22 | 1.03 | −0.52 |
 | dsr | 0.87 | 0.110 | −0.242 | 22 | 1.03 | −0.52 |
 | shrunk | 0.89 | 0.109 | −0.235 | 22 | 1.05 | −0.51 |
-| median | **0.98** | 0.105 | **−0.165** | 21 | 1.06 | −0.45 |
+| median | **0.98** | 0.105 | −0.165 | 21 | 1.06 | −0.45 |
+| inverse | 0.96 | 0.097 | **−0.159** | 20 | 1.03 | −0.39 |
+| veto | 0.89 | 0.107 | −0.235 | 21 | 1.07 | −0.52 |
 | QQQ half-exposure (benchmark) | 0.94 | 0.108 | −0.186 | — | — | — |
 
 `mean_live_sharpe` / `haircut_corr` are computed across hired sleeves with
@@ -82,20 +86,48 @@ Stationary block bootstrap of the daily books (2000 draws, mean block 63
 trading days, the *same* blocks applied to every policy so draws are
 comparable):
 
-| | p05 | p50 | p95 |
-|---|---|---|---|
-| raw / dsr | 0.46 | 0.89 | 1.37 |
-| shrunk | 0.48 | 0.92 | 1.39 |
-| median | 0.51 | 1.00 | 1.46 |
-| QQQ half | 0.50 | 0.96 | 1.45 |
+| | p05 | p50 | p95 | P(> raw) | P(> QQQ half) |
+|---|---|---|---|---|---|
+| raw / dsr | 0.46 | 0.89 | 1.37 | — | 0.34 |
+| shrunk | 0.48 | 0.92 | 1.39 | 0.86 | 0.39 |
+| median | 0.51 | 1.00 | 1.46 | 0.70 | 0.58 |
+| inverse | 0.49 | 0.97 | 1.43 | 0.67 | 0.51 |
+| veto | 0.48 | 0.92 | 1.40 | 0.79 | 0.40 |
+| QQQ half | 0.50 | 0.96 | 1.45 | — | — |
 
-- **P(median > raw) = 0.70** — directionally favorable, far from decisive.
-- **P(median > QQQ half-exposure) = 0.58** — a coin flip.
+- Every anti-curse policy is *directionally* better than raw, none decisively.
+- **No policy clears the dumb benchmark: the best, median, is at P = 0.58 — a
+  coin flip — and `inverse`, which exploits the slope with full hindsight of
+  its sign, sits at P = 0.51, i.e. exactly on the benchmark.**
 
 Leave-one-sleeve-out jackknife: median's full-book Sharpe 0.98 stays in
 [0.90, 1.07] dropping any single hire (raw: 0.87 in [0.78, 0.97]) — the edge
 over raw does not hinge on one lucky sleeve, but it never escapes the
 benchmark's bootstrap band either.
+
+## Is the inverse correlation usable, then?
+
+This is the question the `inverse` and `veto` rows answer, and the answer has
+a low ceiling built into the pod's structure:
+
+1. **Selection only binds at 10 of 26 reviews** (those with ≥ 2 passers), and
+   runners-up usually get hired a quarter later anyway as seats free up.
+   Any ordering policy — however clever — can only shuffle ~half the hires.
+2. **The slope's usable content is "avoid the extreme top," and that's it.**
+   r = −0.52 means R² ≈ 0.27 on n ≤ 21: the predicted difference between the
+   median-ranked and lowest-ranked passer is well inside the noise, which is
+   why `inverse` (0.96) does not even beat `median` (0.98) and gives up CAGR
+   (0.097 — the lowest-research-Sharpe passers skew toward low-exposure dials).
+3. **The learned veto almost never fires.** Predicted live ≤ 0 requires
+   research Sharpe > 2.84; that happened once in nine years (21 vs 22 hires).
+   A veto strong enough to matter (e.g. "predicted must beat half-QQQ," i.e.
+   refuse research Sharpe > 1.55) would cut ~8 of 22 hires — but choosing
+   that threshold *now*, on the same 21 sleeves the regression was fit to, is
+   curve-fitting; it's the variant to take to SPY / other seeds, not to tune here.
+4. **The pool, not the picker, is the constraint.** Gate-passers deliver a
+   mean live Sharpe ≈ 1.03 at well under full exposure; no reordering of that
+   pool reliably clears half-QQQ (0.94). The correlation is a *guardrail*
+   (cap what you'll pay for a backtest), not a source of book alpha.
 
 ## Takeaway
 
@@ -121,6 +153,13 @@ policy.** Defensible conclusions, in order of confidence:
    needs other underlyings (SPY), other seeds, and ideally "median" vs the
    simpler rule it proxies for: *cap the research Sharpe you're willing to
    hire* — which is what the negative slope actually recommends.
+5. **Exploiting the inverse correlation head-on doesn't clear the bar
+   either:** `inverse` — the most aggressive use of the slope, with
+   hindsight of its sign — lands at P = 0.51 vs the benchmark. If the
+   haircut is to earn money rather than just avoid losses, it has to move
+   upstream (deflate holdout Sharpe inside the *gate*, or size capital by
+   predicted live Sharpe) — both change how much risk is deployed, not
+   merely which sleeve gets a seat.
 
 The pod's larger verdict stands: even the best re-selection policy tested is
 statistically indistinguishable from half-exposure QQQ. Selection effort at

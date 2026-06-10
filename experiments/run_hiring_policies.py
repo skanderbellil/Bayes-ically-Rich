@@ -21,6 +21,13 @@ only the ORDER in which gate-passers fill free seats at each review:
   median  — anti-winner's-curse heuristic: fill seats starting from the
             MEDIAN-ranked passer, expanding outward (lower side first),
             so the top-ranked candidate is hired last.
+  inverse — LOWEST research Sharpe first: the pure exploit of the negative
+            research->live slope. ⚠️ hard-codes a fact learned from this
+            sample; the walk-forward-honest versions are shrunk/veto.
+  veto    — shrunk with teeth: same learned predicted-live ranking, but a
+            passer with predicted live Sharpe <= 0 is NOT hired at all
+            (an idle seat earns cash = 0). Unlike pure reordering, the
+            veto can act even when a review has a single passer.
 
 Everything else — the gate (holdout Sharpe > B&H + bootstrap + permutation
 support), the seats, the three retirement rules, the costs — is unchanged.
@@ -65,7 +72,7 @@ logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
 OUT_DIR = _bootstrap.ROOT / "results" / "pod_policies"
 
-POLICIES = ["raw", "dsr", "shrunk", "median"]
+POLICIES = ["raw", "dsr", "shrunk", "median", "inverse", "veto"]
 MIN_LIVE_DAYS = 21      # floor for the 'shrunk' fit (completed sleeves only)
 ANALYSIS_LIVE_DAYS = 60  # floor for REPORTED sleeve stats: younger live
                          # records are annualized noise (47 days -> "5.28")
@@ -139,6 +146,18 @@ class PolicyPod(QuantPod):
         return a[:, 0], a[:, 1]
 
     def _order(self, passers: List[dict]) -> List[dict]:
+        # veto filters before the trivial-length shortcut: it must be able
+        # to reject even a lone passer (reordering never can)
+        if self.policy == "veto":
+            res, live = self._completed_pairs()
+            if len(res) >= MIN_FIT_SLEEVES and res.std() > 1e-9:
+                b, a = np.polyfit(res, live, 1)
+                keep = [p for p in passers
+                        if a + b * p["holdout_sharpe"] > 0.0]
+                return sorted(keep,
+                              key=lambda p: -(a + b * p["holdout_sharpe"]))
+            return sorted(passers, key=lambda p: -p["holdout_sharpe"])
+
         if len(passers) <= 1:
             return passers
 
@@ -147,6 +166,9 @@ class PolicyPod(QuantPod):
 
         if self.policy == "dsr":
             return sorted(passers, key=lambda p: -p["dsr"])
+
+        if self.policy == "inverse":
+            return sorted(passers, key=lambda p: p["holdout_sharpe"])
 
         if self.policy == "shrunk":
             res, live = self._completed_pairs()
@@ -390,7 +412,7 @@ def main():
     print("=" * 70)
     raw_hires = set(map(tuple, journals["raw"][journals["raw"].action == "HIRE"]
                         [["date", "sleeve"]].itertuples(index=False)))
-    for policy in ("dsr", "shrunk", "median"):
+    for policy in POLICIES[1:]:
         h = set(map(tuple, journals[policy][journals[policy].action == "HIRE"]
                     [["date", "sleeve"]].itertuples(index=False)))
         print(f"  {policy:<7} hires: {len(h)} | shared with raw: "
@@ -417,17 +439,16 @@ def main():
         q = boot.quantile([0.05, 0.50, 0.95]).T
         q.columns = ["p05", "p50", "p95"]
         print(q.round(2).to_string())
-        for p in POLICIES:
-            if p == "median":
-                continue
-            print(f"  P(median > {p}): "
-                  f"{float((boot['median'] > boot[p]).mean()):.2f}")
-        print(f"  P(median > {args.underlying} half): "
-              f"{float((boot['median'] > boot[f'{args.underlying}_half']).mean()):.2f}")
+        bench_col = f"{args.underlying}_half"
+        for p in POLICIES[1:]:
+            print(f"  {p:<8} P(> raw): "
+                  f"{float((boot[p] > boot['raw']).mean()):.2f} | "
+                  f"P(> {args.underlying} half): "
+                  f"{float((boot[p] > boot[bench_col]).mean()):.2f}")
 
         print("\nROBUSTNESS — leave-one-sleeve-out book Sharpe")
         print("=" * 70)
-        for policy in ("raw", "median"):
+        for policy in ("raw", "median", "inverse", "veto"):
             jk = jackknife_sleeves(results[policy], args.seats)
             print(f"  {policy:<7} full {metrics(books[policy])['sharpe']:.2f} | "
                   f"drop-1 range [{jk.min():.2f}, {jk.max():.2f}] | "
