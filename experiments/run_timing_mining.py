@@ -36,6 +36,29 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 OUT_DIR = _bootstrap.ROOT / "results" / "alpha_mining"
 
 
+def load_fresh_history(ticker: str, before: pd.Timestamp) -> pd.Series:
+    """
+    Adjusted closes for `ticker` from BEFORE the search sample — the
+    fresh-sample gate's data.  Cached under datasets/ for offline reruns;
+    first build needs network (yfinance).
+    """
+    cache = _bootstrap.ROOT / "datasets" / f"fresh_{ticker}.csv"
+    if cache.exists():
+        s = pd.read_csv(cache, parse_dates=["Date"], index_col="Date")["Close"]
+        return s[s.index < before]
+    import yfinance as yf
+    df = yf.download(ticker, start="1990-01-01", end=str(before.date()),
+                     auto_adjust=True, progress=False)
+    if df is None or len(df) < 500:
+        raise RuntimeError(f"no usable pre-{before.date()} history for {ticker}")
+    s = df["Close"]
+    if isinstance(s, pd.DataFrame):
+        s = s.iloc[:, 0]
+    s.name = "Close"
+    s.to_frame().to_csv(cache, index_label="Date")
+    return s
+
+
 def main():
     ap = argparse.ArgumentParser(description="Timing-dial mining")
     ap.add_argument("--underlying", default="QQQ")
@@ -45,6 +68,8 @@ def main():
     ap.add_argument("--seeds", type=int, default=1)
     ap.add_argument("--tc-bps", type=float, default=2.0)
     ap.add_argument("--no-macro", action="store_true")
+    ap.add_argument("--no-fresh", action="store_true",
+                    help="skip the pre-sample fresh-history gate")
     ap.add_argument("--quick", action="store_true")
     args = ap.parse_args()
 
@@ -79,12 +104,24 @@ def main():
     print(f"Mining: population={cfg.population}, generations={cfg.generations}, "
           f"seeds={seeds}, tc={cfg.tc * 1e4:.0f} bps\n")
 
+    fresh = None
+    if not args.no_fresh:
+        try:
+            fresh = load_fresh_history(args.underlying, prices.index[0])
+            print(f"Fresh-sample gate: {args.underlying} "
+                  f"{fresh.index[0].date()} → {fresh.index[-1].date()} "
+                  f"({len(fresh)} days the search never sees)")
+        except Exception as exc:
+            print(f"Fresh-sample gate unavailable ({exc}) — skipping")
+
     boards = []
     n_trials_total = 0
     for s in seeds:
         cfg.seed = s
         miner = TimingMiner(prices, cfg, macro=macro)
-        lb, _ = miner.run()
+        lb, finalists = miner.run()
+        if fresh is not None:
+            lb = miner.fresh_gauntlet(finalists, fresh, lb)
         lb.insert(0, "seed", s)
         n_trials_total += lb.attrs.get("n_trials", 0)
         boards.append(lb)
