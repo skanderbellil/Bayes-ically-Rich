@@ -18,3 +18,9 @@ if str(_ROOT) not in sys.path:
 # Public repo-root anchor: experiments use `_bootstrap.ROOT / "results"` so
 # output lands under the repo regardless of the current working directory.
 ROOT = _ROOT
+
+# Secrets (e.g. FRED_API_KEY) live in a gitignored <repo>/.env — load them so
+# every experiment that talks to keyed APIs just works.
+from posterioralpha.env import load_env  # noqa: E402
+
+load_env()

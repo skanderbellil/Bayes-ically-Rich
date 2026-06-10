@@ -28,7 +28,7 @@ traced cleanly from idea to validated result:
 posterioralpha/                # the framework package
 ├── data/                      # ── Stage 1: DATA ──
 │   ├── universe.py            #   large liquid ETF + equity universes: financedatabase (info) + yfinance (history)
-│   ├── macro.py               #   FRED net liquidity (Fed assets − TGA − RRP)
+│   ├── macro.py               #   FRED (keyed, .env): net liquidity + curated macro panel
 │   ├── market.py              #   live download + S&P 500 universe (yfinance)
 │   ├── synthetic.py           #   factor-model synthetic universe expansion
 │   └── loaders.py             #   robust loaders for bundled datasets
@@ -73,6 +73,8 @@ time-step-agnostic; `backtest` engines walk research primitives through history;
 pip install -e .          # installs posterioralpha + dependencies
 # or, without installing the package:
 pip install -r requirements.txt
+
+cp .env.example .env      # then fill in FRED_API_KEY (free) for keyed FRED access
 ```
 
 Requires Python ≥ 3.10.

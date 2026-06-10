@@ -27,6 +27,7 @@ ETF_UNIVERSE_INFO_CSV = DATASETS_DIR / "etf_universe_info.csv"
 EQUITY_UNIVERSE_CSV      = DATASETS_DIR / "equity_universe_prices.csv.gz"
 EQUITY_UNIVERSE_INFO_CSV = DATASETS_DIR / "equity_universe_info.csv"
 NET_LIQUIDITY_CSV        = DATASETS_DIR / "net_liquidity.csv"
+FRED_MACRO_CSV           = DATASETS_DIR / "fred_macro.csv"
 
 
 def load_portfolio_prices() -> pd.DataFrame:
@@ -111,4 +112,17 @@ def load_net_liquidity() -> pd.DataFrame:
     ``experiments/run_net_liquidity.py`` to (re)generate.
     """
     path = _require(NET_LIQUIDITY_CSV, "python experiments/run_net_liquidity.py --build")
+    return pd.read_csv(path, parse_dates=["date"], index_col="date").sort_index()
+
+
+def load_fred_macro() -> pd.DataFrame:
+    """
+    Curated FRED macro panel (rates, curve, credit OAS, VIX, NFCI/STLFSI,
+    breakevens, broad dollar, jobless claims), daily business-day index,
+    publication-lagged so row t is information available at t.
+
+    Built from FRED (keyed); see ``posterioralpha.data.macro.build_fred_macro``
+    or ``experiments/build_fred_macro.py`` to (re)generate.
+    """
+    path = _require(FRED_MACRO_CSV, "python experiments/build_fred_macro.py")
     return pd.read_csv(path, parse_dates=["date"], index_col="date").sort_index()

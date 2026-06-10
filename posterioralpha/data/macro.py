@@ -83,6 +83,8 @@ def fetch_fred(series_id: str, retries: int = 4, timeout: int = 30) -> pd.Series
     since FRED's Nov-2025 auth change), otherwise the legacy no-key CSV
     endpoint (often 503 now).  Retries with exponential backoff.
     """
+    from posterioralpha.env import load_env
+    load_env()
     api_key = os.environ.get("FRED_API_KEY")
     last_exc = None
     for attempt in range(retries):
@@ -104,6 +106,76 @@ def fetch_fred(series_id: str, retries: int = 4, timeout: int = 30) -> pd.Series
         "(https://fred.stlouisfed.org/docs/api/api_key.html)."
     )
     raise RuntimeError(f"FRED fetch failed for {series_id}: {last_exc}.{hint}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Broad macro panel
+# ─────────────────────────────────────────────────────────────────────────────
+
+FRED_MACRO_CSV = DATASETS_DIR / "fred_macro.csv"
+
+# Curated FRED series: id → (publication lag in business days, description).
+# Market-derived daily series (yields, spreads, vol, FX) are observable at the
+# close with no revision → lag 1 (usable the next day, matching the miner's
+# 1-day execution lag).  Weekly survey/aggregate series get their actual
+# release delay so the panel stays causal when forward-filled.
+MACRO_SERIES: Dict[str, tuple] = {
+    # rates & curve
+    "DFF":          (1, "Fed funds effective rate"),
+    "DGS2":         (1, "2y Treasury yield"),
+    "DGS10":        (1, "10y Treasury yield"),
+    "T10Y2Y":       (1, "10y−2y curve slope"),
+    "T10Y3M":       (1, "10y−3m curve slope"),
+    # credit — ⚠️ FRED's API license-caps the ICE BofA OAS series to roughly
+    # the last 3 years; BAA10Y is the full-history daily credit spread
+    "BAA10Y":       (1, "Moody's Baa − 10y Treasury spread"),
+    "BAMLH0A0HYM2": (1, "ICE BofA US High Yield OAS (API: ~3y depth)"),
+    "BAMLC0A0CM":   (1, "ICE BofA US Corporate (IG) OAS (API: ~3y depth)"),
+    # risk & conditions
+    "VIXCLS":       (1, "CBOE VIX close"),
+    "NFCI":         (5, "Chicago Fed National Financial Conditions (weekly)"),
+    "STLFSI4":      (5, "St. Louis Fed Financial Stress (weekly)"),
+    # inflation expectations
+    "T5YIE":        (1, "5y breakeven inflation"),
+    "T10YIE":       (1, "10y breakeven inflation"),
+    # dollar
+    "DTWEXBGS":     (1, "Broad trade-weighted dollar index"),
+    # real economy (high frequency)
+    "ICSA":         (5, "Initial jobless claims (weekly)"),
+}
+
+
+def build_fred_macro(
+    start: str = "2010-01-01",
+    save: bool = True,
+) -> pd.DataFrame:
+    """
+    Fetch the curated macro panel from FRED (keyed API; set ``FRED_API_KEY``).
+
+    Each series is shifted by its publication lag, reindexed to a daily
+    business-day calendar and forward-filled, so ``panel.loc[t]`` only
+    contains information that was actually available at t — safe to feed
+    straight into causal signal construction.  Caches to
+    ``datasets/fred_macro.csv`` when ``save``.
+    """
+    raw = {sid: fetch_fred(sid) for sid in MACRO_SERIES}
+    end = max(s.index.max() for s in raw.values())
+    idx = pd.date_range(start, end, freq="B")
+
+    # align to the business-day calendar first (collapses weekend prints of
+    # daily series like DFF), then apply the publication lag positionally
+    panel = pd.DataFrame({
+        sid: raw[sid].reindex(idx, method="ffill").shift(lag)
+        for sid, (lag, _desc) in MACRO_SERIES.items()
+    })
+    panel.index.name = "date"
+
+    if save:
+        DATASETS_DIR.mkdir(exist_ok=True)
+        panel.to_csv(FRED_MACRO_CSV, index_label="date")
+        logger.info("saved FRED macro panel (%d days × %d series) → %s",
+                    len(panel), panel.shape[1], FRED_MACRO_CSV.name)
+    return panel
 
 
 def build_net_liquidity(

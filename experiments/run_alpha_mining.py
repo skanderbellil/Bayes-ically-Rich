@@ -48,6 +48,7 @@ import pandas as pd
 from posterioralpha.data import (
     load_equity_universe_prices,
     load_etf_universe_prices,
+    load_fred_macro,
     load_sp500_prices,
 )
 from posterioralpha.mining import AlphaMiner, MinerConfig
@@ -110,6 +111,8 @@ def main():
     ap.add_argument("--generations", type=int, default=6)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--tc-bps", type=float, default=10.0)
+    ap.add_argument("--no-macro", action="store_true",
+                    help="disable the FRED-panel macro-gated families")
     ap.add_argument("--quick", action="store_true",
                     help="small run for a fast smoke test")
     args = ap.parse_args()
@@ -128,10 +131,20 @@ def main():
     print(f"Universe: {args.universe} — {prices.shape[1]} assets × "
           f"{len(prices)} days ({prices.index[0].date()} → "
           f"{prices.index[-1].date()})")
+
+    macro = None
+    if not args.no_macro:
+        try:
+            macro = load_fred_macro()
+            print(f"Macro panel: {macro.shape[1]} FRED series "
+                  f"(→ {macro.index[-1].date()}) — macro-gated families active")
+        except FileNotFoundError:
+            print("Macro panel not found (run experiments/build_fred_macro.py) "
+                  "— price-only families")
     print(f"Mining: population={cfg.population}, generations={cfg.generations}, "
           f"seed={cfg.seed}\n")
 
-    miner = AlphaMiner(prices, cfg)
+    miner = AlphaMiner(prices, cfg, macro=macro)
     leaderboard, _ = miner.run()
     history = pd.DataFrame(miner.history)
 
