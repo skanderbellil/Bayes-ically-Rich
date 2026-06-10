@@ -48,6 +48,11 @@ posterioralpha/                # the framework package
 │   ├── signals.py·momentum.py·bayesvol.py   # research: SUE, momentum, Bayes vol
 │   ├── walk_forward.py·backtest.py·corrected.py·costs.py  # backtest engines
 │   └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
+├── council/                   # ── blinded period-council backtest (spans stages 2–4) ──
+│   ├── blinding.py            #   no-dates/no-tickers/no-levels period contexts + mirror copies
+│   ├── specialists.py         #   domain analysts (rates/credit/vol/dollar/liquidity/trend)
+│   ├── llm.py                 #   Claude-backed specialists (structured outputs + Batches API)
+│   └── council.py             #   walk-forward engine + solo attribution + mirror leakage audit
 └── mining/                    # ── automated alpha mining (spans stages 2–4) ──
     ├── signals.py             #   cross-sectional alpha families (incl. BOCPD/macro-gated)
     ├── evaluation.py          #   lagged, cost-aware dollar-neutral L/S construction
