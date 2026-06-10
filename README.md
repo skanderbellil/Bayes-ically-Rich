@@ -43,11 +43,17 @@ posterioralpha/                # the framework package
 ├── validation/                # ── Stage 4: VALIDATION ──
 │   ├── metrics.py             #   CAGR, Sharpe, Sortino, Max DD, Calmar, α/β/IR
 │   └── plots.py               #   dashboards, multi-seed bars, λ heatmap
-└── pead/                      # ── PEAD strategy module (spans all 4 stages) ──
-    ├── universe.py·fetch.py   #   data:     equity universe + earnings/price fetch
-    ├── signals.py·momentum.py·bayesvol.py   # research: SUE, momentum, Bayes vol
-    ├── walk_forward.py·backtest.py·corrected.py·costs.py  # backtest engines
-    └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
+├── pead/                      # ── PEAD strategy module (spans all 4 stages) ──
+│   ├── universe.py·fetch.py   #   data:     equity universe + earnings/price fetch
+│   ├── signals.py·momentum.py·bayesvol.py   # research: SUE, momentum, Bayes vol
+│   ├── walk_forward.py·backtest.py·corrected.py·costs.py  # backtest engines
+│   └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
+└── mining/                    # ── automated alpha mining (spans stages 2–4) ──
+    ├── signals.py             #   parameterized alpha families (incl. BOCPD-gated)
+    ├── evaluation.py          #   lagged, cost-aware dollar-neutral L/S construction
+    ├── validation.py          #   randomized gauntlet: random purged windows,
+    │                          #   block bootstrap, permutation test, Deflated SR
+    └── miner.py               #   evolutionary search loop + holdout leaderboard
 
 experiments/                   # reproducible studies that wire the stages together
 datasets/                      # bundled price data (250-ETF + 500-equity liquid universes + info, 5 ETFs, ~100 S&P 500)
