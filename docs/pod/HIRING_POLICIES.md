@@ -129,10 +129,59 @@ a low ceiling built into the pod's structure:
    pool reliably clears half-QQQ (0.94). The correlation is a *guardrail*
    (cap what you'll pay for a backtest), not a source of book alpha.
 
-## Takeaway
+## Out-of-sample: SPY, and a wider search space
 
-**The winner's curse is real; the "hire the median" fix is not (yet) a
-policy.** Defensible conclusions, in order of confidence:
+The doc above flagged the next test: other underlyings, and the
+capital-sizing variant. Both ran (`--underlying SPY`, `--extended` adds
+three short-horizon families — `macro_lag_dial`: 10–60d macro z with a
+1–21d reaction lag; `rev_dial`: 2–15d price reversal/continuation;
+`lag_vote2`: two macro layers with independent lags — i.e. more short-term
+relationships, combinations and lags for the miner to discover).
+
+Book Sharpe by configuration (bench = half-exposure underlying):
+
+| policy | QQQ | SPY | QQQ-ext | SPY-ext |
+|---|---|---|---|---|
+| raw | 0.87 | 0.75 | 0.79 | 0.68 |
+| shrunk | 0.89 | 0.75 | 0.79 | 0.70 |
+| median | 0.98 | **0.58** | 0.67 | 0.79 |
+| inverse | 0.96 | 0.57 | 0.75 | 0.79 |
+| veto | 0.89 | 0.75 | 0.70 | 0.59 |
+| sized (raw hires, pred-live weights) | 0.87 | 0.72 | 0.63 | 0.51 |
+| benchmark | 0.94 | 0.85 | 0.94 | 0.85 |
+
+P(policy > benchmark), joint block bootstrap: best anywhere is median's
+0.58 on the original QQQ run; on SPY everything is ≤ 0.25.
+
+1. **`median`'s QQQ win did not replicate — it was curve-fit.** On SPY it
+   is the *worst* policy (0.58 vs raw 0.75, P(median > raw) = 0.09, i.e.
+   raw beats it in 91% of bootstrap draws); on QQQ-extended it loses again
+   (P = 0.02); on SPY-extended it wins again (P = 0.93). Two up, two down:
+   exactly what a noise variable looks like. The same applies to `inverse`.
+   `shrunk`/`veto` hug raw everywhere (±0.02) — never harmful, never material.
+2. **`sized` is consistently harmful** (QQQ 0.87, SPY 0.72, ext 0.63/0.51;
+   P(> raw) ≤ 0.51 in all four configurations). The haircut regression has
+   predictive *sign* but not predictive *precision*: using its point
+   estimates as capital weights adds estimation error on top of selection
+   noise. If sizing can work at all it needs heavy shrinkage toward equal
+   weight, not raw regression output.
+3. **The wider search space made the pod worse on both underlyings**
+   (raw: QQQ 0.87 → 0.79, SPY 0.75 → 0.68; QQQ pool mean live Sharpe
+   1.03 → 0.77). More short-term families, combinations and lags = more
+   trials = the fixed gate (perm/boot p ≤ 0.25) passes more luck, even
+   though the DSR is charged for the extra trials. "Maybe the miner needs
+   more to choose from" is precisely the intuition the winner's curse
+   punishes.
+4. **The sleeve-level curse replicates where the pool has edge, and is
+   unstable where it doesn't:** SPY slope −0.63 (p = 0.048), SPY-extended
+   −0.48 (p = 0.09) — but QQQ-extended flips to +0.32 (p = 0.57, n = 15).
+   The *negative slope* is a property of this pod's gate + pool, not a law;
+   any policy hard-coded to it inherits that fragility.
+
+## Takeaway (revised after out-of-sample)
+
+**The winner's curse is real; no hiring policy tested converts it into
+book alpha, and "hire the median" failed its out-of-sample test.** Defensible conclusions, in order of confidence:
 
 1. **Do not hire the top backtest Sharpe.** The sleeve-level evidence is
    significant (p = 0.016, and the slope steepened in the second half):
@@ -146,20 +195,29 @@ policy.** Defensible conclusions, in order of confidence:
    this pod: with 3 seats, quarterly reviews, and mostly ≤ seat-count
    passers, reordering changes almost nothing. To matter it would need to
    also *veto* hires (shrink the book), not just reorder.
-4. **`median` beating everything (0.98, −0.165 DD) is suggestive, not
-   established.** One ordering choice on n = 21 hires, P = 0.58 vs the dumb
-   benchmark; the honest reading is that its outperformance is concentrated
-   in avoiding two or three high-research-Sharpe 2021–22 hires. A real test
-   needs other underlyings (SPY), other seeds, and ideally "median" vs the
-   simpler rule it proxies for: *cap the research Sharpe you're willing to
-   hire* — which is what the negative slope actually recommends.
+4. **`median` beating everything on QQQ (0.98, −0.165 DD) was sample
+   luck.** The out-of-sample section above settles what the bootstrap
+   already hinted at (P = 0.58 vs benchmark): on SPY median is the worst
+   policy, and its sign flips across the four configurations. The simpler
+   rule it proxied for — cap the research Sharpe you'll pay for — survives
+   as a guardrail at the sleeve level (top-third research Sharpe delivered
+   0.35–0.58 live across QQQ/SPY; bottom-third 1.46–1.72), but no seat-level
+   implementation of it beat the benchmark anywhere.
 5. **Exploiting the inverse correlation head-on doesn't clear the bar
    either:** `inverse` — the most aggressive use of the slope, with
-   hindsight of its sign — lands at P = 0.51 vs the benchmark. If the
-   haircut is to earn money rather than just avoid losses, it has to move
-   upstream (deflate holdout Sharpe inside the *gate*, or size capital by
-   predicted live Sharpe) — both change how much risk is deployed, not
-   merely which sleeve gets a seat.
+   hindsight of its sign — lands at P = 0.51 vs the benchmark on QQQ and
+   collapses on SPY. Moving the haircut into capital allocation (`sized`)
+   made things strictly worse in all four configurations. The remaining
+   untested lever is the gate itself (raise the evidence bar / deflate
+   holdout Sharpe before the B&H comparison), which shrinks the book
+   rather than re-sorting it.
+6. **Richer short-term search spaces are not the answer.** Adding lagged
+   macro responses, fast reversal, and lagged combination families cut
+   raw's book by ~0.08 Sharpe on both QQQ and SPY and degraded the hired
+   pool's live quality. The binding constraint is real edge in the
+   candidate pool, and widening the funnel dilutes it. Every configuration
+   tested — 7 policies × 2 underlyings × 2 search spaces — lost to
+   half-exposure buy-and-hold.
 
 The pod's larger verdict stands: even the best re-selection policy tested is
 statistically indistinguishable from half-exposure QQQ. Selection effort at
