@@ -106,6 +106,27 @@ def erl_dial(ctx, thresh: float):
     return _sigmoid((ctx.erl - thresh) / (thresh / 4.0 + 1e-9))
 
 
+def macro_vote2(ctx, series_a: str, series_b: str, z_window: int,
+                dir_a: int, dir_b: int, steep: float):
+    """
+    Two-layer macro vote (champion-stack architecture): the average of two
+    independent sigmoid dials.  Diversified layers, continuous mapping —
+    the construction the liquidity thread found robust.
+    """
+    ea = _sigmoid(dir_a * steep * ctx.macro_z(series_a, z_window))
+    eb = _sigmoid(dir_b * steep * ctx.macro_z(series_b, z_window))
+    return 0.5 * (ea + eb)
+
+
+def macro_trend_vote(ctx, series: str, z_window: int, direction: int,
+                     steep: float, trend_window: int, trend_steep: float):
+    """Macro layer × price-trend layer, averaged — liquidity × trend vote."""
+    em = _sigmoid(direction * steep * ctx.macro_z(series, z_window))
+    ma = ctx.prices.rolling(trend_window).mean()
+    et = _sigmoid(trend_steep * (ctx.prices / ma - 1.0))
+    return 0.5 * (em + et)
+
+
 # spec kinds: ("int"/"float", lo, hi) handled as in signals; ("cat", choices)
 DIAL_FAMILIES: Dict[str, Tuple] = {
     "macro_dial": (macro_dial, {
@@ -131,9 +152,25 @@ DIAL_FAMILIES: Dict[str, Tuple] = {
     "erl_dial": (erl_dial, {
         "thresh": (20.0, 150.0, "float"),
     }),
+    "macro_vote2": (macro_vote2, {
+        "series_a":  ("cat", "MACRO_COLS"),
+        "series_b":  ("cat", "MACRO_COLS"),
+        "z_window":  (40, 252, "int"),
+        "dir_a":     ("cat", [-1, 1]),
+        "dir_b":     ("cat", [-1, 1]),
+        "steep":     (0.5, 3.0, "float"),
+    }),
+    "macro_trend_vote": (macro_trend_vote, {
+        "series":       ("cat", "MACRO_COLS"),
+        "z_window":     (40, 252, "int"),
+        "direction":    ("cat", [-1, 1]),
+        "steep":        (0.5, 3.0, "float"),
+        "trend_window": (20, 252, "int"),
+        "trend_steep":  (5.0, 60.0, "float"),
+    }),
 }
 
-MACRO_DIAL_FAMILIES = frozenset({"macro_dial"})
+MACRO_DIAL_FAMILIES = frozenset({"macro_dial", "macro_vote2", "macro_trend_vote"})
 
 
 def _sample(spec, ctx: TimingContext, rng: np.random.Generator):
@@ -402,6 +439,65 @@ class TimingMiner:
         df.attrs["n_trials"] = n_trials
         df.attrs["bh_sharpe"] = bh_sharpe
         return df.reset_index(drop=True)
+
+    # ── Fresh-sample gate ──────────────────────────────────────────────────
+
+    def fresh_gauntlet(self, finalists: List[DialCandidate],
+                       fresh_prices: pd.Series,
+                       leaderboard: pd.DataFrame) -> pd.DataFrame:
+        """
+        The gate the within-sample gauntlet cannot provide: re-run each
+        finalist's dial on price history from BEFORE the search sample
+        (data no part of the selection ever saw) and compare against buy &
+        hold there.  The first QQQ run showed why this is mandatory — five
+        seeds converged on "falling rates = risk-on" dials that validated
+        on 2010→ data and then lost to B&H across 1999–2009, because pre-QE
+        the Fed eased *into* recessions.
+
+        Final verdicts:
+          PROMOTED    — VALIDATED on the holdout AND beats B&H fresh
+          ARTIFACT    — VALIDATED on the holdout, loses to B&H fresh
+          VALIDATED*  — VALIDATED, but the dial's inputs don't exist in the
+                        fresh sample (insufficient coverage) — unresolved
+          (others unchanged)
+        """
+        fctx = TimingContext(prices=fresh_prices, macro=self.ctx.macro)
+        fresh_bh = sharpe(fctx.returns.values)
+
+        fresh_sr: Dict[str, float] = {}
+        for c in finalists:
+            func, _ = DIAL_FAMILIES[c.family]
+            try:
+                e = func(fctx, **c.params).clip(0.0, 1.0)
+            except Exception:
+                continue
+            if float(e.iloc[260:].notna().mean()) < 0.60:
+                continue                      # inputs not available pre-sample
+            if c.smooth > 1:
+                e = e.ewm(span=c.smooth, adjust=False).mean()
+            held = e.shift(1).fillna(0.0)
+            turnover = held.diff().abs().fillna(0.0)
+            net = held * fctx.returns.fillna(0.0) - self.cfg.tc * turnover
+            fresh_sr[c.key] = sharpe(net.values)
+
+        lb = leaderboard.copy()
+        lb["fresh_sharpe"] = lb["dial"].map(
+            lambda k: round(fresh_sr[k], 3) if k in fresh_sr else np.nan)
+        lb["fresh_bh"] = round(fresh_bh, 3)
+
+        def final(row):
+            if row["verdict"] != "VALIDATED":
+                return row["verdict"]
+            if pd.isna(row["fresh_sharpe"]):
+                return "VALIDATED*"
+            return ("PROMOTED" if row["fresh_sharpe"] > fresh_bh
+                    else "ARTIFACT")
+
+        lb["final"] = lb.apply(final, axis=1)
+        lb.attrs.update(leaderboard.attrs)
+        lb.attrs["fresh_span"] = (str(fresh_prices.index[0].date()),
+                                  str(fresh_prices.index[-1].date()))
+        return lb
 
     def run(self) -> Tuple[pd.DataFrame, List[DialCandidate]]:
         finalists = self.evolve()
