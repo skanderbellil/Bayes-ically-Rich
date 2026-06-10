@@ -322,3 +322,38 @@ So the absolute-return frontier on this data is the static one: QQQ B&H
 through. Any dial proposed for the levered vehicle must first pass this
 exact vol/DD-matched static test decisively — including the council/
 champion fixed dial, before it is trusted with leverage.
+
+## Epilogue 4: the barbell — the frontier actually moves
+
+The loop's "next improvement" came from neither mining nor selection but
+from giving the slack capital a job (`run_levered_barbell.py`, council
+exposure from `run_council_backtest.py`, 2011 → 2026, real QLD data, costs):
+
+| | cagr | sharpe | max_dd | calmar | wealth |
+|---|---|---|---|---|---|
+| QQQ buy & hold | 0.192 | 0.95 | −0.351 | 0.55 | 14.7× |
+| QLD buy & hold | 0.319 | 0.88 | −0.637 | 0.50 | 69.4× |
+| **static 0.49 QLD / 0.51 GLD** | 0.217 | 0.99 | −0.395 | 0.55 | 20.4× |
+| **council QLD + slack GLD** | 0.230 | **1.04** | **−0.335** | **0.68** | 23.7× |
+
+1. **The static barbell expands the frontier.** A constant ~50/50 QLD/GLD
+   mix — two tickers, no dial, no fitting — beats QQQ B&H on CAGR
+   (+2.5pp) and Sharpe at a similar drawdown, and sits ~4pp/yr above the
+   QLD-only static line at its drawdown level. This is diversification
+   (levered equity + gold), not alpha, and it is the first configuration
+   in the whole thread to dominate the QQQ↔QLD static menu.
+2. **The council dial earns its keep here — on drawdown, not wealth.**
+   Against the matched static MIX (the correct null), the dial's wealth
+   edge is indecisive (P = 0.63–0.66), but DD-matched it clears the bar:
+   **P = 0.91**, cutting the barbell's drawdown from −39.5% to −33.5%
+   while *adding* CAGR. Calmar 0.68 vs 0.55 for everything static.
+3. **The slack asset is the whole game, and it is the fragile part.**
+   UUP slack (the thread's pre-validated pick): dial adds nothing vs its
+   mix (P ≈ 0.5). TLT slack: poison since 2022 (−48% DD). GLD was chosen
+   post-hoc among four candidates, and gold's 2014–26 decade was
+   exceptional — the honest forward claim is the *structure* (levered
+   equity + uncorrelated hard asset + a clean dial for DD control), not
+   gold's realized 9-10% CAGR.
+
+Mirror audit on the council: all six specialists CLEAN (anti-symmetry 1.0,
+leak 0.0) — the dial's inputs are causal z-scores, not memory.
