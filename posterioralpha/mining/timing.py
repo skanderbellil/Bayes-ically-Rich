@@ -268,12 +268,14 @@ class TimingConfig:
 
 class TimingMiner:
     def __init__(self, prices: pd.Series, config: Optional[TimingConfig] = None,
-                 macro: Optional[pd.DataFrame] = None):
+                 macro: Optional[pd.DataFrame] = None,
+                 families: Optional[List[str]] = None):
         self.cfg = config or TimingConfig()
         self.rng = np.random.default_rng(self.cfg.seed)
         self.ctx = TimingContext(prices=prices, macro=macro)
-        self.families = [f for f in DIAL_FAMILIES
-                         if self.ctx.macro_cols or f not in MACRO_DIAL_FAMILIES]
+        allowed = [f for f in DIAL_FAMILIES
+                   if self.ctx.macro_cols or f not in MACRO_DIAL_FAMILIES]
+        self.families = [f for f in (families or allowed) if f in allowed]
 
         T = len(prices)
         self.holdout_start = int(T * (1.0 - self.cfg.holdout_frac))
