@@ -49,11 +49,12 @@ posterioralpha/                # the framework package
 │   ├── walk_forward.py·backtest.py·corrected.py·costs.py  # backtest engines
 │   └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
 └── mining/                    # ── automated alpha mining (spans stages 2–4) ──
-    ├── signals.py             #   parameterized alpha families (incl. BOCPD-gated)
+    ├── signals.py             #   cross-sectional alpha families (incl. BOCPD/macro-gated)
     ├── evaluation.py          #   lagged, cost-aware dollar-neutral L/S construction
     ├── validation.py          #   randomized gauntlet: random purged windows,
     │                          #   block bootstrap, permutation test, Deflated SR
-    └── miner.py               #   evolutionary search loop + holdout leaderboard
+    ├── miner.py               #   evolutionary search loop + holdout leaderboard
+    └── timing.py              #   timing-dial mining on one underlying (null = buy & hold)
 
 experiments/                   # reproducible studies that wire the stages together
 datasets/                      # bundled price data (250-ETF + 500-equity liquid universes + info, 5 ETFs, ~100 S&P 500)

@@ -124,11 +124,14 @@ MACRO_SERIES: Dict[str, tuple] = {
     "DFF":          (1, "Fed funds effective rate"),
     "DGS2":         (1, "2y Treasury yield"),
     "DGS10":        (1, "10y Treasury yield"),
+    "DGS30":        (1, "30y Treasury yield"),
+    "DFII10":       (1, "10y TIPS real yield"),
     "T10Y2Y":       (1, "10y−2y curve slope"),
     "T10Y3M":       (1, "10y−3m curve slope"),
     # credit — ⚠️ FRED's API license-caps the ICE BofA OAS series to roughly
-    # the last 3 years; BAA10Y is the full-history daily credit spread
+    # the last 3 years; BAA10Y/AAA10Y are the full-history daily spreads
     "BAA10Y":       (1, "Moody's Baa − 10y Treasury spread"),
+    "AAA10Y":       (1, "Moody's Aaa − 10y Treasury spread"),
     "BAMLH0A0HYM2": (1, "ICE BofA US High Yield OAS (API: ~3y depth)"),
     "BAMLC0A0CM":   (1, "ICE BofA US Corporate (IG) OAS (API: ~3y depth)"),
     # risk & conditions
@@ -138,8 +141,10 @@ MACRO_SERIES: Dict[str, tuple] = {
     # inflation expectations
     "T5YIE":        (1, "5y breakeven inflation"),
     "T10YIE":       (1, "10y breakeven inflation"),
-    # dollar
+    # dollar & commodities
     "DTWEXBGS":     (1, "Broad trade-weighted dollar index"),
+    "DEXUSEU":      (1, "USD per EUR exchange rate"),
+    "DCOILWTICO":   (1, "WTI crude oil spot"),
     # real economy (high frequency)
     "ICSA":         (5, "Initial jobless claims (weekly)"),
 }
