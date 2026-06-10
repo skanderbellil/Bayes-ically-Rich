@@ -222,3 +222,60 @@ book alpha, and "hire the median" failed its out-of-sample test.** Defensible co
 The pod's larger verdict stands: even the best re-selection policy tested is
 statistically indistinguishable from half-exposure QQQ. Selection effort at
 the hiring stage cannot rescue a candidate pool whose top end is mostly luck.
+
+## Epilogue 2: the gate, the panel, and the levered vehicle
+
+Three more levers ran after the out-of-sample verdict (`--gate strict`,
+`--with-liquidity` / `--rich-macro`, `--underlying QLD`).
+
+**Tightening the gate is the worst idea tested.** Strict evidence
+(perm/boot p ≤ 0.10 + DSR ≥ 0.5) cut QQQ raw from 0.87 to 0.63 and SPY
+from 0.75 to 0.34 — fewer hires, more cash, and the surviving hires were
+*not* better (QQQ mean live Sharpe 0.86 vs 1.03). Under a negative
+research→live relation this is expected with hindsight: demanding stronger
+in-sample evidence selects *harder* winners, which is exactly what the
+curse punishes. The full selection axis — loose gate ↔ strict gate, every
+hire ordering, sleeve sizing — is now mapped, and no point on it beats
+half-exposure buy & hold on a 1× vehicle.
+
+**Richer FRED inputs change which dials win, not how well.** Two
+enrichments: the Fed net-liquidity complex (WALCL/TGA/RRP/net — the
+strongest council seat, previously invisible to the miner) and
+`fred_macro_plus.csv` (7 more series: 3m bill, JPY, continued claims,
+mortgage rate, CCC OAS, sentiment, permits). Effects flip sign by
+underlying — QQQ 0.87 → 0.78 (though liquidity-only cut the drawdown to
+−18% at flat Sharpe), SPY 0.75 → 0.82, QLD 0.89 → 0.93 — and nothing
+clears its benchmark (best: SPY median 0.85 vs benchmark 0.85, P = 0.52).
+More searchable series is the same multiple-testing tax as more families,
+paid in a different currency.
+
+**The levered vehicle is where the pod finally beats its own benchmark —
+and still loses to plain QQQ.** On QLD (2× QQQ, live data from 2006) the
+pod's book clears half-QLD for the first time in any configuration:
+raw 0.89 vs 0.86 (P = 0.60), rich-panel 0.93 vs 0.86 (P = 0.70), with
+CAGR 15.8–17.6% at −34/−37% DD, and the `sized` overlay finally helps
+(0.90, −31% DD). But the honest yardstick over the same 2014–2026 span is
+**QQQ buy & hold: Sharpe 0.94, CAGR 19.4%, DD −35%** — more return AND
+more Sharpe than every pod variant at the same drawdown. The absolute-
+return frontier on this data runs from QQQ B&H (19.4%, −35%) to QLD B&H
+(31.5%, −64%); the mining pod sits below that line everywhere.
+
+### Where this leaves the absolute-return question
+
+Maximizing CAGR inside an e ∈ [0, 1] dial on a 1× vehicle is impossible
+by construction — the ceiling is buy & hold minus timing slippage. The
+levers that actually move absolute returns, in order of defensibility on
+this repo's own evidence:
+
+1. **Hold the underlying.** QQQ B&H beat every mined configuration. The
+   burden of proof is on any machinery that goes below 100% exposure.
+2. **Take the validated fixed dial to a levered vehicle.** The
+   council/champion-stack dial (Sharpe 1.05, DD −16% on QQQ — a *fixed*,
+   already-validated construction, not a re-selecting pod) applied to
+   QLD/SSO is the CAGR route the earlier threads pointed at: leverage
+   harvested through a dial that has survived fresh-sample tests.
+3. **Stop re-mining.** Every variation of "search more / select smarter /
+   gate harder" tested across 13 configurations made things worse or
+   changed nothing. The pod's value is the haircut measurement itself —
+   it prices the winner's curse at roughly −0.7 live Sharpe per unit of
+   research Sharpe — not the book it trades.
