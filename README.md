@@ -145,6 +145,14 @@ Reusable signal primitives live in `research/` (`rs_hurst`, `rolling_hurst`,
 `intramonth_window_mask`, `wml_formation`); the studies above wire them through the
 backtest + validation stages in `experiments/`.
 
+**Reference configuration** (`experiments/run_champion_stack.py`): the frozen
+5-layer-vote stack — flip-risk slow-down, debt-ceiling ×½, dollar (UUP) slack —
+implemented as *w = exposure/2 in QLD, 1−w in UUP* (two tickers, real fund
+prints).  Best validated scorecard in the project: Sharpe 0.96, max DD −28%,
+Calmar 0.87, 2022 −24%, 100%/97% rolling-3y CAGR/Sharpe win vs SPY (2011→,
+honest costs).  See `experiments/README.md` for the study trail behind every
+component.
+
 ---
 
 ### PEAD — Post-Earnings-Announcement-Drift (`pead`)
