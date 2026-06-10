@@ -127,6 +127,30 @@ def macro_trend_vote(ctx, series: str, z_window: int, direction: int,
     return 0.5 * (em + et)
 
 
+def macro_lag_dial(ctx, series: str, z_window: int, lag: int, direction: int,
+                   steep: float):
+    """Short-window macro z with an explicit reaction lag: lets the miner
+    discover delayed (lead-lag) responses instead of only same-day ones."""
+    return _sigmoid(direction * steep
+                    * ctx.macro_z(series, z_window).shift(lag))
+
+
+def rev_dial(ctx, lookback: int, direction: int, steep: float):
+    """Short-term reversal/continuation: trailing few-day return of the
+    underlying (direction −1 fades it, +1 chases it)."""
+    r = ctx.prices / ctx.prices.shift(lookback) - 1.0
+    return _sigmoid(direction * steep * r)
+
+
+def lag_vote2(ctx, series_a: str, series_b: str, z_window: int,
+              lag_a: int, lag_b: int, dir_a: int, dir_b: int, steep: float):
+    """macro_vote2 with independent per-layer reaction lags — combinations
+    AND lags in one genome."""
+    ea = _sigmoid(dir_a * steep * ctx.macro_z(series_a, z_window).shift(lag_a))
+    eb = _sigmoid(dir_b * steep * ctx.macro_z(series_b, z_window).shift(lag_b))
+    return 0.5 * (ea + eb)
+
+
 # spec kinds: ("int"/"float", lo, hi) handled as in signals; ("cat", choices)
 DIAL_FAMILIES: Dict[str, Tuple] = {
     "macro_dial": (macro_dial, {
@@ -168,9 +192,34 @@ DIAL_FAMILIES: Dict[str, Tuple] = {
         "trend_window": (20, 252, "int"),
         "trend_steep":  (5.0, 60.0, "float"),
     }),
+    # short-horizon / lag / combination families (the "extended" search space)
+    "macro_lag_dial": (macro_lag_dial, {
+        "series":    ("cat", "MACRO_COLS"),
+        "z_window":  (10, 60, "int"),
+        "lag":       (1, 21, "int"),
+        "direction": ("cat", [-1, 1]),
+        "steep":     (0.5, 3.0, "float"),
+    }),
+    "rev_dial": (rev_dial, {
+        "lookback":  (2, 15, "int"),
+        "direction": ("cat", [-1, 1]),
+        "steep":     (5.0, 120.0, "float"),
+    }),
+    "lag_vote2": (lag_vote2, {
+        "series_a": ("cat", "MACRO_COLS"),
+        "series_b": ("cat", "MACRO_COLS"),
+        "z_window": (10, 90, "int"),
+        "lag_a":    (0, 21, "int"),
+        "lag_b":    (0, 21, "int"),
+        "dir_a":    ("cat", [-1, 1]),
+        "dir_b":    ("cat", [-1, 1]),
+        "steep":    (0.5, 3.0, "float"),
+    }),
 }
 
-MACRO_DIAL_FAMILIES = frozenset({"macro_dial", "macro_vote2", "macro_trend_vote"})
+MACRO_DIAL_FAMILIES = frozenset({"macro_dial", "macro_vote2",
+                                 "macro_trend_vote", "macro_lag_dial",
+                                 "lag_vote2"})
 
 
 def _sample(spec, ctx: TimingContext, rng: np.random.Generator):

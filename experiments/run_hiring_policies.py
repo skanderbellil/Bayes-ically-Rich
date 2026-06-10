@@ -29,6 +29,19 @@ only the ORDER in which gate-passers fill free seats at each review:
             (an idle seat earns cash = 0). Unlike pure reordering, the
             veto can act even when a review has a single passer.
 
+Plus one capital overlay (not a hiring policy): `sized` keeps raw's hires
+but weights each sleeve's seat by its PREDICTED live Sharpe — w = clip(
+a + b * research, 0, 2) / seats, regression fit on sleeves completed by
+the hire date (equal weight until >= 6 completions), daily gross capped
+at 1 (no leverage). This moves the haircut from seat selection into
+capital allocation — the lever the ordering policies hold fixed.
+
+--extended widens the search space with three short-horizon families:
+macro_lag_dial (10-60d macro z with a 1-21d reaction lag), rev_dial
+(2-15d price reversal/continuation), lag_vote2 (two macro layers with
+independent 0-21d lags). More combinations and lags means more trials —
+the DSR term in the gate is charged for every one automatically.
+
 Everything else — the gate (holdout Sharpe > B&H + bootstrap + permutation
 support), the seats, the three retirement rules, the costs — is unchanged.
 The miner is deterministic per review (seed = pod seed + review index) and
@@ -65,7 +78,7 @@ from scipy import stats
 
 from posterioralpha.data import load_etf_universe_prices, load_fred_macro
 from posterioralpha.mining.evaluation import sharpe
-from posterioralpha.mining.pod import PodConfig, QuantPod
+from posterioralpha.mining.pod import POD_FAMILIES, PodConfig, QuantPod
 from posterioralpha.mining.timing import TimingConfig, TimingMiner
 
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
@@ -73,6 +86,7 @@ logging.basicConfig(level=logging.WARNING, format="%(message)s")
 OUT_DIR = _bootstrap.ROOT / "results" / "pod_policies"
 
 POLICIES = ["raw", "dsr", "shrunk", "median", "inverse", "veto"]
+EXTENDED_FAMILIES = POD_FAMILIES + ["macro_lag_dial", "rev_dial", "lag_vote2"]
 MIN_LIVE_DAYS = 21      # floor for the 'shrunk' fit (completed sleeves only)
 ANALYSIS_LIVE_DAYS = 60  # floor for REPORTED sleeve stats: younger live
                          # records are annualized noise (47 days -> "5.28")
@@ -296,6 +310,38 @@ def stationary_bootstrap(rets: pd.DataFrame, n_boot: int, rng,
     return pd.DataFrame(out, columns=rets.columns)
 
 
+def sized_book(res: dict, seats: int) -> Tuple[pd.Series, pd.Series]:
+    """Capital overlay on raw's hires: each sleeve's seat weight is its
+    PREDICTED live Sharpe, w = clip(a + b*research, 0, 2)/seats, with
+    (a, b) fit on sleeves completed BEFORE its hire date (equal weight
+    1/seats until >= MIN_FIT_SLEEVES completions). Daily gross is capped
+    at 1, so this can only de-lever, never lever. All causal."""
+    sleeves = res["sleeves"]
+    idx = res["book"].index
+    weights = {}
+    for s in sleeves:
+        done = [(r.is_sharpe, sharpe(r.live().values)) for r in sleeves
+                if r.fired_at is not None and r.fired_at <= s.hired_at
+                and len(r.live()) >= MIN_LIVE_DAYS]
+        w = 1.0 / seats
+        if len(done) >= MIN_FIT_SLEEVES:
+            a = np.array(done)
+            if a[:, 0].std() > 1e-9:
+                b1, b0 = np.polyfit(a[:, 0], a[:, 1], 1)
+                w = float(np.clip(b0 + b1 * s.is_sharpe, 0.0, 2.0)) / seats
+        weights[id(s)] = w
+
+    book = pd.Series(0.0, index=idx)
+    gross = pd.Series(0.0, index=idx)
+    for s in sleeves:
+        live = s.live().reindex(idx)
+        mask = live.notna()
+        book[mask] += live[mask] * weights[id(s)]
+        gross[mask] += weights[id(s)]
+    scale = 1.0 / gross.clip(lower=1.0)         # no leverage: gross <= 1
+    return book * scale, gross
+
+
 def jackknife_sleeves(res: dict, seats: int) -> pd.Series:
     """Leave-one-sleeve-out book Sharpe: does the result hinge on one hire?"""
     book = res["book"]
@@ -308,7 +354,7 @@ def jackknife_sleeves(res: dict, seats: int) -> pd.Series:
 
 
 def plot_curves(books: Dict[str, pd.Series], bench_half: pd.Series,
-                underlying: str) -> str:
+                underlying: str, tag: str) -> str:
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 8), sharex=True,
                                    gridspec_kw={"height_ratios": [2, 1]})
     series = dict(books)
@@ -328,7 +374,7 @@ def plot_curves(books: Dict[str, pd.Series], bench_half: pd.Series,
     ax2.set_ylabel("drawdown")
     ax2.grid(alpha=0.3)
     fig.tight_layout()
-    path = OUT_DIR / f"equity_curves_{underlying}.png"
+    path = OUT_DIR / f"equity_curves_{tag}.png"
     fig.savefig(path, dpi=140)
     plt.close(fig)
     return str(path)
@@ -345,14 +391,20 @@ def main():
     ap.add_argument("--seats", type=int, default=3)
     ap.add_argument("--n-boot", type=int, default=2000,
                     help="bootstrap draws for the robustness section (0 = skip)")
+    ap.add_argument("--extended", action="store_true",
+                    help="widen the search space with short-horizon, lagged "
+                         "and combination dial families")
     args = ap.parse_args()
 
     prices = load_etf_universe_prices()[args.underlying].dropna()
     macro = load_fred_macro()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    families = EXTENDED_FAMILIES if args.extended else None
+    tag = f"{args.underlying}_ext" if args.extended else args.underlying
 
     print(f"Underlying: {args.underlying} | seats: {args.seats} | seed: "
-          f"{args.seed} | policies: {', '.join(POLICIES)}")
+          f"{args.seed} | policies: {', '.join(POLICIES)} + sized overlay"
+          + (" | EXTENDED families" if args.extended else ""))
     print("Research results are cached per review and shared across policies "
           "(deterministic\nminer, seed = pod seed + review index) — four "
           "policies ≈ one pod run.\n")
@@ -363,12 +415,15 @@ def main():
         print(f"── policy: {policy}")
         pod = PolicyPod(prices, macro=macro,
                         config=PodConfig(seed=args.seed, seats=args.seats),
-                        policy=policy, research_cache=cache)
+                        policy=policy, research_cache=cache,
+                        families=families)
         res = pod.run()
         results[policy], books[policy] = res, res["book"]
         journals[policy] = res["journal"]
         res["haircut"].to_csv(
-            OUT_DIR / f"haircut_{policy}_{args.underlying}.csv", index=False)
+            OUT_DIR / f"haircut_{policy}_{tag}.csv", index=False)
+
+    books["sized"], _ = sized_book(results["raw"], args.seats)
 
     bench = prices.pct_change().loc[books["raw"].index]
     half = bench / 2
@@ -386,6 +441,13 @@ def main():
             "mean_live_sharpe": round(float(done.live_sharpe.mean()), 2),
             "haircut_corr": round(corr, 2),
         })
+    done_raw = sleeve_table(results["raw"])
+    rows.append({"policy": "sized (raw hires, pred-live weights)",
+                 **metrics(books["sized"]),
+                 "hires": int((journals["raw"].action == "HIRE").sum()),
+                 "mean_live_sharpe": round(float(done_raw.live_sharpe.mean()), 2),
+                 "haircut_corr": round(
+                     float(done_raw.research_sharpe.corr(done_raw.live_sharpe)), 2)})
     rows.append({"policy": f"{args.underlying} half-exposure (benchmark)",
                  **metrics(half), "hires": np.nan,
                  "mean_live_sharpe": np.nan, "haircut_corr": np.nan})
@@ -399,7 +461,7 @@ def main():
     print(f"\nmean_live_sharpe / haircut_corr: across hired sleeves with "
           f">= {ANALYSIS_LIVE_DAYS} live days;\nhaircut_corr = corr(research "
           "Sharpe at hire, realized live Sharpe).")
-    summary.to_csv(OUT_DIR / f"summary_{args.underlying}.csv", index=False)
+    summary.to_csv(OUT_DIR / f"summary_{tag}.csv", index=False)
 
     # ── the winner's-curse regression (raw policy's sleeves) ────────────────
     winner_curse_regression(sleeve_table(results["raw"]))
@@ -419,18 +481,19 @@ def main():
               f"{len(h & raw_hires)} | different: {len(h ^ raw_hires)}")
 
     # ── plots ───────────────────────────────────────────────────────────────
-    path = plot_curves(books, half, args.underlying)
+    path = plot_curves(books, half, args.underlying, tag)
     print(f"\nEquity + drawdown plot: {path}")
 
     daily = pd.DataFrame({**{p: books[p] for p in POLICIES},
+                          "sized": books["sized"],
                           f"{args.underlying}_half": half}).fillna(0.0)
-    daily.to_csv(OUT_DIR / f"daily_returns_{args.underlying}.csv")
+    daily.to_csv(OUT_DIR / f"daily_returns_{tag}.csv")
 
     # ── robustness ──────────────────────────────────────────────────────────
     if args.n_boot > 0:
         rng = np.random.default_rng(args.seed)
         boot = stationary_bootstrap(daily, args.n_boot, rng)
-        boot.to_csv(OUT_DIR / f"bootstrap_sharpes_{args.underlying}.csv",
+        boot.to_csv(OUT_DIR / f"bootstrap_sharpes_{tag}.csv",
                     index=False)
         print(f"\nROBUSTNESS — stationary block bootstrap of daily returns "
               f"({args.n_boot} draws,\nmean block 63d, SAME blocks for every "
@@ -440,7 +503,7 @@ def main():
         q.columns = ["p05", "p50", "p95"]
         print(q.round(2).to_string())
         bench_col = f"{args.underlying}_half"
-        for p in POLICIES[1:]:
+        for p in POLICIES[1:] + ["sized"]:
             print(f"  {p:<8} P(> raw): "
                   f"{float((boot[p] > boot['raw']).mean()):.2f} | "
                   f"P(> {args.underlying} half): "
