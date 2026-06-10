@@ -181,17 +181,34 @@ class CouncilBacktest:
     @staticmethod
     def _mirror_audit(stances: Dict[str, List[float]],
                       mirrored: Dict[str, List[float]]) -> pd.DataFrame:
+        """
+        Two statistics per specialist:
+
+        anti_symmetry — -corr(stance, mirrored stance); ≈1 for an honest
+                        analyst. Blunt at low leak levels (the oracle test
+                        showed a 25% leak keeps it ≈0.84).
+        leak_ratio    — std(orig + mirrored) / (std(orig) + std(mirrored)).
+                        For an honest (odd) analyst the sum is identically
+                        zero, so ANY symmetric residual is direct evidence
+                        of episode memory; ≈0 honest, ≈1 pure oracle, and
+                        ≈0.33 already at a 25% leak.
+
+        SUSPECT if anti_symmetry < 0.8 or leak_ratio > 0.25.
+        """
         rows = []
         for d in stances:
             a = np.array(stances[d])
             b = np.array(mirrored[d])
             ok = (np.std(a) > 1e-9) and (np.std(b) > 1e-9)
             anti = float(-np.corrcoef(a, b)[0, 1]) if ok else np.nan
+            leak = float(np.std(a + b) / (np.std(a) + np.std(b) + 1e-9))
+            suspect = (anti == anti and anti < 0.8) or leak > 0.25
             rows.append({
                 "specialist": d,
                 "anti_symmetry": round(anti, 3) if anti == anti else np.nan,
-                "verdict": ("CLEAN" if anti == anti and anti > 0.8
-                            else "SUSPECT" if anti == anti else "n/a"),
+                "leak_ratio": round(leak, 3),
+                "verdict": ("SUSPECT" if suspect
+                            else "CLEAN" if anti == anti else "n/a"),
             })
         return pd.DataFrame(rows).set_index("specialist")
 
