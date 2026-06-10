@@ -406,6 +406,9 @@ def main():
     ap.add_argument("--with-liquidity", action="store_true",
                     help="add the Fed net-liquidity complex (WALCL, TGA, RRP, "
                          "net) to the searchable macro panel")
+    ap.add_argument("--rich-macro", action="store_true",
+                    help="use datasets/fred_macro_plus.csv (base panel + 7 "
+                         "extra FRED series; build_fred_macro_plus.py)")
     args = ap.parse_args()
 
     uni = load_etf_universe_prices()
@@ -415,7 +418,11 @@ def main():
         lev = pd.read_csv(_bootstrap.ROOT / "datasets" / "levered_etfs.csv.gz",
                           index_col=0, parse_dates=True)
         prices = lev[args.underlying].dropna()
-    macro = load_fred_macro()
+    if args.rich_macro:
+        macro = pd.read_csv(_bootstrap.ROOT / "datasets" / "fred_macro_plus.csv",
+                            index_col=0, parse_dates=True)
+    else:
+        macro = load_fred_macro()
     if args.with_liquidity:
         macro = macro.join(load_net_liquidity(), how="left")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -426,6 +433,7 @@ def main():
         min_dsr = 0.5
     tag = (args.underlying + ("_ext" if args.extended else "")
            + ("_strict" if args.gate == "strict" else "")
+           + ("_rich" if args.rich_macro else "")
            + ("_liq" if args.with_liquidity else ""))
 
     print(f"Underlying: {args.underlying} | seats: {args.seats} | seed: "
