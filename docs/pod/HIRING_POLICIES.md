@@ -579,3 +579,34 @@ EWMA nowcast, cap 2×, retail QLD+cash, Alpaca costs, 2011 → 2026:
 Ledger: return tilting is real but it is not a signal — it is a seat on
 the leverage/drawdown frontier. Pick the drawdown you can survive; the
 wealth column is the price list.
+
+## Epilogue 10: the GFC test — the crisis the configuration never saw
+
+`run_barbell_gfc.py`: QLD real prints from 2006-06, GLD/QQQ stitched back
+via returns, net liquidity rebuilt from 2005, the council run on
+1999→2026 QQQ (mirror audit CLEAN on the extended sample). Zero
+re-fitting anywhere — the council is fit-free and the barbell weights
+were frozen on 2011→ data, so 2007–2009 is genuinely out-of-regime.
+
+| (2006-07 → 2026-06) | cagr | sharpe | max_dd | calmar | wealth | GFC (peak→trough) | 2008 |
+|---|---|---|---|---|---|---|---|
+| QLD B&H | 0.265 | 0.76 | **−0.831** | 0.32 | 106× | **−0.82** | −0.73 |
+| QQQ B&H | 0.171 | 0.83 | −0.534 | 0.32 | 23× | −0.51 | −0.42 |
+| static 50/50 | 0.211 | 0.92 | −0.557 | 0.38 | 45× | −0.47 | −0.41 |
+| **rotation (council)** | 0.234 | 0.99 | −0.487 | **0.48** | 65× | −0.41 | −0.31 |
+| volmgmt 50/50 | 0.184 | **1.01** | −0.406 | 0.45 | 29× | −0.36 | −0.28 |
+
+1. **The rotation barbell passes.** Through a crisis no part of it ever
+   saw, it cut the GFC loss to −41% (vs QQQ −51%, QLD −82%), took 2008 at
+   −31%, caught 2009 at +101%, and over the full 20 years delivers the
+   best Calmar (0.48) at 65× wealth. The council de-risked into late
+   2008 on the same blinded macro inputs it uses today.
+2. **Epilogue 9's frontier, corrected by the crisis sample:** "just hold
+   max leverage" meant living through −83%. The honest price list is now
+   −83% → 106×, −49% → 65× (rotation), −41% → 29× (volmgmt). The
+   Epilogue 7 division of labor replicates out-of-regime: rotation is
+   the wealth-efficient governor, volmgmt the drawdown-efficient one.
+3. **Honest limits:** −49% max DD is a damper, not a shield; the
+   liquidity seat only exists from ~2005; QLD's 2006 inception gives one
+   crisis, not a population of them. One pass, n = 1 crisis — but it is
+   the pass that 2011-start backtests could never provide.
