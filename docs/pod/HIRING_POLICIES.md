@@ -462,3 +462,40 @@ actually face. The vol-managed levered barbell joins the alive list:
   discovery) · council dial as leg rotation (P = 0.91) · volatility
   management on levered barbells (P = 0.89–1.00 DD-matched, with a
   leverage dose-response) · B&H / half-exposure on 1× vehicles.
+
+## Epilogue 7: the stack test — the survivors are substitutes, not complements
+
+`run_barbell_stack.py`: the three alive pieces run JOINTLY for the first
+time (rotation × volmgmt on each leg), with leave-one-out bootstrap
+questions. 2011 → 2026, joint blocks:
+
+| configuration | sharpe | max_dd | calmar | wealth | P_w(stack > rotation) | P_w(stack > volmgmt) |
+|---|---|---|---|---|---|---|
+| QLD/GLD rotation only | 1.04 | −0.335 | 0.69 | 23.8× | — | — |
+| QLD/GLD volmgmt only | 1.02 | −0.311 | 0.58 | 12.9× | — | — |
+| QLD/GLD **stack** | 1.02 | −0.276 | 0.70 | 14.8× | **0.01** | 0.65 |
+| SSO/GLD rotation only | 0.91 | −0.332 | 0.49 | 10.2× | — | — |
+| SSO/GLD volmgmt only | 0.98 | −0.211 | 0.67 | 7.5× | — | — |
+| SSO/GLD **stack** | 0.92 | −0.204 | 0.68 | 7.4× | **0.04** | 0.45 |
+
+1. **The two surviving overlays do not stack.** On wealth, rotation alone
+   beats the stack in 99% (QLD) / 96% (SSO) of bootstrap draws; the
+   stack's Calmar gain over the best single overlay is ≤ 0.01 on both
+   legs. Against its own DD-matched constant the stack still clears
+   (0.94/0.97) — but so did each piece alone; stacking adds nothing the
+   better single piece didn't already deliver.
+2. **Mechanism: overlapping de-risk triggers.** corr(council exposure,
+   volmgmt scale) = 0.43 on both legs; they are jointly de-risked 35% of
+   days (25% if independent). The council's vol/credit seats already cut
+   exposure in high-vol states — multiplying in a second vol-keyed scale
+   double-counts the same information and pays for it in compounding
+   (QLD wealth 23.8× → 14.8×).
+3. **Pick ONE governor per barbell, matched to the leg:** QLD/GLD →
+   council rotation (Calmar 0.69 at 60% more wealth than the stack);
+   SSO/GLD → volmgmt (Calmar 0.67, simplest, no council needed). The
+   leverage dose-response of Epilogue 6 explains the split: volmgmt's
+   edge grows with leg leverage relative to the dial's macro information.
+
+Final ledger, updated: **alive** — strategic levered-equity/gold barbell;
+ONE governor on top (council rotation for QLD, volmgmt for SSO), never
+both. **Newly dead:** governor stacking.
