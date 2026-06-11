@@ -499,3 +499,49 @@ questions. 2011 → 2026, joint blocks:
 Final ledger, updated: **alive** — strategic levered-equity/gold barbell;
 ONE governor on top (council rotation for QLD, volmgmt for SSO), never
 both. **Newly dead:** governor stacking.
+
+## Epilogue 8: gradient descent on the weights against a nowcast
+
+`run_nowcast_descent.py`: w_{t+1} = proj_simplex(w_t − η·∇L) weekly on the
+13-ETF basket, L = nowcast vol (or −nowcast return, or mean-variance),
+EWMA(21d) nowcasts, η = 0.05 a priori, Alpaca costs. Exact-QP min-var,
+exponentiated gradient, and equal-weight / inverse-vol / SPY baselines.
+
+**Foundation, measured on this data:** EWMA vol nowcast R² vs realized
+next-month vol = 0.246 (mean across assets); return nowcast R² = 0.032 —
+an 8× predictability gap, with TLT/GLD return R² ≈ 0.00. The two
+objectives were never symmetric.
+
+| strategy | sharpe | real vol | max_dd | turn/yr | P_sh > equal | P_sh > invvol |
+|---|---|---|---|---|---|---|
+| minvol OGD | 1.09 | **0.081** | −0.192 | **2.2** | 0.77 | 0.70 |
+| minvol exact QP | **1.16** | 0.080 | **−0.179** | 10.3 | 0.83 | 0.80 |
+| meanvar OGD (γ=4) | 0.80 | 0.151 | −0.273 | 5.1 | 0.18 | 0.09 |
+| maxret OGD | 0.74 | 0.179 | −0.284 | 4.2 | 0.12 | **0.05** |
+| inverse-vol | 0.97 | 0.126 | −0.262 | 1.5 | 0.94 | — |
+| equal weight | 0.91 | 0.139 | −0.303 | 0.0 | — | 0.06 |
+| SPY B&H | 0.86 | 0.171 | −0.337 | 0.0 | 0.16 | 0.04 |
+
+1. **The vol objective delivers exactly what it optimizes.** Both min-vol
+   books realized 8.0–8.1% vol — the lowest in the table — confirming the
+   nowcast is good enough to steer by. Sharpe is the table's best
+   (1.09/1.16) and 2022 was −9 to −11% vs SPY −18%.
+2. **Maximizing nowcast returns failed exactly as theory predicted:**
+   maxret OGD loses to plain inverse-vol in 95% of bootstrap draws; any
+   contamination of the objective with the return nowcast (meanvar)
+   degrades it monotonically. The 8× R² gap is the whole story.
+3. **What gradient descent itself buys: turnover, not Sharpe.** OGD
+   reaches 93% of the exact QP's Sharpe at 1/5th the turnover (2.2 vs
+   10.3×/yr) — the small learning rate is implicit shrinkage toward
+   yesterday's weights, a free TC penalty. At 1 bp ETF costs this barely
+   matters; at wider spreads or larger size it is the deciding feature.
+4. **Honest bar: directional, not decisive.** Best-in-table minvol QP
+   sits at P = 0.83/0.80 vs the baselines — under the 0.90 bar this
+   thread holds, and minvol is a defensive allocation (CAGR 8.8–9.4% vs
+   equal-weight 12.5%): a risk tool, not a return engine. And per
+   Epilogue 7, do NOT stack it on the barbell governors — min-vol weights
+   are a third vol-keyed de-risking channel, correlated with both.
+
+Ledger: vol-nowcast descent joins inverse-vol/min-var in the "real but
+defensive risk tools" bin; return-nowcast optimization joins the dead
+list, killed by its own foundation table.
