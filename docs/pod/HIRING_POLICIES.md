@@ -396,3 +396,44 @@ walk-forward diversifier selection — dead. Alive: half-exposure or B&H
 on the 1× vehicle; the strategic levered-equity+gold barbell *as a
 conviction, not a discovery*; and the audited council dial as its
 drawdown governor.
+
+## Epilogue 6: four novel governors for the barbell — none decisive
+
+`run_barbell_governors.py`: the fixed 50/50 QLD/GLD barbell with four
+overlays never tried in this thread, each parameterized once, a priori
+(disclosed multiplicity: 4 ideas at a 0.90 bar ⇒ ~0.4 false positives
+expected). Null: the SAME barbell at a constant scale — average,
+vol-matched and DD-matched. 2011 → 2026:
+
+| overlay | sharpe | max_dd | calmar | P vs DD-matched const |
+|---|---|---|---|---|
+| (none — static barbell) | 0.99 | −0.400 | 0.55 | — |
+| vol management (Moreira–Muir style) | 1.01 | −0.311 | 0.59 | **0.89** |
+| correlation-spike governor (corr63 > 0.2 → halve) | 0.93 | −0.328 | 0.54 | 0.56 |
+| VIX term-structure scale (VIX3M/VIX clipped) | 1.00 | −0.401 | 0.54 | 0.12 |
+| council disagreement (above-median → halve) | 0.91 | −0.378 | 0.41 | 0.00 |
+
+1. **Vol management is the only live one, and it is borderline** —
+   P = 0.89 DD-matched, a real Calmar gain (0.59 vs 0.55, DD −31% vs
+   −40%) but it *loses wealth* against the constant version of its own
+   average scale (P = 0.21). Its honest claim is drawdown-efficiency,
+   not return; one more configuration (SSO leg or 1× QQQ/GLD) should
+   decide it.
+2. **The correlation-spike governor — the mechanism story — is dead**
+   (P ≤ 0.56 on every null). Knowing the diversification premise is
+   failing (trailing corr > 0) is too late to act on at daily horizon.
+3. **The VIX slope barely acts** (average scale 1.00: backwardation is
+   too rare and too brief), and **council disagreement is actively
+   harmful** (P = 0.00) — the council's uncertainty carries no
+   information beyond its vote. A clean negative for an appealing idea.
+4. **Structural insight from the reference row:** the council dial
+   applied as book-to-CASH scaling earns P = 0.85, weaker than the same
+   dial applied as a QLD↔GLD *rotation* (Epilogue 4, P = 0.91). Governors
+   that flee to cash give up the second risk premium; overlays on a
+   barbell should rotate between the legs, not abandon them.
+
+Ledger update — alive: the strategic barbell; the council dial as
+*rotation*; vol management as a borderline drawdown-efficiency overlay
+(pending one more leg). Newly dead: corr-spike governor, VIX-slope
+scale, council-disagreement de-risking, and cash-scaling overlays as a
+class.
