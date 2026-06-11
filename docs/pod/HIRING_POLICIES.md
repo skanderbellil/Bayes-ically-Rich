@@ -357,3 +357,42 @@ exposure from `run_council_backtest.py`, 2011 → 2026, real QLD data, costs):
 
 Mirror audit on the council: all six specialists CLEAN (anti-symmetry 1.0,
 leak 0.0) — the dial's inputs are causal z-scores, not memory.
+
+## Epilogue 5: de-hindsighting the barbell — the gold leg cannot be selected
+
+Epilogue 4's two open caveats (GLD picked post-hoc; one levered leg) are
+resolved by `run_barbell_robustness.py`, and the answer is the strict one:
+
+| QLD leg, 2011 → 2026 | cagr | sharpe | max_dd | calmar |
+|---|---|---|---|---|
+| QQQ buy & hold | 0.192 | 0.95 | −0.351 | 0.55 |
+| static QLD/GLD (hindsight) | 0.217 | 0.99 | −0.395 | 0.55 |
+| static QLD/WF-slack, selector 1 | 0.173 | 0.89 | −0.354 | 0.49 |
+| static QLD/WF-slack, selector 2 | 0.166 | 0.81 | −0.380 | 0.44 |
+| council QLD + WF-slack (best of 2) | 0.175 | 0.92 | −0.306 | 0.57 |
+
+1. **Walk-forward selection of the diversifier destroys the barbell.**
+   Selector 1 (trailing-3y Sharpe among |corr| ≤ 0.4 ETFs, top-2
+   inverse-vol) degenerates into T-bills after 2022 — bills win any
+   Sharpe race — and missed gold's run entirely. Selector 2 (disclosed
+   second look: vol ≥ 8%, so the slack must be a risk premium) picked
+   gold in 56 of 60 quarters yet still lost ~5pp/yr to the fixed GLD mix
+   through TLT/commodity detours at the wrong moments. Both land BELOW
+   QQQ buy & hold.
+2. **The SSO leg fails everywhere** (best variant Sharpe 0.79 vs SPY B&H
+   0.86): the SPY council has no edge to lend, and SSO's decay is
+   heavier. The structure's strength is specific to QQQ/QLD + gold.
+3. **What survives:** the barbell works only as a *strategic, fixed*
+   conviction — levered equity + gold, held, not selected — which is
+   exactly how the industry ships it (WisdomTree GDE = 90% equities +
+   90% gold futures; the Return Stacked suite stacks fixed diversifier
+   sleeves). On top of that fixed structure, the council dial's drawdown
+   improvement (Epilogue 4, P = 0.91) stands as this repo's one
+   defensible overlay.
+
+Final ledger for the whole thread: mined selection policies — dead;
+gate engineering — dead; search-space enrichment — dead; sizing — dead;
+walk-forward diversifier selection — dead. Alive: half-exposure or B&H
+on the 1× vehicle; the strategic levered-equity+gold barbell *as a
+conviction, not a discovery*; and the audited council dial as its
+drawdown governor.
