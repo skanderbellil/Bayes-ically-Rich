@@ -437,3 +437,28 @@ Ledger update — alive: the strategic barbell; the council dial as
 (pending one more leg). Newly dead: corr-spike governor, VIX-slope
 scale, council-disagreement de-risking, and cash-scaling overlays as a
 class.
+
+### Epilogue 6 addendum: the deciding test — vol management is real, and leverage is why
+
+Same overlay, two configurations it had never seen:
+
+| configuration | sharpe | max_dd | calmar | P vs DD-matched const |
+|---|---|---|---|---|
+| SSO/GLD static | 0.90 | −0.352 | 0.48 | — |
+| SSO/GLD × volmgmt | 0.96 | **−0.211** | **0.68** | **1.00** |
+| QQQ(1×)/GLD static | 1.04 | −0.235 | 0.60 | — |
+| QQQ(1×)/GLD × volmgmt | 1.04 | −0.184 | 0.64 | 0.84 |
+
+Dose–response in leverage: P = 0.84 (1×) → 0.89 (QLD) → 1.00 (SSO).
+Mechanism-consistent — vol management de-levers exactly when daily-reset
+compounding damage is worst, so its value scales with the leg's leverage.
+The correct reading of the claim: volmgmt always loses wealth to the
+constant version of its *average* scale (P ≤ 0.28 — it is not a return
+enhancer), but **at a fixed max-drawdown budget it delivers decisively
+more wealth on levered legs** — the practical constraint most investors
+actually face. The vol-managed levered barbell joins the alive list:
+
+  **alive:** strategic levered-equity/gold barbell (conviction, not
+  discovery) · council dial as leg rotation (P = 0.91) · volatility
+  management on levered barbells (P = 0.89–1.00 DD-matched, with a
+  leverage dose-response) · B&H / half-exposure on 1× vehicles.
