@@ -545,3 +545,37 @@ objectives were never symmetric.
 Ledger: vol-nowcast descent joins inverse-vol/min-var in the "real but
 defensive risk tools" bin; return-nowcast optimization joins the dead
 list, killed by its own foundation table.
+
+## Epilogue 9: tilting toward maximum returns — the dial is the drawdown budget
+
+`run_return_tilt.py`: with returns unpredictable, return-maximization can
+only mean premium exposure sized by risk. Constant-premium Kelly
+(e = μ̄/γσ̂², μ̄ = 7% fixed) and vol targeting (e = σ*/σ̂), σ̂ = the working
+EWMA nowcast, cap 2×, retail QLD+cash, Alpaca costs, 2011 → 2026:
+
+| | cagr | max_dd | calmar | wealth | P_w > QLD B&H |
+|---|---|---|---|---|---|
+| QLD B&H (2× always) | **0.319** | −0.637 | 0.50 | **69×** | — |
+| kelly γ=1 | 0.248 | −0.392 | 0.63 | 30× | 0.08 |
+| voltarget 25% | 0.211 | −0.362 | 0.58 | 19× | 0.02 |
+| QLD/GLD rotation (alive) | 0.230 | −0.335 | **0.69** | 24× | 0.13 |
+| QQQ B&H | 0.192 | −0.351 | 0.55 | 15× | 0.01 |
+
+1. **Nothing beats holding the maximum leverage on wealth** (best
+   challenger P = 0.13). With the cap at 2×, every sizing scheme can only
+   ever hold *less* than QLD B&H — in a sample whose bull years dominate,
+   that's a one-sided bet. Return tilting = drawdown-budget tilting; the
+   dose-response is exact (σ* 15→20→25% ⇒ CAGR 13.5→17.6→21.1%).
+2. **The Moreira–Muir return claim does not show up here**: vol-managed
+   leverage lost wealth to static 2× in every variant — consistent with
+   Epilogue 6 (volmgmt is drawdown efficiency, not return enhancement).
+3. **The efficient menu, by DD budget:** −64% → QLD B&H (69×); −39% →
+   full Kelly (30×); −34% → rotation barbell (24×, the best Calmar 0.69
+   and it dominates QQQ B&H outright); −23% → voltarget 15% / the 1×
+   council. Survival caveat: this sample has no GFC — 2× B&H through
+   2008 was a −85% event; Kelly's entire purpose is that log-wealth
+   punishes ruin, which a 2011-start backtest structurally understates.
+
+Ledger: return tilting is real but it is not a signal — it is a seat on
+the leverage/drawdown frontier. Pick the drawdown you can survive; the
+wealth column is the price list.
