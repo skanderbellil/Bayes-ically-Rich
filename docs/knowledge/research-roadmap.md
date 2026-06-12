@@ -138,3 +138,25 @@ is doing its job by saying so before any backtest exists:
 
 Trials ledger: 5 signals × 3 horizons on one sample. Carry this count into
 any future DSR on strategies built from these signals.
+
+## 6. First timing-luck check (2026-06-12, core AMR, 5 ETFs, 2005 → 2026)
+
+`rebalance_offset_dispersion(run_amr_backtest, strategy="amr")` across the
+five weekly anchors:
+
+| anchor | CAGR | Sharpe | MaxDD |
+|---|---|---|---|
+| W-MON | 0.096 | 0.545 | −0.199 |
+| W-TUE | 0.098 | 0.565 | −0.234 |
+| W-WED | 0.096 | 0.551 | −0.224 |
+| W-THU | 0.098 | 0.563 | −0.226 |
+| W-FRI | 0.095 | 0.543 | −0.234 |
+| **range** | **0.003** | **0.022** | **0.035** |
+
+Verdict: the core AMR engine is robust to rebalance timing — 0.3 pp of CAGR
+and 0.02 of Sharpe across anchors is noise-level, so its measured edge is
+not an artifact of the Friday anchor. Notably W-FRI (the anchor used in
+every published run) is the *worst* of the five, so historical results were
+not flattered by the choice. Still open: the same check on the BOCPD-AMR
+v2–v4 variants, whose regime signals could interact with the anchor more
+strongly than the plain optimiser does.
