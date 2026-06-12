@@ -410,6 +410,7 @@ def run_amr_backtest(
     tc: float = 0.0005,          # 5 bps per unit of turnover
     use_vol_target: bool = True,
     bocpd_hazard: float = 1 / 252,
+    rebal_anchor: str = "W-FRI",  # weekly anchor — vary to measure timing luck
 ) -> AMRResult:
     """
     Weekly-rebalanced backtest with optional volatility targeting overlay.
@@ -469,7 +470,7 @@ def run_amr_backtest(
 
     # Weekly rebalance dates
     try:
-        rebal_dates = returns.resample("W-FRI").last().index
+        rebal_dates = returns.resample(rebal_anchor).last().index
     except Exception:
         rebal_dates = returns.resample("W").last().index
     rebal_dates = rebal_dates[rebal_dates > returns.index[lookback + vol_window]]
