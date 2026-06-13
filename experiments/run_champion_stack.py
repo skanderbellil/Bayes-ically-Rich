@@ -184,6 +184,12 @@ def main() -> None:
     strat["FULL STACK in QLD+UUP (retail)"] = (
         r_retail, float((w.diff().abs() + w_uup.diff().abs()).mean()) * 252)
 
+    # persist daily returns for downstream studies (factor attribution etc.)
+    rets_out = pd.DataFrame({n: r for n, (r, _) in strat.items()}).loc[live:]
+    rets_csv = RESULTS_DIR / "champion_stack_returns.csv"
+    rets_out.to_csv(rets_csv)
+    logger.info("Saved: %s", rets_csv)
+
     print("\n" + "=" * 100)
     print(f"  THE CHAMPION STACK  ·  QQQ, honest costs  ·  common live "
           f"{live.date()} → {idx[-1].date()}")
