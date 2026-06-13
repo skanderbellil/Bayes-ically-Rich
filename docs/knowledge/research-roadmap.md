@@ -154,6 +154,18 @@ floor (7-8%) barely beats the target's own 8% vol, and equities are
 the orthogonal complement of a long-only portfolio — addable via
 market-neutral vehicles, not rebuildable from beta. `run_zoo_tracking.py`.
 
+### Idea 14 — The reachable frontier — TESTED, CONCENTRATION WON THE REGIME
+The practical landing: best long-only, no-leverage, NET book from 20 liquid
+ETFs. Over 2011-2026 nothing beat SPY risk-adjusted (SPY Sharpe 0.90 on
+realized RF, 60/40 0.89, every diversified book 0.62-0.72). Diversification
+delivered drawdown insurance (maxDD −12-14% vs −24%, 2022 −8% vs −18%) but
+not Sharpe. All reachable books are negatively correlated with the levered
+zoo (−0.31 to −0.41), so none of them harvest it — the zoo is reachable
+only through genuine market-neutral vehicles. Whole sub-arc conclusion:
+the absolute-return king is orthogonal to long-only space; in that space,
+over this regime, concentration paid and diversification was insurance.
+Caveat: one bull-dominated regime + 2022. `run_reachable_frontier.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
