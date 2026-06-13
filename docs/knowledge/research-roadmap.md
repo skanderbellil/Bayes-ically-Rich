@@ -120,6 +120,21 @@ baskets can. Still open if pursued: cost model for the 2× monthly-turnover
 sleeve; within-cluster seasonality (cluster bet or not); an OOS test at
 matched breadth (e.g. the 153-factor JKP set, not its 13 themes).
 
+### Idea 11 — Factor-level BOCPD: regime age in the zoo's cross-section —
+### TESTED, MECHANISM YES / EDGE NO
+The genuinely novel one (no published precedent in the KB): per-factor
+online Bayesian changepoint posteriors, regime age (ERL) as a meta-signal.
+The Daniel-Moskowitz logic transfers — stale-regime factors beat fresh
+(α t 2.2 vs −0.4), regime-conditioned momentum orders exactly as predicted
+in both eras, and momentum return is near-monotone in ERL quintile
+(Sharpe 0.66 freshest → 1.03 stalest). But no construction clears the EW
+benchmark or t>2 alpha (spread t 1.5, conditioned mom t 1.25), and the
+cross-sectional changepoint dial is dead. Mechanism worth keeping in the
+KB; edge not present at monthly/gross resolution. Possible revival: daily
+factor returns (JKP daily?) where changepoints are sharper, or ERL as a
+*risk* model (position sizing) rather than a return signal.
+`run_factor_regimes.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
