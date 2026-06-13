@@ -88,6 +88,16 @@ classically significant, below Harvey's t > 3 bar. The thread deserves
 continued investment but not promotion language stronger than "fragile
 alpha". `run_factor_attribution.py`.
 
+### Idea 9 — Factor crowding gauges on the zoo — TESTED, NULL
+Three causal gauges (36m avg pairwise corr, PC1 share, 12m dispersion) on
+the OpenAP panel as warning dials for the EW-zoo holding. The zoo
+*de*-correlated as it grew (PC1 share 0.44→0.28 since the 90s); the
+correlation gauges disagree on sign within eras (neither t>2); the only
+borderline signal is dispersion→forward-EW (IC +0.14, t 2.2 post-2004) —
+an opportunity-set effect, not a crowding alarm. No dial to build. Gross
+panel can't see cost/capacity crowding, so this null does not clear live
+risk. `run_factor_crowding.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
