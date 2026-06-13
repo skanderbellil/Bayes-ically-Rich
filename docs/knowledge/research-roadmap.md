@@ -36,6 +36,17 @@ different universe (ETFs, where BOCPD regimes are cleaner) revives it.
 The miner's leaderboard is a panel of factor returns; time them by their own
 trailing 12-month performance. Cheap meta-strategy on existing output.
 
+**OpenAP variant — TESTED, NULL vs benchmark.** On the 212-predictor panel
+(live 1997→2024) the Ehsani-Linnainmaa fact replicates — XS winners Sharpe
+0.83 (t 4.4), TS winners 1.01 (t 5.4), 12m spread +9.5%/yr (t 2.6), all
+sub-period stable — but the spread is ~1.9× beta to the EW-ALL benchmark
+with alpha +0.9%/yr (t 0.25), and the pre-declared 50/50 vol-matched combo
+lowers the Sharpe (1.09 vs 1.29). Factor momentum on this panel is
+time-varying zoo exposure, not a new return stream; hold the zoo, don't
+time it. Still open: the original Idea-3 target (the miner's own
+leaderboard, where the EW benchmark is much weaker).
+`run_factor_momentum.py`.
+
 ### Idea 4 — Retroactive DSR on the hand-built families
 Run `dsr_report` over BOCPD-AMR v1–v4 + hmm3 + inv-vol on the 5-ETF sample,
 and over the vote-layer variants. The program has been honest per-experiment;
