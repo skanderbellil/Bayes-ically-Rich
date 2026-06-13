@@ -126,3 +126,69 @@ def load_fred_macro() -> pd.DataFrame:
     """
     path = _require(FRED_MACRO_CSV, "python experiments/build_fred_macro.py")
     return pd.read_csv(path, parse_dates=["date"], index_col="date").sort_index()
+
+
+# ── Factor datasets (built by experiments/build_factor_data.py) ──────────────
+
+def load_ff_factors(freq: str = "monthly") -> pd.DataFrame:
+    """
+    Kenneth French US factors: Mkt-RF, SMB, HML, RMW, CMA, RF, Mom —
+    decimals. ``freq`` ∈ {"monthly", "daily"}; daily is the one to regress
+    daily strategy returns on (FF5+UMD attribution).
+    """
+    from posterioralpha.data.factors import (FF_FACTORS_DAILY_CSV,
+                                             FF_FACTORS_MONTHLY_CSV)
+    path = FF_FACTORS_DAILY_CSV if freq == "daily" else FF_FACTORS_MONTHLY_CSV
+    _require(path, "python experiments/build_factor_data.py --source ff")
+    return pd.read_csv(path, parse_dates=["Date"], index_col="Date").sort_index()
+
+
+def load_ff_europe() -> pd.DataFrame:
+    """French Europe 5 factors + momentum, monthly, decimals."""
+    from posterioralpha.data.factors import FF_EUROPE_MONTHLY_CSV
+    _require(FF_EUROPE_MONTHLY_CSV,
+             "python experiments/build_factor_data.py --source ff")
+    return pd.read_csv(FF_EUROPE_MONTHLY_CSV, parse_dates=["Date"],
+                       index_col="Date").sort_index()
+
+
+def load_ff_industries() -> pd.DataFrame:
+    """French 12 value-weighted industry portfolios, monthly, decimals."""
+    from posterioralpha.data.factors import FF_INDUSTRY12_CSV
+    _require(FF_INDUSTRY12_CSV,
+             "python experiments/build_factor_data.py --source ff")
+    return pd.read_csv(FF_INDUSTRY12_CSV, parse_dates=["Date"],
+                       index_col="Date").sort_index()
+
+
+def load_jkp_factors(region: str = None) -> pd.DataFrame:
+    """
+    JKP theme-level monthly factor returns. Long format
+    (location, name, date, ret); pass ``region`` (e.g. "usa") to get a
+    wide date × theme frame for that region.
+    """
+    from posterioralpha.data.factors import JKP_FACTORS_CSV
+    _require(JKP_FACTORS_CSV,
+             "python experiments/build_factor_data.py --source jkp")
+    panel = pd.read_csv(JKP_FACTORS_CSV, parse_dates=["date"])
+    if region is None:
+        return panel
+    sub = panel[panel["location"] == region]
+    return sub.pivot(index="date", columns="name", values="ret").sort_index()
+
+
+def load_openap_returns() -> pd.DataFrame:
+    """Chen-Zimmermann monthly long-short predictor returns (wide, decimals)."""
+    from posterioralpha.data.factors import OPENAP_LS_CSV
+    _require(OPENAP_LS_CSV,
+             "python experiments/build_factor_data.py --source openap")
+    return pd.read_csv(OPENAP_LS_CSV, parse_dates=["date"],
+                       index_col="date").sort_index()
+
+
+def load_openap_doc() -> pd.DataFrame:
+    """Chen-Zimmermann signal documentation (acronym, category, sample, t-stats)."""
+    from posterioralpha.data.factors import OPENAP_DOC_CSV
+    _require(OPENAP_DOC_CSV,
+             "python experiments/build_factor_data.py --source openap")
+    return pd.read_csv(OPENAP_DOC_CSV)
