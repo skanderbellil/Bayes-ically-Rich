@@ -145,6 +145,15 @@ carry dilutes it. Winner: causally vol-targeted EW zoo @10% (cap 3×) —
 word in both objectives: selection adds nothing; leverage converts the
 zoo's Sharpe into return. `run_zoo_absolute.py`.
 
+### Idea 13 — Long-only tracking of the levered zoo — TESTED, UNSPANNED
+Can a reachable book (long-only, no leverage, +cash) replicate Idea-12's
+levered EW stream? No. Min-TE on FF12 industries and 27 ETFs, in-sample
+floor + walk-forward: the optimizer parks ~90-97% in cash, in-sample TE
+floor (7-8%) barely beats the target's own 8% vol, and equities are
+*negatively* correlated with the stream (SPY −0.42). The levered zoo is
+the orthogonal complement of a long-only portfolio — addable via
+market-neutral vehicles, not rebuildable from beta. `run_zoo_tracking.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
