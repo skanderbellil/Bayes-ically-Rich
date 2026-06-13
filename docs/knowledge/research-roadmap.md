@@ -47,10 +47,16 @@ time it. Still open: the original Idea-3 target (the miner's own
 leaderboard, where the EW benchmark is much weaker).
 `run_factor_momentum.py`.
 
-### Idea 4 — Retroactive DSR on the hand-built families
-Run `dsr_report` over BOCPD-AMR v1–v4 + hmm3 + inv-vol on the 5-ETF sample,
-and over the vote-layer variants. The program has been honest per-experiment;
-this adds the cross-experiment trials correction.
+### Idea 4 — Retroactive DSR on the hand-built families — DONE, split verdict
+Ran `dsr_report` (excess returns, rf 4%) over both flagship families, with a
+DSR-vs-assumed-trials sensitivity curve since nominal counts undercount the
+true search. **5-ETF v1→v4 arc (9 variants, 2016-2024): FAILS** — best is
+`bocpd_amr_v4` at DSR 0.91 (bar: 0.95), 0.88 at n=80; v3 ≡ v4 and v2 < v1,
+so the version ladder was noise. **Champion-stack ladder on QQQ (7 variants,
+2011→): PASSES** — DSR ≈ 1.00 across the board, robust to n=80 and to a
+14× wider trial dispersion. Consequence: retire the 5-ETF allocation arc
+from promotion language; the QQQ vote stack carries the program.
+`run_retroactive_dsr.py`.
 
 ### Idea 5 — IC gate inside the miner loop
 Wire `mining/ic.py` in as a cheap pre-filter: candidates whose 21d rank IC
