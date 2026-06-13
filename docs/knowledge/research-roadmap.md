@@ -140,7 +140,21 @@ momentum-orthogonal, cost-fragile." Its cleanest form (world_ex_us, β≈0,
 corr_mom≈0) is a candidate market-neutral overlay sleeve (cf. Idea 15) —
 but only if turnover is engineered down. Remaining open: low-turnover
 construction (membership buffering/hysteresis) to lift the cost break-even;
-within-cluster seasonality.
+ within-cluster seasonality.
+
+**LOW-TURNOVER construction — RESOLVED (`run_seasonality_lowturn.py`,
+2026-06-13):** tested whether the ~12-25×/yr turnover is structural or
+reducible. Three builds (hard tercile, continuous z-score, hysteresis-
+buffered). **Buffering is strictly better than the baseline** — higher
+gross Sharpe (developed 0.65→0.73, world_ex_us 0.70→0.78) AND ~27% lower
+turnover, because the hysteresis band stops trading boundary flicker — but
+the cost break-even only rises from ~15 to ~18 bps. Continuous cuts
+turnover ~45% but dilutes the signal (gross ~1.8%/yr). **All three die by
+20-30 bps**: turnover is largely STRUCTURAL — the seasonality cross-section
+reconstitutes every calendar month by construction, so the book must churn.
+Final verdict on seasonality: a real, momentum-orthogonal *institutional*
+market-neutral overlay sleeve, best implemented buffered (~18 bps
+break-even); not retail-viable at any construction. Seasonality arc closed.
 
 ### Idea 11 — Factor-level BOCPD: regime age in the zoo's cross-section —
 ### TESTED, MECHANISM YES / EDGE NO
