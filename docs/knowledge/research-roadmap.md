@@ -305,6 +305,8 @@ on market-neutral access. The deployable next step is to source a real
 liquid-alts / market-neutral vehicle for the zoo leg.
 `run_orthogonal_ensemble.py`.
 
+**RETAIL-DEPLOYABLE (`run_retail_alts_ensemble.py`, 2026-06-13):** the breakthrough needs a market-neutral sleeve; the academic zoo gets it by shorting hundreds of stocks (impossible on Alpaca). Tested two retail proxies from real ETF prices (returns net of expense ratios). **Beta-hedged factor ETFs FAIL** (long MTUM/VLUE/QUAL/USMV/SIZE − β·SPY): residual beta +0.20, killed by the post-2019 factor winter. **Liquid alts WORK**: an EW basket of BTAL (anti-beta) + MNA (merger arb) + DBMF (managed futures), held LONG (the funds short internally — the retail investor never shorts a stock), keeps corr −0.42 to SPY STABLY across both halves (−0.38/−0.47), low standalone Sharpe 0.26 (a diversifier, the zoo's character). Result: risk-parity{SPY, ETF-momentum L/S, liquid-alts} → **Sharpe 1.42 vs SPY 0.99**, maxDD −14% (vs −24%), **+15% in 2022** (SPY −18%), and sub-period STABLE (1.48/1.42) — MORE robust than the institutional ensemble (2.16→1.27 decay) because managed-futures/anti-beta don't fade like academic factors. Everything trades on Alpaca. This is the program's most deployable result: a 3-sleeve retail portfolio that lifts equity Sharpe ~43% net of cost. `run_retail_alts_ensemble.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
