@@ -108,10 +108,17 @@ Keloharju same-calendar-month signal gives α vs EW-ALL of +9.5%/yr
 (t 3.6, β −0.12), is not momentum (corr −0.20), holds in both eras, and
 the 50/50 vol-matched combo lifts the EW holder's Sharpe 1.29 → 1.42 with
 a smaller maxDD in both sub-periods. First clear t>3 positive on the
-OpenAP panel, with KLN's published priors behind it. Next steps if pursued:
-cost model for the 2× monthly-turnover sleeve; does seasonality survive
-within clusters (or is it a cluster bet); JKP cross-region OOS.
+OpenAP panel, with KLN's published priors behind it.
 `run_zoo_metafactors.py`.
+
+**OOS update (`run_seasonality_oos.py`):** the JKP cross-region test
+confirms direction, not magnitude. True-OOS regions all positive and
+half-stable (Sharpe 0.37-0.42, t 2.1-2.5) but ~1/6 the OpenAP size; the
+US theme-level panel is flat (t 0.76 / 69y). Seasonality is a breadth
+effect — 4-per-leg theme baskets can't carry what 60-per-leg predictor
+baskets can. Still open if pursued: cost model for the 2× monthly-turnover
+sleeve; within-cluster seasonality (cluster bet or not); an OOS test at
+matched breadth (e.g. the 153-factor JKP set, not its 13 themes).
 
 ## 3. Standing hygiene rules (KB §5, adopted)
 
