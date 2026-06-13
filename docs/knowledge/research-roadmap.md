@@ -214,6 +214,37 @@ market-neutrality, which long-only access (Ideas 13-14) destroys; with
 shorting/alts access a 30-50% overlay is the reachable upgrade.
 `run_zoo_overlay.py`.
 
+### Idea 16 — Factor lead-lag network: do some factors lead others? —
+### TESTED, MECHANISM YES (cross-region) / EDGE NO
+User prompt 2026-06-13: "construction of factor matters, maybe some factors
+lead others." A genuinely novel directed-network question (no explicit KB
+precedent), distinct from own-momentum (Idea 3) and the XS winners effect.
+Tested at the JKP 13-theme level × 4 regions (dimensionality + cross-region
+discipline against the 13×13 = 156-test overfit surface).
+  • **The pre-declared fast→slow hypothesis is the robust win.** Market-
+    priced FAST factors (momentum, short-term reversal, low-risk) lead
+    accounting-priced SLOW factors (investment, accruals, profitability,
+    value) in ALL FOUR regions: lag-1 corr +0.07 to +0.14 (t 1.6-4.0,
+    three of four >2), while the reverse direction slow→fast is always ~0
+    (|t|<1.6). The asymmetry rules out a shared contemporaneous factor —
+    this is genuine directed lead-lag, and construction-speed is the
+    mechanism, exactly as hypothesized.
+  • **Leadership network exists but is ex-US-stable only.** Net-leadingness
+    ranking agrees across developed/emerging/world_ex_us (Spearman
+    0.65-0.95) but the US is idiosyncratic (0.10-0.21). Robust pattern:
+    **size leads**, profitability/quality/profit_growth lag.
+  • **Not tradable.** The walk-forward cross-factor predictor has real
+    gross predictability (t 2.9-4.4 in 3 regions) but dies at 20 bps,
+    does not beat own-momentum cross-region, and nothing beats simply
+    holding EW-ALL (Sharpe 1.1-1.5). Same structural verdict as the arc:
+    timing the zoo loses to holding it.
+Net: confirms the user's intuition at the mechanism level (fast factors
+lead slow, cross-region) — keep as a KB fact and a candidate *forecasting/
+risk* input — but no net-of-cost return edge at monthly/gross resolution.
+Possible revival: daily factor returns (sharper lead-lag), or the fast→slow
+signal as a conditioner on the Idea-15 overlay rather than a standalone
+sleeve. `run_factor_leadlag.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
