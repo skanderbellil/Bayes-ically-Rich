@@ -25,7 +25,8 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 def main():
     ap = argparse.ArgumentParser(description="Build factor datasets")
-    ap.add_argument("--source", choices=["ff", "jkp", "openap", "all"],
+    ap.add_argument("--source",
+                    choices=["ff", "jkp", "jkp-indiv", "openap", "all"],
                     default="all")
     args = ap.parse_args()
 
@@ -42,6 +43,14 @@ def main():
         print(f"jkp_factors: {len(panel)} rows, "
               f"regions={sorted(panel['location'].unique())}, "
               f"themes={panel['name'].nunique()}, "
+              f"{panel['date'].min().date()} → {panel['date'].max().date()}")
+
+    if args.source in ("jkp-indiv", "all"):
+        from posterioralpha.data.factors import build_jkp_individual
+        panel = build_jkp_individual()
+        print(f"jkp_factors_individual: {len(panel)} rows, "
+              f"regions={sorted(panel['location'].unique())}, "
+              f"factors={panel['name'].nunique()}, "
               f"{panel['date'].min().date()} → {panel['date'].max().date()}")
 
     if args.source in ("openap", "all"):

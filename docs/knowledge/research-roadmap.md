@@ -116,9 +116,31 @@ confirms direction, not magnitude. True-OOS regions all positive and
 half-stable (Sharpe 0.37-0.42, t 2.1-2.5) but ~1/6 the OpenAP size; the
 US theme-level panel is flat (t 0.76 / 69y). Seasonality is a breadth
 effect — 4-per-leg theme baskets can't carry what 60-per-leg predictor
-baskets can. Still open if pursued: cost model for the 2× monthly-turnover
-sleeve; within-cluster seasonality (cluster bet or not); an OOS test at
-matched breadth (e.g. the 153-factor JKP set, not its 13 themes).
+baskets can.
+
+**MATCHED-BREADTH OOS + cost model — RESOLVED (`run_seasonality_matched_oos.py`,
+2026-06-13):** built the JKP 153 individual-factor panel × 4 regions
+(new `build_jkp_individual` / `load_jkp_individual`, cached as
+`datasets/jkp_factors_individual.csv.gz`) and reran at breadth that rivals
+OpenAP, closing the "is it breadth-illusory?" question and the cost
+question together. Verdict:
+  • **Geographic OOS confirms the signal is real, not breadth-illusory:**
+    developed α +3.4%/yr (t 3.9), world_ex_us +3.4% (t 4.3; β 0.02,
+    corr_mom −0.01 → a nearly pure orthogonal stream), emerging +2.3%
+    (t 3.1); momentum-orthogonal, sub-period stable in both halves.
+  • **But the OpenAP +9.5% magnitude was an artifact:** the true
+    cross-region effect is ~3%/yr gross (a third), and **usa on JKP does
+    not replicate** (t(α) 1.78, β 1.18, dead post-2004) — the OpenAP US
+    headline was panel-specific.
+  • **Costs cap it:** ~12×/yr turnover, break-even ≈25-30 bps per unit
+    one-way (net Sharpe ~0.4-0.5 at 10 bps, ~0 at 30 bps). Survives
+    institutional frictions, dies at retail.
+Net: seasonality downgrades from "the headline positive" to "real, modest,
+momentum-orthogonal, cost-fragile." Its cleanest form (world_ex_us, β≈0,
+corr_mom≈0) is a candidate market-neutral overlay sleeve (cf. Idea 15) —
+but only if turnover is engineered down. Remaining open: low-turnover
+construction (membership buffering/hysteresis) to lift the cost break-even;
+within-cluster seasonality.
 
 ### Idea 11 — Factor-level BOCPD: regime age in the zoo's cross-section —
 ### TESTED, MECHANISM YES / EDGE NO
@@ -205,6 +227,7 @@ The KB's free data sources are now bundled (built by
 | `ff_europe_monthly.csv` | Europe 5F + WML (1990→) | European-universe attribution |
 | `ff_industry12_monthly.csv` | 12 VW industry portfolios (1926→) | cheap cross-sectional test assets |
 | `jkp_factors.csv.gz` | 13 JKP themes × usa/developed/emerging/world_ex_us, monthly vw_cap (1926→) | cross-region OOS validation of any signal family |
+| `jkp_factors_individual.csv.gz` | 153 individual JKP characteristic factors × 4 regions, premium-oriented, monthly (1926→) | matched-breadth (rivals OpenAP's 212) cross-region OOS — resolved the seasonality magnitude question |
 | `openap_ls_returns.csv.gz` + `openap_signal_doc.csv` | 212 published predictors' monthly L/S returns + doc table (165 'clear' predictors) | factor momentum (Idea 3), factor crowding/PCA, decay studies — without rebuilding 200 signals |
 
 Sanity-checked on load: FF equity premium 0.6%/mo at 16.2% ann vol; all
