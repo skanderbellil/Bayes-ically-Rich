@@ -51,6 +51,26 @@ PEAD already fetches earnings data; SUE's cousins (gross profitability,
 accruals, net issuance — the HXZ survivors) are one fetch away. Closes the
 Ilmanen style gap with infrastructure that already exists.
 
+### Idea 7 — Alpha half-life (zoo age structure) — TESTED, NULL
+McLean-Pontiff decay as an allocation rule: long YOUNG factors (1-5y since
+publication), short OLD (>15y), on the OpenAP panel. The decay fact
+replicates (50% post-pub haircut, M-P report ~58%) but the event-time
+profile is a STEP at publication followed by a 25-year plateau at ~4%/yr —
+age beyond publication carries no information, YOUNG−OLD is dead
+(−0.7%/yr, t −0.3). Keep the byproduct: EW of all published factors runs
+Sharpe 1.21 gross (t 5.9, maxDD −6%) and is sub-period stable — the zoo's
+value is diversification, not its age structure. `run_alpha_halflife.py`.
+
+### Idea 8 — Champion attribution — DONE, verdict in
+FF5+UMD Newey-West regression (2011-10 → 2026-04): full stack
+α = +6.1%/yr (t 2.34), retail QLD+UUP wrapper +6.9% (t 2.56), vs the QQQ
+B&H control's +2.6% (t 2.07). Average market beta ≈ 1.0 (the 2× cap is
+rarely fully spent), anti-value tilt (HML −0.36), R² 0.81. Read: the
+timing machinery adds ~+3.5-4.3pp/yr beyond static growth beta —
+classically significant, below Harvey's t > 3 bar. The thread deserves
+continued investment but not promotion language stronger than "fragile
+alpha". `run_factor_attribution.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
