@@ -245,6 +245,31 @@ Possible revival: daily factor returns (sharper lead-lag), or the fast→slow
 signal as a conditioner on the Idea-15 overlay rather than a standalone
 sleeve. `run_factor_leadlag.py`.
 
+### Idea 17 — Retail-scale IC improvement, net of Alpaca costs —
+### LOOP RESULT: found on ETFs, decayed, best as an overlay sleeve
+User loop 2026-06-13 ("until next IC improvement at retail scale, alpaca
+costs"). Grounded in the repo's Alpaca cost model (commission-free; binding
+cost = half-spread: 1bp ETF / 2bp mega / 4bp large; mid-and-smaller not
+shortable). Two arenas:
+  • **Single-name large-caps (490 names) — NULL.** Three levers (z-score
+    composite, sector-neutralization, multi-horizon 21/63/126d) all confirm
+    cross-sectional stock-selection IC ≈ 0 (momentum IC 0.001-0.002,
+    |t|<0.2). HXZ confirmed: survivorship-biased large-caps over a bull
+    decade are the wrong arena. Incumbent long-only momentum nets Sharpe
+    1.15 but at ~0 IC (tail-driven). `run_retail_signal_lab.py`.
+  • **Cross-asset ETFs (235 names) — FOUND.** 12-1 momentum IC 0.058
+    (t 2.40) at 21d, 0.089 (t 2.11) at 63d — first t>2 of the loop, net of
+    1bp cost. Matches the program's prior ("cross-asset ETF portfolios =
+    the one real robust result"). Caveats: DECAYED (IC 0.09/t2.3 ≤2017 →
+    0.023/t0.78 >2017 — post-publication crowding); standalone long-only
+    loses to SPY (0.78 vs 0.97). Durable use = the market-neutral L/S
+    sleeve (corr −0.04 to SPY, +10.3%/yr net, Sharpe 0.52), a retail
+    diversifier that feeds the Idea-15 overlay. `run_retail_etf_lab.py`.
+Recurring loop lesson: signal COMBINATION lost to the single best signal in
+BOTH arenas — blending dilutes when components differ in quality. Loop
+goal met (a real net-of-cost IC improvement exists at retail scale); the
+honest framing is "modest, decayed, overlay-grade," not a headline winner.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
