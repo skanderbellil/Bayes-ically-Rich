@@ -166,6 +166,18 @@ the absolute-return king is orthogonal to long-only space; in that space,
 over this regime, concentration paid and diversification was insurance.
 Caveat: one bull-dominated regime + 2022. `run_reachable_frontier.py`.
 
+### Idea 15 — Zoo as a market-neutral overlay — TESTED, THE ARC'S PAYOFF
+Relax long-only and the orthogonality pays. Core = FF total market
+(Sharpe 0.50), overlay = levered EW zoo, corr −0.61. The diversifier
+hurdle ρ·S_core is negative, so the overlay survives an ~11.3%/yr cost
+break-even. Implementable walk-forward (36m tangency dose, cap 50%, no
+future info) at a hard 6% cost: equity core 0.46 / +9.1% / −50% maxDD →
+0.71 / +11.6% / −42% maxDD — better on all three axes, out of sample.
+Resolution of the whole absolute-return arc: the zoo's value IS its
+market-neutrality, which long-only access (Ideas 13-14) destroys; with
+shorting/alts access a 30-50% overlay is the reachable upgrade.
+`run_zoo_overlay.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
