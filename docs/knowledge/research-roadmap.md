@@ -98,6 +98,21 @@ an opportunity-set effect, not a crowding alarm. No dial to build. Gross
 panel can't see cost/capacity crowding, so this null does not clear live
 risk. `run_factor_crowding.py`.
 
+### Idea 10 — Meta-factors / cluster structure of the zoo — TESTED, ONE SURVIVOR
+The factor-of-factors sweep beyond momentum (user prompt 2026-06-13).
+Clusters are real and nowcastable (K=6, 36m corr, median ARI 0.75) but
+cluster-balanced weighting decays (α t 4.9 → 2.0 across 2004) and cluster
+rotation is dead. LT reversal and low-vol at the factor level: dead
+(low-vol is backwards). **Factor-level seasonality survives everything**:
+Keloharju same-calendar-month signal gives α vs EW-ALL of +9.5%/yr
+(t 3.6, β −0.12), is not momentum (corr −0.20), holds in both eras, and
+the 50/50 vol-matched combo lifts the EW holder's Sharpe 1.29 → 1.42 with
+a smaller maxDD in both sub-periods. First clear t>3 positive on the
+OpenAP panel, with KLN's published priors behind it. Next steps if pursued:
+cost model for the 2× monthly-turnover sleeve; does seasonality survive
+within clusters (or is it a cluster bet); JKP cross-region OOS.
+`run_zoo_metafactors.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
