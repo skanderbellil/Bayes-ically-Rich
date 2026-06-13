@@ -11,6 +11,17 @@ from posterioralpha.data.loaders import (
     load_equity_universe_info,
     load_net_liquidity,
     load_fred_macro,
+    load_ff_factors,
+    load_ff_europe,
+    load_ff_industries,
+    load_jkp_factors,
+    load_openap_returns,
+    load_openap_doc,
+)
+from posterioralpha.data.factors import (
+    build_ff_factors,
+    build_jkp_factors,
+    build_openap,
 )
 from posterioralpha.data.macro import (
     build_net_liquidity,
@@ -48,6 +59,15 @@ __all__ = [
     "load_equity_universe_info",
     "load_net_liquidity",
     "load_fred_macro",
+    "load_ff_factors",
+    "load_ff_europe",
+    "load_ff_industries",
+    "load_jkp_factors",
+    "load_openap_returns",
+    "load_openap_doc",
+    "build_ff_factors",
+    "build_jkp_factors",
+    "build_openap",
     "build_net_liquidity",
     "build_fred_macro",
     "fetch_fred",

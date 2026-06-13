@@ -67,6 +67,22 @@ The cross-sectional additions live in `mining/` (ic lab, per-stock families)
 and `validation/` (robustness) — stages 2 and 4 of the pipeline. The
 per-stock ERL panel is cached on `SignalContext` (first call ~1s/name).
 
+## 4b. Factor data enrichment (2026-06-13)
+
+The KB's free data sources are now bundled (built by
+`experiments/build_factor_data.py`, loaders in `posterioralpha.data`):
+
+| dataset | contents | unblocks |
+|---|---|---|
+| `ff_factors_monthly.csv` / `ff_factors_daily.csv.gz` | US Mkt-RF, SMB, HML, RMW, CMA, RF, Mom (1963→, daily too) | Idea: FF5+UMD alpha attribution of the champion stack / barbell (the "Buffett's Alpha" regression) on daily returns |
+| `ff_europe_monthly.csv` | Europe 5F + WML (1990→) | European-universe attribution |
+| `ff_industry12_monthly.csv` | 12 VW industry portfolios (1926→) | cheap cross-sectional test assets |
+| `jkp_factors.csv.gz` | 13 JKP themes × usa/developed/emerging/world_ex_us, monthly vw_cap (1926→) | cross-region OOS validation of any signal family |
+| `openap_ls_returns.csv.gz` + `openap_signal_doc.csv` | 212 published predictors' monthly L/S returns + doc table (165 'clear' predictors) | factor momentum (Idea 3), factor crowding/PCA, decay studies — without rebuilding 200 signals |
+
+Sanity-checked on load: FF equity premium 0.6%/mo at 16.2% ann vol; all
+series stored as decimals.
+
 ## 5. First IC results (2026-06-12, 94 names, 2016-04 → 2026-04)
 
 Monthly Spearman rank IC vs. forward returns, overlap-corrected t-stats;
