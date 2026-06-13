@@ -135,6 +135,16 @@ factor returns (JKP daily?) where changepoints are sharper, or ERL as a
 *risk* model (position sizing) rather than a return signal.
 `run_factor_regimes.py`.
 
+### Idea 12 — Absolute-return blends on the zoo — TESTED, LEVERAGE WINS
+The objective flip (total return, beta indifferent). VM 50/50 at the
+factor level fails its premise: MOM/VAL corr +0.21 (≈0 post-2004), factor
+value too weak to blend (Sharpe 0.13), so the blend trails momentum alone.
+VMS (with seasonality) reaches 0.76; every stack that includes the EW
+carry dilutes it. Winner: causally vol-targeted EW zoo @10% (cap 3×) —
++10.9%/yr gross, Sharpe 1.37, maxDD −15%, era-stable. The panel's final
+word in both objectives: selection adds nothing; leverage converts the
+zoo's Sharpe into return. `run_zoo_absolute.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
