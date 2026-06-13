@@ -177,6 +177,23 @@ def load_jkp_factors(region: str = None) -> pd.DataFrame:
     return sub.pivot(index="date", columns="name", values="ret").sort_index()
 
 
+def load_jkp_individual(region: str = None) -> pd.DataFrame:
+    """
+    JKP 153 INDIVIDUAL characteristic factors (premium-oriented). Long
+    format (location, name, date, ret); pass ``region`` (e.g. "usa") for a
+    wide date × factor frame. Matched-breadth panel for the seasonality
+    OOS test (rivals OpenAP's 212 US predictors, unlike the 13 themes).
+    """
+    from posterioralpha.data.factors import JKP_INDIV_CSV
+    _require(JKP_INDIV_CSV,
+             "python experiments/build_factor_data.py --source jkp-indiv")
+    panel = pd.read_csv(JKP_INDIV_CSV, parse_dates=["date"])
+    if region is None:
+        return panel
+    sub = panel[panel["location"] == region]
+    return sub.pivot(index="date", columns="name", values="ret").sort_index()
+
+
 def load_openap_returns() -> pd.DataFrame:
     """Chen-Zimmermann monthly long-short predictor returns (wide, decimals)."""
     from posterioralpha.data.factors import OPENAP_LS_CSV

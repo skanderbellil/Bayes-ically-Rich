@@ -127,6 +127,7 @@ _JKP_URL = ("https://jkpfactors-data.s3.amazonaws.com/public/"
             "%5B{region}%5D_%5B{theme}%5D_%5B{freq}%5D_%5B{weight}%5D.zip")
 
 JKP_FACTORS_CSV = DATASETS_DIR / "jkp_factors.csv.gz"
+JKP_INDIV_CSV   = DATASETS_DIR / "jkp_factors_individual.csv.gz"
 JKP_REGIONS = ("usa", "developed", "emerging", "world_ex_us")
 
 
@@ -156,6 +157,39 @@ def build_jkp_factors(
 
     panel = pd.concat(frames, ignore_index=True)
     panel.to_csv(JKP_FACTORS_CSV, index=False, compression="gzip")
+    return panel
+
+
+def build_jkp_individual(
+    regions=JKP_REGIONS,
+    weight: str = "vw_cap",
+) -> pd.DataFrame:
+    """
+    Fetch the 153 INDIVIDUAL JKP characteristic factors per region (the
+    ``all_factors`` download, not the 13-theme aggregate) and cache them as
+    one long table (location, name, date, ret) with ``ret`` oriented to
+    positive expected return (raw ret × the published ``direction`` sign).
+
+    This is the matched-breadth panel: ~153 factors per region rivals the
+    OpenAP US panel's 212, which is what the seasonality OOS test needs
+    (the 13-theme set was too thin — 4 factors per leg — to carry it).
+    """
+    import requests
+
+    frames = []
+    for region in regions:
+        url = _JKP_URL.format(region=region, theme="all_factors",
+                              freq="monthly", weight=weight)
+        logger.info(f"JKP indiv: {region} / all_factors (monthly, {weight}) …")
+        r = requests.get(url, timeout=120)
+        r.raise_for_status()
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        df = pd.read_csv(zf.open(zf.namelist()[0]), parse_dates=["date"])
+        df["ret"] = df["ret"] * df["direction"]   # orient to positive premium
+        frames.append(df[["location", "name", "date", "ret"]])
+
+    panel = pd.concat(frames, ignore_index=True)
+    panel.to_csv(JKP_INDIV_CSV, index=False, compression="gzip")
     return panel
 
 

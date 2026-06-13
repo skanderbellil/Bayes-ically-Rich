@@ -15,12 +15,14 @@ from posterioralpha.data.loaders import (
     load_ff_europe,
     load_ff_industries,
     load_jkp_factors,
+    load_jkp_individual,
     load_openap_returns,
     load_openap_doc,
 )
 from posterioralpha.data.factors import (
     build_ff_factors,
     build_jkp_factors,
+    build_jkp_individual,
     build_openap,
 )
 from posterioralpha.data.macro import (
@@ -63,10 +65,12 @@ __all__ = [
     "load_ff_europe",
     "load_ff_industries",
     "load_jkp_factors",
+    "load_jkp_individual",
     "load_openap_returns",
     "load_openap_doc",
     "build_ff_factors",
     "build_jkp_factors",
+    "build_jkp_individual",
     "build_openap",
     "build_net_liquidity",
     "build_fred_macro",
