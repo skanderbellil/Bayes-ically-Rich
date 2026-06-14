@@ -343,6 +343,30 @@ leverage with -25% maxDD; single regime (2011-26). vs QQQ the appraisal IR
 is positive but small (0.32) — the edge is "beats SPY/60-40 with real alpha,"
 not "beats the generational QQQ run." Loop goal MET. `run_retail_ir.py`.
 
+### Idea 20 — Pre-registered OOS test of the vol-management MECHANISM — PASS
+After the IR alpha failed t>3 (Idea 19), the only honest move: fix ONE
+mechanism with canonical params (no search) and test ONCE on data the session
+never saw. Pre-registration committed BEFORE the result (`run_preregistered_oos.py`,
+auditable in git history). Mechanism: vol-managed 2x equity, exposure =
+clip(0.25/(2*EWMA20_vol), 0, 1) in QLD/SSO, rest cash — identical to the
+deployment spec, NOT re-optimized. Test data: 2006-07→2010-12, the GFC era
+(every other experiment started 2011-01-01). Benchmark: the 1x underlying.
+Pre-registered hypotheses: H1 shallower maxDD than 1x, H2 higher Sharpe than
+1x — for BOTH QLD and SSO.
+**RESULT: 4/4 PASS.** vol-managed QLD: Sharpe 0.48, maxDD -46% vs QQQ 0.29 /
+-53%; vol-managed SSO: 0.21, -51% vs SPY 0.05 / -55%. And the UNMANAGED 2x
+imploded in 2008 (QLD -83%, SSO -85% maxDD) — vol management roughly HALVED
+those crashes while beating the 1x underlying on both axes. Read honestly:
+this confirms the MECHANISM (vol-managing leverage is a real, theory-backed
+[variance-drain identity] + pre-registered + OOS risk-management improvement),
+NOT a statistical alpha. It is also only ~2 independent tests (QLD/SSO are
+both US equity) over one crisis window — a directional confirmation, not a
+high-t proof. And it is still 2x leverage with a -46% GFC drawdown: an
+aggressive sleeve made survivable, not safe. Net session verdict: no alpha
+clears t>3, but the vol-management MECHANISM survives a pre-registered
+out-of-sample crisis test — the honest, durable takeaway.
+`run_preregistered_oos.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
