@@ -321,6 +321,28 @@ liquid-alts / market-neutral vehicle for the zoo leg.
 
 **PURE VOL MANAGEMENT — more return without estimating returns (`run_vol_managed.py`, 2026-06-14):** the user's principle — returns are noise, so strip out return estimation entirely; the only input is VOLATILITY (predictable, it clusters) and the compounding math delivers via VARIANCE DRAIN: g ~ mu - sigma^2/2. Continuous exposure = clip(target_vol/EWMA_vol(QQQ), 0, 1) in QLD, rest in MF/cash, daily. Quantifies leverage decay cleanly: QLD bleeds -4.4%/yr to variance drain (9x QQQ's -0.5%). Vol-managed QLD @30% compounds at GEO +25.7%/yr vs QQQ +19.0% at the SAME -35% maxDD; @25% beats QQQ's return at LESS drawdown (-30%), Sharpe ~0.80. This is the PRINCIPLE behind every leverage result this session: you cannot forecast returns, but you can forecast (and stabilise) volatility, and the geometric-return math converts stable vol into compound growth - the AMR philosophy (no mu estimation) + Man-AHL vol targeting + the variance-drain identity, unified. Continuous targeting is the purest form (parameter-light, no thresholds); the binary fast-vol signal trades a threshold for higher Sharpe (0.9-0.98). `run_vol_managed.py`.
 
+### Idea 19 — Exploitable IR at retail scale — LOOP RESULT, FOUND
+User loop 2026-06-14 "until IR is exploitable retail scale". The culmination
+of the forecastable-orthogonal-lever framework: stack the two levers that
+passed BOTH tests (forecastable AND orthogonal) into one retail book and
+measure the Grinold-Kahn Information Ratio.
+  • Tier 1 (variance drain / vol management): continuous QLD exposure =
+    clip(target_vol / EWMA_vol(QQQ), 0, 1) — the identity lever, ~free.
+  • Tier 2 (orthogonal rebalancing premium): 25-30% managed futures
+    (DBMF/KMLM/CTA, corr~0, pays in crashes), daily-rebalanced.
+**Result (`run_retail_ir.py`): BETA-ADJUSTED appraisal IR ~0.5 vs SPY (0.54
+for the 30%-MF mix; 0.64 OOS 2017-26), alpha +5-7%/yr at beta ~0.9, t(alpha)
+~2.** This is the honest, leverage-stripped IR — genuine skill from the
+variance-drain harvest + orthogonal MF rebalancing, NOT beta. Adding managed
+futures RAISES the appraisal IR (0.37 -> 0.54) by cutting beta and adding
+idiosyncratic alpha — the orthogonal lever's signature. Clears the
+Grinold-Kahn "good active manager" bar (IR ~0.5), beta-adjusted, OOS-stable,
+net of cost, fully retail (QLD + managed-futures ETFs, long-only, Alpaca).
+Honest caveats: t(alpha)~2 is marginal significance not overwhelming; 2x
+leverage with -25% maxDD; single regime (2011-26). vs QQQ the appraisal IR
+is positive but small (0.32) — the edge is "beats SPY/60-40 with real alpha,"
+not "beats the generational QQQ run." Loop goal MET. `run_retail_ir.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
