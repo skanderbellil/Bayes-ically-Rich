@@ -375,7 +375,11 @@ bar). Results:
     has hidden equity beta (beta-adj t 2.16), decays post-2014 (2.80→1.40).
     Fails t>3. CARRY (bond/commodity roll proxies): NULL, t<1.5, orthogonal
     but indistinguishable from zero. (`run_*` agent script.)
-  • ALPHA-MINER gauntlet: [pending].
+  • ALPHA-MINER gauntlet (the program's own DSR/bootstrap/permutation
+    machine, on S&P-100 + 250 ETFs): NULL. 0 of ~880 mined candidates clear
+    DSR>0.95; best (regime-gated momentum, DSR 0.43) is pure market beta
+    (permutation p=0.47 — time-shifting its weights gives equal Sharpe).
+    Price-based signal zoo yields no honest alpha — by design.
   • VALUE/QUALITY cross-region (JKP 153 factors × 4 regions): **FOUND ONE.**
     Of 31 value/quality/profitability factors+themes, exactly one clears the
     FULL bar — **cop_at, cash-based operating profitability** (Ball-Gerakos-
