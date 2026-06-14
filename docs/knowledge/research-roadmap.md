@@ -367,6 +367,35 @@ clears t>3, but the vol-management MECHANISM survives a pre-registered
 out-of-sample crisis test — the honest, durable takeaway.
 `run_preregistered_oos.py`.
 
+### Idea 21 — Agent hunt: cash-based operating profitability (cop_at) — THE EDGE
+User loop 2026-06-14 "launch agents, honest testing, until we find the edge."
+Three parallel agents (worktree-isolated, handed the t>3 + cross-region + cost
+bar). Results:
+  • TREND-following: NULL. Diversified cross-asset trend t≈2.3-2.9, best spec
+    has hidden equity beta (beta-adj t 2.16), decays post-2014 (2.80→1.40).
+    Fails t>3. CARRY (bond/commodity roll proxies): NULL, t<1.5, orthogonal
+    but indistinguishable from zero. (`run_*` agent script.)
+  • ALPHA-MINER gauntlet: [pending].
+  • VALUE/QUALITY cross-region (JKP 153 factors × 4 regions): **FOUND ONE.**
+    Of 31 value/quality/profitability factors+themes, exactly one clears the
+    FULL bar — **cop_at, cash-based operating profitability** (Ball-Gerakos-
+    Linnainmaa-Nikolaev 2016): US t=9.06 (6.83 net of 1.5% cost), replicates
+    in developed/emerging/world_ex_us (gross t 3.7-4.0), holds both sub-
+    periods. The US t=9 survives any multiple-testing correction; 4-region
+    independent replication is the guard. `experiments/value_quality_test.py`.
+**THE EDGE (first of the session to clear our own bar):** cash-based
+operating profitability is a real, cross-region-replicated quality factor —
+exactly where the KB pointed (HXZ robust survivors, FF RMW, QMJ). Honest
+caveats: (1) it's a LONG-SHORT academic factor; retail can't short hundreds
+of stocks, so the clean alpha needs the short leg — a long-only quality/
+profitability tilt (e.g. COWZ/QUAL-style) captures the long half mixed with
+beta. (2) Non-US legs are cost-sensitive (t 2.4-2.6 at 1.5%, break by 3%);
+the US leg is the robust one (t 6.8 net). (3) Gross JKP academic returns.
+Also notable: the broad VALUE theme is strong OUTSIDE the US (dev/em/wxus t>4)
+but dead in the US post-2004 (t 1.05) — "US value winter" confirmed; value
+lives abroad. Net: the loop found a genuine edge (cop_at), retail-exploitable
+in long-only tilt form, fully exploitable only with shorting.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
