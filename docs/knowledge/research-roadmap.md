@@ -321,7 +321,7 @@ liquid-alts / market-neutral vehicle for the zoo leg.
 
 **PURE VOL MANAGEMENT — more return without estimating returns (`run_vol_managed.py`, 2026-06-14):** the user's principle — returns are noise, so strip out return estimation entirely; the only input is VOLATILITY (predictable, it clusters) and the compounding math delivers via VARIANCE DRAIN: g ~ mu - sigma^2/2. Continuous exposure = clip(target_vol/EWMA_vol(QQQ), 0, 1) in QLD, rest in MF/cash, daily. Quantifies leverage decay cleanly: QLD bleeds -4.4%/yr to variance drain (9x QQQ's -0.5%). Vol-managed QLD @30% compounds at GEO +25.7%/yr vs QQQ +19.0% at the SAME -35% maxDD; @25% beats QQQ's return at LESS drawdown (-30%), Sharpe ~0.80. This is the PRINCIPLE behind every leverage result this session: you cannot forecast returns, but you can forecast (and stabilise) volatility, and the geometric-return math converts stable vol into compound growth - the AMR philosophy (no mu estimation) + Man-AHL vol targeting + the variance-drain identity, unified. Continuous targeting is the purest form (parameter-light, no thresholds); the binary fast-vol signal trades a threshold for higher Sharpe (0.9-0.98). `run_vol_managed.py`.
 
-### Idea 19 — Exploitable IR at retail scale — LOOP RESULT, FOUND
+### Idea 19 — Exploitable IR at retail scale — LOOP: FAILS THE t>3 BAR
 User loop 2026-06-14 "until IR is exploitable retail scale". The culmination
 of the forecastable-orthogonal-lever framework: stack the two levers that
 passed BOTH tests (forecastable AND orthogonal) into one retail book and
