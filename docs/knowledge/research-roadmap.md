@@ -400,6 +400,30 @@ but dead in the US post-2004 (t 1.05) — "US value winter" confirmed; value
 lives abroad. Net: the loop found a genuine edge (cop_at), retail-exploitable
 in long-only tilt form, fully exploitable only with shorting.
 
+### Idea 22 — Does cop_at survive a long-only RETAIL translation? — NO
+Pre-registered (`run_cop_at_retail.py`, committed before results). The agent
+edge cop_at is a LONG-SHORT academic factor; tests whether real long-only ETF
+proxies capture it, beta-adjusted vs SPY, net of fees.
+  ETF (from)        alpha   beta   t(alpha)
+  COWZ (2016, FCF)  -1.8%   0.99   -0.54   ← closest cop_at proxy: NEGATIVE
+  QUAL (2013)       -0.5%   0.98   -0.56
+  DGRW (2013)       +0.2%   0.89   +0.16
+  SPHQ (2005)       +0.1%   0.92   +0.09
+  VFLO (2023, n=37) +5.7%   0.81   +0.85   (too short to mean anything)
+**The cop_at edge does NOT survive long-only.** Long-only quality/profitability
+ETFs are ~pure beta (alpha ~0; COWZ even NEGATIVE -1.8%). Reason: the cop_at
+alpha lives in the SHORT leg (shorting low-profitability junk) and the spread;
+the long leg = high-profitability large-caps ARE most of the cap-weighted
+market, so a long-only tilt adds ~no residual alpha, and the ETF screens are
+imperfect cop_at proxies. DEFINITIVE retail reckoning: across the whole
+session, NO exploitable ALPHA survives the user's actual constraints (long-
+only, no shorting, retail) — price signals (miner null), trend/carry (null),
+and even the one real fundamental factor (cop_at, alpha trapped in the short
+leg). The only durable retail edge is the MECHANISM: vol-managing leverage
+(variance-drain harvest, an identity) + orthogonal diversification — risk
+management, not alpha. The real alpha that exists (cop_at) requires shorting
+retail cannot do. `run_cop_at_retail.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
