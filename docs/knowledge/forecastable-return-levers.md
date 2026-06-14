@@ -29,7 +29,7 @@ forecastable from quantities that persist, and each is a lever.**
 |---|---|---|---|---|
 | 1 | **Variance drain (B)** | volatility (clusters) | vol-target leverage → less σ²/2 drag | **DONE: +6pp geo on QLD** (`run_vol_managed.py`) |
 | 2 | **Rebalancing premium (C)** | vol + correlation (persist) | rebalance volatile, uncorrelated assets | **TESTED: +2–5pp** for TQQQ+DBMF etc. (`run_rebalancing_premium.py`) |
-| 3 | **Carry / VRP (D)** | implied−realized vol; option premium (persistent ~3–4 vol pts) | sell covered calls / cash-secured puts on the held sleeve → harvest the volatility risk premium ON TOP of the holding | **NEXT — strongest untapped** |
+| 3 | **Carry / VRP (D)** | implied−realized vol (persistent, forecastable) | sell covered calls / short vol | **TESTED — NEGATIVE: forecastable but NOT orthogonal (same crash risk as equity); covered calls cap upside** (`run_carry_vrp.py`) |
 | 4 | **Roll yield (D)** | futures curve shape (contango/backwardation, observable today) | hold backwardated commodity/bond futures; bonds roll down the curve | untested here |
 | 5 | **Low-beta premium (A-structural)** | beta (more stable than returns) | tilt low-beta, lever to target beta (BAB; leverage-constraint premium) | KB-known, not retail-built |
 | 6 | **Regime: trend vs mean-revert (Hurst)** | Hurst/autocorrelation (somewhat persistent) | apply the matching harvester — rebalance if mean-reverting, trend-follow if trending | program has Hurst/BOCPD |
@@ -60,6 +60,33 @@ timing it could add more.
 shape is observable TODAY. Backwardated commodities/managed-futures carry a
 positive roll; this is income, not a forecast. Hypothesis: a backwardation
 filter on the commodity/managed-futures sled improves its carry.
+
+## REFINEMENT (2026-06-14): forecastable is necessary but NOT sufficient — also need ORTHOGONAL
+
+Testing lever #3 (carry/VRP, `run_carry_vrp.py`) revealed a second condition.
+The VRP is genuinely forecastable (implied > realized 59% of months, fatter
+when VIX is high) — yet harvesting it does NOT add return to leveraged
+equity, because it is NOT ORTHOGONAL: short-vol / covered-call positions are
++0.66 to +0.88 correlated with QQQ and lose 64-67% of QQQ's drop in crashes.
+Carry/VRP is the SAME crash risk you already own, repackaged as yield; and
+covered calls cap the upside you leveraged for (capture ~50% up, ~50% down).
+
+So the levers sort into THREE tiers:
+  • Tier 1 — IDENTITY (truly mechanical, no risk premium): variance drain
+    (lever B / vol management). Pure algebra; nearly free. **Best.**
+  • Tier 2 — ORTHOGONAL risk premium: rebalancing with managed futures
+    (lever C). A different risk (corr≈0, pays in crashes) → diversifies and
+    adds geometric return. **Works.**
+  • Tier 3 — SAME-RISK premium: carry/VRP (lever D). Forecastable, but it
+    pays you for the crash risk you ALREADY bear → concentrates, not
+    diversifies. **Does not add return to an equity sleeve.**
+
+The test for any candidate lever is now TWO-PART: (1) is the input
+forecastable (persists)? (2) is the payoff ORTHOGONAL to what you already
+hold (corr≈0 AND ideally positive in your drawdowns)? Volatility and the
+managed-futures rebalancing premium pass both; carry/VRP passes only the
+first. Re-rank the remaining levers (#4 roll yield, #5 low-beta, #6 regime,
+#7 skew, #8 frictions, #9 flow) by BOTH tests before building.
 
 ## The unifying principle
 
