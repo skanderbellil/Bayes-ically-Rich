@@ -121,13 +121,17 @@ def main():
     print(tabulate(orows, headers=["window", "CAGR", "Sharpe",
                                    "appraisal IR vs SPY", "t(alpha)"],
                    tablefmt="github"))
-    print("\nLOOP VERDICT — EXPLOITABLE IR FOUND: vol-managed QLD@25% + 25% "
-          "managed futures (daily, long-only, Alpaca, net of cost) has a "
-          "BETA-ADJUSTED appraisal IR ~0.5 vs SPY (0.64 OOS), alpha +5-7%/yr "
-          "at beta ~0.9, t(alpha)~2 — Grinold-Kahn 'good' level, genuine skill "
-          "(vol-management + orthogonal MF rebalancing), not leverage. "
-          "Caveats: t(alpha)~2 is marginal, 2x leverage -25% maxDD, single "
-          "regime; vs QQQ apprIR is positive but small (0.32).")
+    print("\nLOOP VERDICT — FAILS OUR OWN t>3 BAR. The appraisal IR ~0.5 vs "
+          "SPY looks 'good', BUT the alpha t-stat is only ~2.1 (p=0.034), "
+          "which FAILS the Harvey/KB hygiene bar of t>3 — and after this "
+          "session's ~30+ book/parameter trials, the family-wise probability "
+          "the best config's alpha is NOISE is ~65%. So NO statistically-"
+          "established exploitable IR was found. What survives is the "
+          "MECHANISM, not the empirical alpha: the variance-drain identity "
+          "(g=mu-sigma^2/2, deterministic, needs no t-stat) + the orthogonal "
+          "managed-futures diversification (structural). The book is a sound "
+          "RISK-MANAGEMENT construction, not a proven alpha. Honest loop "
+          "outcome: the exploitable-IR target is NOT met at our standard.")
     pd.DataFrame(rows).to_csv(RES / "retail_ir.csv", index=False)
 
 
