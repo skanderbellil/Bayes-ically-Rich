@@ -200,15 +200,29 @@ spanning all four stages, on live data (Gamma metadata + CLOB price history):
 ```bash
 python experiments/run_polymarket_momentum.py            # cached panel + 4 books
 python experiments/run_polymarket_momentum.py --refresh  # re-pull live Polymarket data
+python experiments/run_polymarket_vol_outcome.py --refresh   # sharp-move → outcome study
 ```
 
-It pits cross-sectional momentum vs. its contrarian mirror (`xs_reversal`),
-per-market time-series momentum, and a `long_all` baseline — all causal,
-Bayesian-shrunk by each market's log-odds noise, cost-aware. First finding
-(`docs/polymarket/`, **research artefact, not a deployable edge**): on the top
-resolved markets the weekly cross-section **mean-reverts** rather than trends
-(favorite–longshot bias), the signal is weak (|Sharpe| ≈ 0.18), and turnover cost
-is the binding constraint — it does not survive 50 bps/turn.
+**Cross-market momentum** (`run_polymarket_momentum.py`) pits cross-sectional
+momentum vs. its contrarian mirror (`xs_reversal`), per-market time-series
+momentum, and a `long_all` baseline — all causal, Bayesian-shrunk by each
+market's log-odds noise, cost-aware. First finding (`docs/polymarket/`,
+**research artefact, not a deployable edge**): on the top resolved markets the
+weekly cross-section **mean-reverts** rather than trends (favorite–longshot bias),
+the signal is weak (|Sharpe| ≈ 0.18), and turnover cost is the binding constraint
+— it does not survive 50 bps/turn.
+
+**Sharp move → actual outcome** (`run_polymarket_vol_outcome.py`) is an event
+study using the settled resolution as ground truth: it buckets `(market, day)`
+episodes by recent upside log-odds volatility (and `sharp_up` / `vol_skew` /
+`bocpd_cp`, reusing the repo's BOCPD detector) and reads off the actual Yes-rate,
+the calibration residual vs. price, and the forward drift. Finding: a sharp
+upside move is **mildly informative about the eventual outcome** (markets
+underprice Yes by ~+3.6% in the top bucket) but the sharpest spikes **overreact
+short-term** (forward 10-day log-odds drift flips negative) — the same mean-reversion
+theme as the momentum study. Full order-book depth is reachable live
+(`fetch.order_book_features`: spread / microprice / depth imbalance) for future
+live-signal work, though Polymarket exposes no historical book.
 
 ## Methodology notes
 
