@@ -132,3 +132,54 @@ def bracket_outcomes(
         "fwd_dlogodds":  g["fwd_dlogodds"].mean(),
     })
     return out.reset_index().rename(columns={"_bracket": "bracket"})
+
+
+# default price bands for the level-controlled test
+PRICE_BANDS = ((0.05, 0.15), (0.15, 0.30), (0.30, 0.50), (0.50, 0.70), (0.70, 0.95))
+
+
+def band_matched_calibration(
+    events: pd.DataFrame,
+    metric: str = "upside_vol",
+    price_bands=PRICE_BANDS,
+    hi_quantile: float = 0.70,
+    min_band_n: int = 40,
+) -> pd.DataFrame:
+    """Within each price band, split episodes high-vs-low on ``metric`` and compare.
+
+    Controls for the level confound: a market at 0.30 resolves Yes ~30% regardless
+    of vol, so we hold price roughly fixed (the band) and ask whether *high* recent
+    upside vol resolves Yes more often than *low* vol at the **same price**.
+
+    Per band: episode counts, the (near-matched) mean price of each leg, each leg's
+    Yes-rate and calibration residual, the within-band Yes-rate lift
+    ``hi_minus_lo`` (the level-controlled vol signal), and each leg's forward drift.
+    A positive, consistent ``hi_minus_lo`` ⇒ the edge is a genuine vol signal, not a
+    price-level artifact.
+    """
+    e = events.dropna(subset=[metric, "price", "outcome"]).copy()
+    rows = []
+    for lo, hi in price_bands:
+        sub = e[(e["price"] >= lo) & (e["price"] < hi)]
+        if len(sub) < min_band_n:
+            continue
+        thr = sub[metric].quantile(hi_quantile)
+        hi_mask = sub[metric] >= thr
+        hi_leg, lo_leg = sub[hi_mask], sub[~hi_mask]
+        if len(hi_leg) == 0 or len(lo_leg) == 0:
+            continue
+        rows.append({
+            "band":        f"[{lo:.2f},{hi:.2f})",
+            "n":           int(len(sub)),
+            "n_hi":        int(len(hi_leg)),
+            "price_hi":    float(hi_leg["price"].mean()),
+            "price_lo":    float(lo_leg["price"].mean()),
+            "yes_hi":      float(hi_leg["outcome"].mean()),
+            "yes_lo":      float(lo_leg["outcome"].mean()),
+            "calib_hi":    float(hi_leg["outcome"].mean() - hi_leg["price"].mean()),
+            "calib_lo":    float(lo_leg["outcome"].mean() - lo_leg["price"].mean()),
+            "hi_minus_lo": float(hi_leg["outcome"].mean() - lo_leg["outcome"].mean()),
+            "fwd_hi":      float(hi_leg["fwd_dlogodds"].mean()),
+            "fwd_lo":      float(lo_leg["fwd_dlogodds"].mean()),
+        })
+    return pd.DataFrame(rows)

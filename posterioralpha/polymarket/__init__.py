@@ -15,7 +15,7 @@ log-odds.
   validation→ reuse ``posterioralpha.validation.compute_metrics``
 """
 from .backtest import PMParams, PMResult, run_polymarket_momentum
-from .events import bracket_outcomes, build_event_table
+from .events import band_matched_calibration, bracket_outcomes, build_event_table
 from .fetch import (
     build_price_panel,
     fetch_markets,
@@ -65,6 +65,7 @@ __all__ = [
     # events
     "build_event_table",
     "bracket_outcomes",
+    "band_matched_calibration",
     # backtest
     "PMParams",
     "PMResult",

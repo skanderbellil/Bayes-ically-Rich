@@ -226,13 +226,21 @@ live-signal work, though Polymarket exposes no historical book.
 
 **Harvesting the edge** (`run_polymarket_event_trades.py`) turns that split into
 trades with realistic frictions (fill *after* the move, slippage per book crossing,
-one position per market) and shows the **exit policy is the whole game**: detecting a
-top-bucket upside spike and **holding Yes to resolution** earns ~+5¢ per $1 contract
-(survives 2% slippage) — the calibration edge paid out — while **trading the drift**
-(take-profit / fixed horizon) breaks even or loses, killed by the same short-term
-overreaction. Buying Yes beats letting `vol_skew` pick the side, confirming the edge
-is *Yes-underpricing*, not a generic spike effect. Thin (~100 trades) and
-universe-tilted — read the sign, not the t-stat (`docs/polymarket/EVENT_TRADE_HARVEST.md`).
+one position per market). The **exit policy is the whole game**: detecting a
+top-bucket upside spike and **holding Yes to resolution** makes money while **trading
+the drift** (take-profit / fixed horizon) breaks even or loses to the short-term
+overreaction (`docs/polymarket/EVENT_TRADE_HARVEST.md`).
+
+**Level control** (`run_polymarket_band_control.py`) then *corrects* that reading.
+Comparing high- vs low-vol episodes **within fixed price bands** shows the
+hold-to-resolution PnL is the favorite–longshot **calibration of the entry band**,
+not the vol detection — a vol filter slightly *reduces* it (+9¢ vs +11¢ per $1
+contract). The level-controlled vol signal is real but **sign-flips** (spiking
+longshots revert; spiking favorites resolve Yes +29% more) and is **already priced**
+(trading it loses net of slippage). So the genuine effect here is *structural*
+favorite–longshot mispricing of mid-low-probability markets — not a volatility/timing
+edge. A cautionary, self-correcting result in the spirit of the PEAD writeup
+(`docs/polymarket/BAND_CONTROL.md`).
 
 ## Methodology notes
 

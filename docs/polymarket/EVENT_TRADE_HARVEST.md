@@ -1,5 +1,11 @@
 # Harvesting the sharp-move edge — exit policy is the whole game
 
+> ⚠️ **Corrected by `BAND_CONTROL.md`.** The hold-to-resolution PnL below is real,
+> but a price-level control shows its *source* is the favorite–longshot calibration
+> of the ~0.27 entry band, **not** the upside-vol detection (a vol filter slightly
+> *reduces* the edge). The "exit policy is the whole game" contrast still holds;
+> the "vol detection is the edge" reading does not. Read this with that correction.
+
 The vol→outcome study (`SHARP_MOVE_OUTCOME.md`) found two opposite-signed effects
 after a sharp upside move: the market **underprices Yes** (a positive *calibration*
 edge, realised only at settlement) but **overreacts short-term** (negative forward
