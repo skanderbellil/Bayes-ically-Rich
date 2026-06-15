@@ -47,7 +47,7 @@ _METRICS = {"upside_vol": upside_vol, "sharp_up": sharp_up, "vol_skew": vol_skew
 class TradeParams:
     metric: str = "upside_vol"        # trigger metric (top-quantile crossing)
     entry_quantile: float = 0.8       # 0.8 → top 20% (Q5); 0.6 → top 40% (Q4+Q5)
-    side: str = "yes_only"            # "yes_only" | "directional" (vol_skew sign)
+    side: str = "yes_only"            # "yes_only" | "no_only" | "directional" (vol_skew sign)
     exit: str = "resolution"          # "resolution" | "take_profit" | "horizon"
     take_profit: float = 0.10         # favourable move banked (prob units)
     stop_loss: float = 0.25           # adverse move stopped (prob units)
@@ -117,7 +117,12 @@ def simulate_event_trades(
                 i += 1
                 continue
 
-            sd = 1.0 if (params.side == "yes_only" or not np.isfinite(sk[i]) or sk[i] >= 0) else -1.0
+            if params.side == "yes_only":
+                sd = 1.0
+            elif params.side == "no_only":
+                sd = -1.0
+            else:  # directional: let the vol skew pick the side
+                sd = 1.0 if (not np.isfinite(sk[i]) or sk[i] >= 0) else -1.0
 
             # ── resolve the exit ──────────────────────────────────────────
             early = False

@@ -54,6 +54,8 @@ def main() -> None:
     ap.add_argument("--take-profit",type=float, default=0.10)
     ap.add_argument("--stop-loss",  type=float, default=0.25)
     ap.add_argument("--horizon",    type=int,   default=10)
+    ap.add_argument("--min-price",  type=float, default=0.05, help="entry price band floor")
+    ap.add_argument("--max-price",  type=float, default=0.95, help="entry price band ceiling")
     ap.add_argument("--refresh",    action="store_true")
     ap.add_argument("--no-plots",   action="store_true")
     args = ap.parse_args()
@@ -72,17 +74,18 @@ def main() -> None:
                 *panel.shape, len(outcomes), 100 * outcomes.mean())
 
     m, slip = args.metric, args.slippage
+    band = dict(min_price=args.min_price, max_price=args.max_price)
     configs = {
         # ── Idea 1: hold to resolution ──────────────────────────────────
-        "res · Q5 · Yes":   TradeParams(m, 0.8, "yes_only",    "resolution", slippage=slip),
-        "res · Q4Q5 · Yes": TradeParams(m, 0.6, "yes_only",    "resolution", slippage=slip),
-        "res · Q5 · dir":   TradeParams(m, 0.8, "directional", "resolution", slippage=slip),
+        "res · Q5 · Yes":   TradeParams(m, 0.8, "yes_only",    "resolution", slippage=slip, **band),
+        "res · Q4Q5 · Yes": TradeParams(m, 0.6, "yes_only",    "resolution", slippage=slip, **band),
+        "res · Q5 · dir":   TradeParams(m, 0.8, "directional", "resolution", slippage=slip, **band),
         # ── Idea 2: trade the drift ─────────────────────────────────────
         "TP · Q5 · Yes":    TradeParams(m, 0.8, "yes_only", "take_profit", slippage=slip,
-                                        take_profit=args.take_profit, stop_loss=args.stop_loss),
+                                        take_profit=args.take_profit, stop_loss=args.stop_loss, **band),
         f"horizon{args.horizon} · Q5 · Yes":
                             TradeParams(m, 0.8, "yes_only", "horizon", slippage=slip,
-                                        max_hold=args.horizon),
+                                        max_hold=args.horizon, **band),
     }
 
     results, rows = {}, []
