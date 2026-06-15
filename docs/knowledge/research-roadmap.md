@@ -448,6 +448,32 @@ cash-burning lottery/junk name is 'bad vol'. 'Good vol vs bad vol' reduces to
 'quality vs junk', and quality (cop_at) is the robust, cross-region edge.
 `run_good_bad_vol.py`.
 
+### Idea 24 — LONG-ONLY cop_at tilt, net of cost — WORKS (corrects Idea 22)
+User 2026-06-15. Idea 22 concluded cop_at's alpha was all in the SHORT leg
+(real ETFs COWZ/QUAL underperformed SPY). That was WRONG — it conflated "the
+ETFs don't track cop_at" with "the long leg has no alpha." Tested properly
+using JKP per-quantile PORTFOLIOS (the actual top-quantile high-cash-
+profitability book), top-quantile minus universe, net of 1% cost, across 12
+countries (`run_quality_longonly.py`, datasets/jkp_cop_portfolios.csv.gz):
+  • The long-only tilt's Sharpe BEATS the market in ALL 12 countries; active
+    return is POSITIVE gross in all 12.
+  • Net of 1% cost: US +1.9%/yr t=5.56 (74y sample — clears t>3 net!), UK
+    t 2.57, Germany 2.33, Hong Kong 2.40 (4/12 clear t>2 net); Japan is the
+    notable null (-0.3%). Direction universal, significance strongest in US.
+  • So the LONG leg of cash-profitability genuinely earns net of cost — the
+    cop_at edge IS partly capturable long-only (Idea 22 was too pessimistic).
+  • BUT the buyable ETFs don't capture it: COWZ/QUAL/DGRW/SPHQ all have
+    NEGATIVE active return vs SPY (-0.7% to -2.0%), because their screens are
+    imperfect/value-tilted proxies for cash operating profitability, and the
+    value tilt hurt in the 2017-26 growth regime.
+**Verdict:** a long-only cash-profitability tilt is a real, modest, net-of-
+cost edge (US t 5.56 net, lifts Sharpe ~0.49→0.66; positive in 12/12 gross)
+— the session's most robust retail-IMPLEMENTABLE-IN-PRINCIPLE finding. The
+catch is implementation: you need a CLEAN cop_at screen (direct cash-operating-
+profitability sort), which off-the-shelf quality ETFs do NOT provide. The
+deployable gap is a faithful cop_at ETF/screen, not the concept.
+`run_quality_longonly.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
