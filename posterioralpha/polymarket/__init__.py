@@ -31,6 +31,7 @@ from .signals import (
     logodds_momentum,
     to_logodds,
 )
+from .trades import TradeParams, TradeResult, simulate_event_trades, summarize_trades
 from .volatility import (
     downside_vol,
     logodds_returns,
@@ -68,4 +69,9 @@ __all__ = [
     "PMParams",
     "PMResult",
     "run_polymarket_momentum",
+    # event-trade harvest
+    "TradeParams",
+    "TradeResult",
+    "simulate_event_trades",
+    "summarize_trades",
 ]
