@@ -75,20 +75,50 @@ def _get(url: str, params: dict, retries: int = 4, timeout: int = 30) -> Optiona
 # Gamma — market metadata
 # ---------------------------------------------------------------------------
 
+def _yes_index(outcomes: str) -> int:
+    """Index of the Yes/True leg in the (JSON-string) outcomes list (0 if absent)."""
+    try:
+        outs = [o.strip().lower() for o in json.loads(outcomes)]
+    except (json.JSONDecodeError, TypeError):
+        return 0
+    for i, out in enumerate(outs):
+        if out in ("yes", "true"):
+            return i
+    return 0
+
+
 def _yes_token_id(clob_token_ids: str, outcomes: str) -> Optional[str]:
     """Pick the Yes-outcome token id from the (JSON-string) Gamma fields."""
     try:
         tokens = json.loads(clob_token_ids)
-        outs   = [o.strip().lower() for o in json.loads(outcomes)]
     except (json.JSONDecodeError, TypeError):
         return None
-    if not tokens or len(tokens) != len(outs):
+    if not tokens:
         return None
-    for tok, out in zip(tokens, outs):
-        if out in ("yes", "true"):
-            return str(tok)
-    # Non Yes/No market (e.g. multi-candidate) — treat first outcome as the "Yes leg"
-    return str(tokens[0])
+    idx = _yes_index(outcomes)
+    return str(tokens[idx]) if idx < len(tokens) else str(tokens[0])
+
+
+def _yes_outcome(outcome_prices: str, outcomes: str) -> float:
+    """Settled Yes probability (0/1) for a resolved market; NaN if not settled.
+
+    After resolution Gamma reports ``outcomePrices`` as the settled values, e.g.
+    ``["1", "0"]`` (Yes happened) or ``["0", "1"]`` (No happened).
+    """
+    try:
+        prices = [float(x) for x in json.loads(outcome_prices)]
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return float("nan")
+    idx = _yes_index(outcomes)
+    if idx >= len(prices):
+        return float("nan")
+    val = prices[idx]
+    # settled markets sit at ~0/1; anything in between isn't a clean label
+    if val <= 0.02:
+        return 0.0
+    if val >= 0.98:
+        return 1.0
+    return float("nan")
 
 
 def fetch_markets(
@@ -148,6 +178,7 @@ def fetch_markets(
                 "start_date": m.get("startDate"),
                 "end_date":   m.get("endDate"),
                 "closed":     bool(m.get("closed")),
+                "outcome":    _yes_outcome(m.get("outcomePrices", ""), m.get("outcomes", "")),
             })
             if len(rows) >= n_markets:
                 break
@@ -276,3 +307,75 @@ def build_price_panel(
     logger.info("build_price_panel: %d days × %d markets",
                 panel.shape[0], panel.shape[1])
     return panel, meta
+
+
+# ---------------------------------------------------------------------------
+# Resolution outcomes (the "actual outcome" label)
+# ---------------------------------------------------------------------------
+
+def resolution_outcomes(meta: pd.DataFrame, panel: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Binary Yes-resolution label per market (1.0 = resolved Yes, 0.0 = No).
+
+    Prefers Gamma's settled ``outcome`` column; falls back to the last clean
+    panel price (≈0/1 at resolution) for rows where the column is absent — so a
+    legacy cache without the column still yields labels. Markets that did not
+    settle cleanly are dropped (NaN).
+    """
+    out = pd.Series(np.nan, index=meta.index, dtype=float)
+    if "outcome" in meta.columns:
+        out = pd.to_numeric(meta["outcome"], errors="coerce")
+
+    if panel is not None:
+        need = out.index[out.isna()]
+        for mid in need:
+            if mid in panel.columns:
+                last = panel[mid].dropna()
+                if len(last):
+                    v = float(last.iloc[-1])
+                    out.loc[mid] = 1.0 if v >= 0.9 else (0.0 if v <= 0.1 else np.nan)
+    return out.dropna()
+
+
+# ---------------------------------------------------------------------------
+# CLOB order book (live snapshot — full depth, no history)
+# ---------------------------------------------------------------------------
+
+def fetch_order_book(token_id: str) -> dict:
+    """Current order book for a token: ``{bids: [...], asks: [...]}`` with sizes.
+
+    Live snapshot only — Polymarket exposes full current depth but no historical
+    books, so this powers *live* microstructure signals, not the backtest.
+    """
+    data = _get("https://clob.polymarket.com/book", {"token_id": token_id})
+    return data if isinstance(data, dict) else {}
+
+
+def order_book_features(book: dict) -> dict:
+    """Microstructure features from a CLOB book snapshot.
+
+    Returns best bid/ask, spread, mid, size-weighted microprice, and top-of-book
+    depth imbalance ∈ [-1, 1] (positive = more bid size → buy pressure).
+    """
+    def _levels(side):
+        out = []
+        for lv in book.get(side, []) or []:
+            try:
+                out.append((float(lv["price"]), float(lv["size"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return out
+
+    bids, asks = _levels("bids"), _levels("asks")
+    if not bids or not asks:
+        return {}
+    best_bid = max(bids, key=lambda x: x[0])
+    best_ask = min(asks, key=lambda x: x[0])
+    bp, bsz = best_bid
+    ap, asz = best_ask
+    mid = 0.5 * (bp + ap)
+    micro = (bp * asz + ap * bsz) / (asz + bsz) if (asz + bsz) > 0 else mid
+    imb = (bsz - asz) / (bsz + asz) if (bsz + asz) > 0 else 0.0
+    return {
+        "best_bid": bp, "best_ask": ap, "spread": ap - bp,
+        "mid": mid, "microprice": micro, "depth_imbalance": imb,
+    }

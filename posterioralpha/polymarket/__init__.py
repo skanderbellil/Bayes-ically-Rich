@@ -7,13 +7,23 @@ Outcome-token prices are implied probabilities, edge comes from probability
 *mispricing/drift* rather than mean-variance, and the natural coordinate is
 log-odds.
 
-  data      → ``fetch``    : live Gamma (metadata) + CLOB (price history) panel
-  research  → ``signals``  : log-odds momentum, cross-sectional z-score, Bayes shrink
-  backtest  → ``backtest`` : no-lookahead, cost-aware long/short engine
+  data      → ``fetch``      : live Gamma (metadata) + CLOB (price history + book) panel
+  research  → ``signals``    : log-odds momentum, cross-sectional z-score, Bayes shrink
+              ``volatility`` : upside/downside semivol, vol-skew, sharp-move detection
+  events    → ``events``     : event-study table (sharp move → actual outcome), BOCPD-tagged
+  backtest  → ``backtest``   : no-lookahead, cost-aware long/short engine
   validation→ reuse ``posterioralpha.validation.compute_metrics``
 """
 from .backtest import PMParams, PMResult, run_polymarket_momentum
-from .fetch import build_price_panel, fetch_markets, fetch_token_history
+from .events import bracket_outcomes, build_event_table
+from .fetch import (
+    build_price_panel,
+    fetch_markets,
+    fetch_order_book,
+    fetch_token_history,
+    order_book_features,
+    resolution_outcomes,
+)
 from .signals import (
     bayesian_shrink,
     cross_sectional_score,
@@ -21,16 +31,40 @@ from .signals import (
     logodds_momentum,
     to_logodds,
 )
+from .volatility import (
+    downside_vol,
+    logodds_returns,
+    realized_vol,
+    sharp_up,
+    upside_vol,
+    vol_skew,
+)
 
 __all__ = [
+    # data
     "build_price_panel",
     "fetch_markets",
     "fetch_token_history",
+    "fetch_order_book",
+    "order_book_features",
+    "resolution_outcomes",
+    # research: momentum signals
     "to_logodds",
     "from_logodds",
     "logodds_momentum",
     "bayesian_shrink",
     "cross_sectional_score",
+    # research: volatility
+    "logodds_returns",
+    "realized_vol",
+    "upside_vol",
+    "downside_vol",
+    "vol_skew",
+    "sharp_up",
+    # events
+    "build_event_table",
+    "bracket_outcomes",
+    # backtest
     "PMParams",
     "PMResult",
     "run_polymarket_momentum",
