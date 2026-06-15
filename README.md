@@ -188,6 +188,28 @@ result was traced to a **winners-only calculation bug** and corrected to ~+11–
 and the live-names-only universe makes long-short returns **survivorship-biased upward**.
 Treat it as a research artefact, not a deployable edge.
 
+### Polymarket — cross-market momentum (`polymarket`)
+
+A **prediction-market** module, deliberately a *different asset class* from every
+time-series / cross-sectional **equity** strategy above. A Polymarket market
+resolves Yes/No and its Yes-token price *is* the implied probability, so edge comes
+from probability mispricing/drift rather than mean–variance, and the natural
+coordinate is **log-odds**. Like `pead`/`council` it is a self-contained subpackage
+spanning all four stages, on live data (Gamma metadata + CLOB price history):
+
+```bash
+python experiments/run_polymarket_momentum.py            # cached panel + 4 books
+python experiments/run_polymarket_momentum.py --refresh  # re-pull live Polymarket data
+```
+
+It pits cross-sectional momentum vs. its contrarian mirror (`xs_reversal`),
+per-market time-series momentum, and a `long_all` baseline — all causal,
+Bayesian-shrunk by each market's log-odds noise, cost-aware. First finding
+(`docs/polymarket/`, **research artefact, not a deployable edge**): on the top
+resolved markets the weekly cross-section **mean-reverts** rather than trends
+(favorite–longshot bias), the signal is weak (|Sharpe| ≈ 0.18), and turnover cost
+is the binding constraint — it does not survive 50 bps/turn.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
