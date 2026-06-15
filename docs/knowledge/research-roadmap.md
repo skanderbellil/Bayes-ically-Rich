@@ -424,6 +424,30 @@ leg). The only durable retail edge is the MECHANISM: vol-managing leverage
 management, not alpha. The real alpha that exists (cop_at) requires shorting
 retail cannot do. `run_cop_at_retail.py`.
 
+### Idea 23 — Good vol vs bad vol — TESTED, NULL (the discriminator is quality, not a vol stat)
+User 2026-06-15: maybe among volatile assets some earn (good vol) and some
+don't (bad vol), separable ex-ante. Two tests (`run_good_bad_vol.py`):
+  • Stock-level double sort (490-stock equity universe, vol × momentum/MAX/
+    skew): SURVIVORSHIP-CONTAMINATED — within high-vol, high-MAX(lottery)
+    stocks OUTperformed (t −3.08), the OPPOSITE of the academic lottery
+    effect, because the current-membership index keeps the lottery WINNERS
+    (NVDA/TSLA) and drops the blow-ups. Unusable for levels.
+  • JKP survivorship-free cross-region (the honest test): the whole vol
+    family — total vol (low-vol anomaly), IVOL (the puzzle), lottery
+    (rmax1/5), skew (iskew/rskew), beta/downside-beta/BAB — NONE clears
+    US t>3 net + cross-region t>2 net of 1.5% cost. 'Bad vol' (IVOL,
+    lottery, skew) is real GROSS in the US (t≈2) but dies on cost and does
+    not replicate abroad; betting-against-beta even REVERSES in emerging/
+    developed (t −2 to −3). 
+**Verdict:** the intuition is right that volatile assets are heterogeneous,
+but the discriminator is NOT a volatility/lottery/skew statistic (all fail
+our bar) — it is FUNDAMENTAL QUALITY. The one signal that cleared the bar all
+session, cop_at (cash-based operating profitability, Idea 21), IS the good-vs-
+bad-vol answer: a volatile firm that earns cash is 'good vol'; a volatile
+cash-burning lottery/junk name is 'bad vol'. 'Good vol vs bad vol' reduces to
+'quality vs junk', and quality (cop_at) is the robust, cross-region edge.
+`run_good_bad_vol.py`.
+
 ## 3. Standing hygiene rules (KB §5, adopted)
 
 1. IC analysis before any backtest (`mining/ic.py` is the gate).
