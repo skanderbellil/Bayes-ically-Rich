@@ -365,6 +365,16 @@ post-election slice (2025-01 →) it still nets **0.67** with gross rising to 1.
 long-tilt that needs honest spread modelling and walk-forward tuning before live use
 (`docs/polymarket/PAYUP_FOLLOW.md`).
 
+**Pre-resolution timing** (`run_polymarket_timing.py`) asks the question that decides whether
+"some wallets buy before jumps" is exploitable: does timing skill *persist*? A strict split-half
+test (score each wallet's lead = mean forward drift in the first vs second half of its fills,
+correlate across wallets) finds **modest** persistence — robust **Spearman +0.28**, and top-half-early
+timers stay positive late (+0.042) while early-poor go negative (−0.026). Real but weak, and the raw
+"best timers" leaderboard is contaminated by survivorship artefacts (Pearson +0.73 is one mechanical
+outlier with t≈8,672), so standalone "follow the timers" is fragile. It mainly explains *why* the
+pay-up book works — informed wallets do lead moves repeatably — rather than beating it
+(`docs/polymarket/TIMING.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi

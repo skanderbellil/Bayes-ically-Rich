@@ -154,3 +154,54 @@ def summarize_quality(feat: pd.DataFrame) -> dict[str, pd.DataFrame]:
         (f"flipper (hold<={med:.0f}d)", feat["hold_days"] <= med),
     ])
     return out
+
+
+# ---------------------------------------------------------------------------
+# Pre-resolution timing — is informed timing a *persistent* wallet skill?
+# ---------------------------------------------------------------------------
+
+def wallet_lead_scores(feat: pd.DataFrame, min_fills: int = 20) -> pd.DataFrame:
+    """Per-wallet 'lead score': mean forward directional drift of its fills.
+
+    A high score means the wallet's trades systematically *precede* moves in their
+    favour — the informed-timing / pre-jump signature. Columns: n, lead (mean
+    dir_fwd), t, hit (resolution). Only wallets with ≥``min_fills`` fills.
+    """
+    g = feat.groupby("wallet")
+    rows = []
+    for w, d in g:
+        if len(d) < min_fills:
+            continue
+        m, tt, n = _stat(d["dir_fwd"])
+        rows.append([w, n, m, tt, float(d["resolved_correct"].dropna().mean())])
+    out = pd.DataFrame(rows, columns=["wallet", "n", "lead", "t", "hit"])
+    return out.sort_values("lead", ascending=False).reset_index(drop=True)
+
+
+def timing_persistence(feat: pd.DataFrame, min_each: int = 15) -> dict:
+    """Split-half test: does a wallet's *early* lead score predict its *late* one?
+
+    Each wallet's fills are split at its own median trade time; we score the lead
+    (mean forward drift) in each half and correlate across wallets. Persistence is
+    the test that separates real informed timing from luck — and the actionable
+    table: do the wallets that timed well early keep timing well later?
+    """
+    rows = []
+    for w, d in feat.groupby("wallet"):
+        d = d.sort_values("timestamp")
+        if len(d) < 2 * min_each:
+            continue
+        cut = len(d) // 2
+        early, late = d.iloc[:cut]["dir_fwd"], d.iloc[cut:]["dir_fwd"]
+        if len(early) >= min_each and len(late) >= min_each:
+            rows.append([w, float(early.mean()), float(late.mean())])
+    df = pd.DataFrame(rows, columns=["wallet", "early", "late"])
+    res = {"n_wallets": len(df), "frame": df}
+    if len(df) >= 5:
+        res["pearson"] = float(df["early"].corr(df["late"]))
+        res["spearman"] = float(df["early"].corr(df["late"], method="spearman"))
+        top = df[df["early"] > df["early"].median()]
+        bot = df[df["early"] <= df["early"].median()]
+        res["late_given_top_early"] = float(top["late"].mean())
+        res["late_given_bot_early"] = float(bot["late"].mean())
+    return res

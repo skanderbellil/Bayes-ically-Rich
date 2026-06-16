@@ -67,7 +67,12 @@ from .flow import (
     flow_signal_panels,
     run_flow_book,
 )
-from .tradequality import build_trade_features, summarize_quality
+from .tradequality import (
+    build_trade_features,
+    summarize_quality,
+    timing_persistence,
+    wallet_lead_scores,
+)
 from .traders import (
     build_token_panel,
     candidate_universe,
@@ -168,7 +173,9 @@ __all__ = [
     "run_flow_book",
     "FlowParams",
     "FlowResult",
-    # behaviour: trade-level quality tells
+    # behaviour: trade-level quality tells + timing persistence
     "build_trade_features",
     "summarize_quality",
+    "wallet_lead_scores",
+    "timing_persistence",
 ]
