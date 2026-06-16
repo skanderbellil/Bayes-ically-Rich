@@ -271,6 +271,17 @@ the market can't forecast. The inefficient domains are exactly the mis-calibrate
 which reframes the missing edge: where the market looks least efficient there is mostly
 **irreducible uncertainty, not exploitable mispricing** (`docs/polymarket/EFFICIENCY.md`).
 
+**Strategy synthesis** (`run_polymarket_strategy_synthesis.py`) answers "can any of
+this be traded?". Directional alpha: no. **One** structural trade survives — the classic
+favorite–longshot bias in **macro** (scheduled Fed/rate markets): tail events priced
+4–20% that resolved Yes 0%, so shorting them (buy No, hold to resolution) earns
++9¢/contract, CI [+0.073,+0.110], surviving 3% slippage. But it's a **short-volatility**
+bet — ~100% hit only because no tail fired in the calm 2024–25 regime — with tiny
+capacity and unobserved tail risk. The politics/sports "underpricing" that looked like
+edge is shown to be **volume-selection bias** (high-volume longshots are far more
+"underpriced" — exciting underdogs only draw volume once they're winning). A single
+honestly-caveated candidate, not a free lunch (`docs/polymarket/STRATEGY_SYNTHESIS.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
