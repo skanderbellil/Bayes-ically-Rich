@@ -25,6 +25,7 @@ from .crossoutcome import (
 )
 from .efficiency import brier_skill, build_brier_frame
 from .events import band_matched_calibration, bracket_outcomes, build_event_table
+from .fieldshape import bucket_by_shape, constituent_rows, field_shape_events
 from .fetch import (
     build_price_panel,
     fetch_markets,
@@ -77,6 +78,10 @@ __all__ = [
     # efficiency
     "build_brier_frame",
     "brier_skill",
+    # field shape (peaked vs flat) calibration
+    "field_shape_events",
+    "constituent_rows",
+    "bucket_by_shape",
     # cross-outcome structure
     "event_panels",
     "coupling_summary",
