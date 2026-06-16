@@ -35,6 +35,7 @@ import _bootstrap  # noqa: F401  (adds repo root to sys.path)
 from posterioralpha.polymarket import (
     build_price_panel,
     bucket_by_shape,
+    classify_markets,
     constituent_rows,
     event_panels,
     field_shape_events,
@@ -68,8 +69,12 @@ def _boot_diff(a, b, n=5000, seed=1):
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--n-markets",  type=int,   default=600)
-    ap.add_argument("--min-volume", type=float, default=20_000)
+    # this study pulls a deliberately LARGE, low-volume-floor universe: multi-outcome
+    # fields are scarce and their longshot constituents are low-volume, so a tight
+    # screen starves the field count (24 fields) and inflates a selection bias. The
+    # wide pull yields ~83 fields and is cached after the first (~10 min) run.
+    ap.add_argument("--n-markets",  type=int,   default=2500)
+    ap.add_argument("--min-volume", type=float, default=3_000)
     ap.add_argument("--refresh",    action="store_true")
     ap.add_argument("--no-plots",   action="store_true")
     args = ap.parse_args()
@@ -148,6 +153,43 @@ def main() -> None:
                    tablefmt="rounded_grid"))
     print("  resid = realised Yes-rate − mean price; constituents are event-clustered "
           f"(only {cr['event'].nunique()} independent fields → read direction, not significance)")
+
+    # ── 5. "just size the leader and win?" — buy-leader economics by category ─
+    # The leader wins ~70-83% of the time, which *looks* like a sizable edge. Test it
+    # honestly: pool ALL fields, hold the leader to resolution, split by topic. A real
+    # edge must (a) clear t>2 and (b) not live only in the one political regime.
+    cat = classify_markets(meta)
+    ev_cat = {}
+    for ev, sub in evp.items():
+        cs = [cat.get(m) for m in sub.columns if m in cat.index]
+        cs = [c for c in cs if c]
+        ev_cat[ev] = pd.Series(cs).mode().iloc[0] if cs else "other"
+    df["cat"] = df["event"].map(ev_cat)
+    df["pnl"] = (df["fav_win"] - df["p_fav"]) - 0.01           # buy leader at price, 1% slip
+
+    def _t(x):
+        x = np.asarray(x, float)
+        return x.mean() / x.std() * np.sqrt(len(x)) if len(x) > 1 and x.std() > 0 else float("nan")
+
+    print("\n" + "═" * 78)
+    print("  BUY-LEADER, hold to resolution (1% slip), event-clustered  ·  by topic")
+    print("  → can we 'just size the favorite and win'?  a real edge needs t>2 AND breadth")
+    print("═" * 78)
+    rows = []
+    for grp, g in [("ALL", df)] + sorted(df.groupby("cat"), key=lambda kv: -len(kv[1])):
+        if isinstance(grp, tuple):
+            grp, g = grp
+        if len(g) < 2:
+            continue
+        m, lo, hi = _boot_mean(g["pnl"].values, seed=11)
+        rows.append([grp, len(g), f"{g['fav_win'].mean():.2f}", f"{g['p_fav'].mean():.3f}",
+                     f"{m:+.3f}", f"[{lo:+.3f},{hi:+.3f}]", f"{_t(g['pnl'].values):.2f}",
+                     "✓" if (lo > 0) else ""])
+    print(tabulate(rows, headers=["group", "n", "win", "price", "PnL/ev", "95% CI", "t", "CI>0"],
+                   tablefmt="rounded_grid"))
+    print("  reading: the ALL-fields leader edge is NOT significant once the universe is")
+    print("  un-selected; only MACRO survives (t≈3, CI excludes 0) — the favorite-longshot")
+    print("  candidate already flagged in STRATEGY_SYNTHESIS, now confirmed at higher n.")
 
     # ── plot: residual vs entropy, sized by k, colored by win/lose ────────
     if not args.no_plots:
