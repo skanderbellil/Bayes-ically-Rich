@@ -251,6 +251,17 @@ macro. The "favorite–longshot edge" was the 2024-election + war complex; it do
 generalise. No deployable, universe-robust edge survived the four-study arc — but a
 clean, reusable prediction-market research stack did (`docs/polymarket/UNIVERSE_ROBUSTNESS.md`).
 
+**Digging into politics** (`run_polymarket_politics_deep.py`) stress-tests the one
+positive lead. Good news: the underpricing *is* diverse — 25 distinct events across
+many countries, persisting 2024–2025, and politics is genuinely **mis-calibrated**
+(underdogs underpriced, favorites at 0.7–0.9 resolving Yes only ~44%) while
+non-politics hugs the calibration diagonal. But traded honestly — entered at realistic
+prices, **PnL clustered per event**, bootstrap CI — every strategy's interval spans
+zero, it's statistically **indistinguishable from the non-political baseline**, and it
+decays in 2026 (+10%→+12%→−4% by year). A real behavioural mis-calibration, but one
+correlated political era — a directional regime bet, not a confirmed edge. Upgrading it
+needs genuine out-of-sample cycles (pre-2024 history) — `docs/polymarket/POLITICS_DEEP.md`.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
