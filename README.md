@@ -262,6 +262,15 @@ decays in 2026 (+10%→+12%→−4% by year). A real behavioural mis-calibration
 correlated political era — a directional regime bet, not a confirmed edge. Upgrading it
 needs genuine out-of-sample cycles (pre-2024 history) — `docs/polymarket/POLITICS_DEEP.md`.
 
+**Information efficiency** (`run_polymarket_efficiency.py`) steps back from edge-hunting
+to ask how informative prices are (Brier score) over a market's life. Prices converge
+(Brier 0.081→0.028 into the last 3 days), and **efficiency varies hugely by domain**:
+Brier-skill-vs-base-rate is +84% in macro (Fed telegraphs), +39% in sports, but only
+**+4.5% in geopolitics** — far-from-resolution geopolitical prices are near coin-flips
+the market can't forecast. The inefficient domains are exactly the mis-calibrated ones,
+which reframes the missing edge: where the market looks least efficient there is mostly
+**irreducible uncertainty, not exploitable mispricing** (`docs/polymarket/EFFICIENCY.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
