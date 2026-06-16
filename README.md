@@ -295,13 +295,16 @@ without a new edge (`docs/polymarket/CROSS_OUTCOME.md`).
 
 **Field shape — peaked vs flat** (`run_polymarket_field_shape.py`) asks whether a field
 with one towering favorite is differently predictive than a flat scrum of comparably-priced
-outcomes. The leader's calibration is **shape-invariant** (under-priced ~+0.1 in both;
-peaked − flat gap −0.012, CI [−0.31, +0.29]), so a clear favorite is no better-tuned to its
-own outcome. What shape *does* govern is **information content** (Brier skill 0.72 peaked
-vs 0.51 flat — flat fields are genuinely more uncertain) and the **location of the
-challenger-over-bet** mispricing, which concentrates in flat fields' 0.10–0.35 band
-(resid −0.093 vs +0.023 peaked). A conditioning lens — trust a flat field's prices, and
-its mid-priced challengers, less — but no harvestable edge (`docs/polymarket/FIELD_SHAPE.md`).
+outcomes — pulling a deliberately wide, low-volume-floor universe (**83 multi-outcome fields**
+vs the 24 a tight screen yields) to break the field-count ceiling. The leader's calibration is
+**shape-invariant** (under-priced ~+0.05–0.10 in both; peaked − flat gap −0.042, CI [−0.23,
++0.14]). What shape *does* govern is **information content** (Brier skill 0.60 peaked vs 0.23
+flat — flat fields genuinely more uncertain) and the **location of the challenger-over-bet**
+mispricing (flat fields' 0.10–0.35 band, resid −0.056 over n=75). It also settles the "the
+leader wins 83%, just size it" question: on the un-selected universe the leader wins only
+**70%** at price 0.62 (pooled t=1.35, CI spans zero) — the 83% was volume-selection bias — and
+**only macro survives** (leaders win 93%, +19.8¢/event, t=2.96), the same favorite-longshot
+candidate as `STRATEGY_SYNTHESIS`, now confirmed at higher n (`docs/polymarket/FIELD_SHAPE.md`).
 
 ## Methodology notes
 
