@@ -99,6 +99,19 @@ def _yes_token_id(clob_token_ids: str, outcomes: str) -> Optional[str]:
     return str(tokens[idx]) if idx < len(tokens) else str(tokens[0])
 
 
+def _event_fields(m: dict) -> tuple[str, str]:
+    """Parent-event ticker + title for a market (for categorisation); ('','') if absent."""
+    ev = m.get("events")
+    if isinstance(ev, str):
+        try:
+            ev = json.loads(ev)
+        except (json.JSONDecodeError, TypeError):
+            ev = None
+    if isinstance(ev, list) and ev and isinstance(ev[0], dict):
+        return str(ev[0].get("ticker") or ""), str(ev[0].get("title") or "")
+    return "", ""
+
+
 def _yes_outcome(outcome_prices: str, outcomes: str) -> float:
     """Settled Yes probability (0/1) for a resolved market; NaN if not settled.
 
@@ -168,6 +181,7 @@ def fetch_markets(
             yes_token = _yes_token_id(m.get("clobTokenIds", ""), m.get("outcomes", ""))
             if yes_token is None:
                 continue
+            ev_ticker, ev_title = _event_fields(m)
             rows.append({
                 "id":         str(m.get("id")),
                 "question":   m.get("question"),
@@ -179,6 +193,8 @@ def fetch_markets(
                 "end_date":   m.get("endDate"),
                 "closed":     bool(m.get("closed")),
                 "outcome":    _yes_outcome(m.get("outcomePrices", ""), m.get("outcomes", "")),
+                "event_ticker": ev_ticker,
+                "event_title":  ev_title,
             })
             if len(rows) >= n_markets:
                 break

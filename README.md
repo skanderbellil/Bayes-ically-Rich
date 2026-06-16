@@ -242,6 +242,15 @@ favorite–longshot mispricing of mid-low-probability markets — not a volatili
 edge. A cautionary, self-correcting result in the spirit of the PEAD writeup
 (`docs/polymarket/BAND_CONTROL.md`).
 
+**Universe robustness** (`run_polymarket_universe_robustness.py`) asks whether the
+[0.15,0.30] underpricing is structural or a 2024 artifact: it pulls a larger 514-market
+universe, tags each by topic (`categorize.py`), and re-runs the calibration per category.
+Verdict — **political, not structural**: the residual is +42% in politics and +22% in
+geopolitics but **≈0 in sports** (the largest category) and crypto, and negative in
+macro. The "favorite–longshot edge" was the 2024-election + war complex; it does not
+generalise. No deployable, universe-robust edge survived the four-study arc — but a
+clean, reusable prediction-market research stack did (`docs/polymarket/UNIVERSE_ROBUSTNESS.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
