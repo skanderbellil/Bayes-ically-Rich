@@ -293,6 +293,16 @@ reverts, but not tradably), and within fields the favorite is under-bet / the ch
 over-bet (one-regime caveat). A rich structural primitive for hedging/modelling, even
 without a new edge (`docs/polymarket/CROSS_OUTCOME.md`).
 
+**Field shape — peaked vs flat** (`run_polymarket_field_shape.py`) asks whether a field
+with one towering favorite is differently predictive than a flat scrum of comparably-priced
+outcomes. The leader's calibration is **shape-invariant** (under-priced ~+0.1 in both;
+peaked − flat gap −0.012, CI [−0.31, +0.29]), so a clear favorite is no better-tuned to its
+own outcome. What shape *does* govern is **information content** (Brier skill 0.72 peaked
+vs 0.51 flat — flat fields are genuinely more uncertain) and the **location of the
+challenger-over-bet** mispricing, which concentrates in flat fields' 0.10–0.35 band
+(resid −0.093 vs +0.023 peaked). A conditioning lens — trust a flat field's prices, and
+its mid-priced challengers, less — but no harvestable edge (`docs/polymarket/FIELD_SHAPE.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
