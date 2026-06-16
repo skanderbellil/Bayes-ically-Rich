@@ -9,5 +9,7 @@ results/
 *.csv
 # Bundled datasets are tracked despite the *.csv rule above
 !datasets/*.csv
+# Paper-trade ledger is tracked (it's the forward out-of-sample record)
+!data/paper_trade/macro_positions.csv
 .DS_Store
 .claude/
