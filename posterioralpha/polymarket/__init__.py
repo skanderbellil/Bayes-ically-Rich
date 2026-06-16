@@ -16,6 +16,7 @@ log-odds.
 """
 from .backtest import PMParams, PMResult, run_polymarket_momentum
 from .categorize import classify_markets, market_category
+from .efficiency import brier_skill, build_brier_frame
 from .events import band_matched_calibration, bracket_outcomes, build_event_table
 from .fetch import (
     build_price_panel,
@@ -66,6 +67,9 @@ __all__ = [
     # categorisation
     "market_category",
     "classify_markets",
+    # efficiency
+    "build_brier_frame",
+    "brier_skill",
     # events
     "build_event_table",
     "bracket_outcomes",
