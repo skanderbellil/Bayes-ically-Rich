@@ -26,6 +26,7 @@ from .crossoutcome import (
 from .efficiency import brier_skill, build_brier_frame
 from .events import band_matched_calibration, bracket_outcomes, build_event_table
 from .fieldshape import bucket_by_shape, constituent_rows, field_shape_events
+from .papertrade import load_ledger, update_ledger
 from .fetch import (
     build_price_panel,
     fetch_markets,
@@ -82,6 +83,9 @@ __all__ = [
     "field_shape_events",
     "constituent_rows",
     "bucket_by_shape",
+    # paper-trade tracker
+    "load_ledger",
+    "update_ledger",
     # cross-outcome structure
     "event_panels",
     "coupling_summary",
