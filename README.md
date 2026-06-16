@@ -319,6 +319,19 @@ following the bottom-20 losers the **best** (0.33), and including market makers 
 across cohort sizes — trader flow mean-reverts, i.e. the favorite-longshot bias in order-flow
 clothing, not a copy-trading edge (`docs/polymarket/SMART_MONEY.md`).
 
+**Domain specialists** (`run_polymarket_specialists.py`) rescues that null. Skill on
+Polymarket is *domain-specific* (the efficiency/field-shape studies), so ranking a wallet by
+*total* PnL blends its real politics edge with its sports noise. This tags every token by topic
+(`behavior.py`, reusing `categorize`), reconstructs each wallet's **point-in-time PnL within each
+domain**, and follows the per-domain specialists only on that domain's markets — same point-in-time,
+mirror-and-exit engine. On a deliberately **large** universe (177 wallets × 238 priced tokens, vs
+the 48-token election sliver before) the `specialist` book earns net Sharpe **0.99** (maxDD −0.38)
+and beats the domain-**blind** `global` book (0.84) on Sharpe *and* drawdown at every cohort size;
+the winner-beats-loser ordering — *inverted* on the small universe — is **restored** (0.99 vs anti
+0.74). Honest asterisks: `all_leaders` ties it (selection mostly avoids bad concentration) and a
+naive long-all-tokens beta is already 0.51, so it's a risk/selection refinement riding a
+favorite-drift tilt, not new alpha (`docs/polymarket/SPECIALISTS.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
