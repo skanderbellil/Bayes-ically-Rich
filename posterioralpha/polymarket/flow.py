@@ -76,11 +76,24 @@ def flow_signal_panels(
         d = daily.reindex(columns=tokens, fill_value=0.0).reindex(dates, fill_value=0.0)
         return d.rolling(lookback, min_periods=1).sum()
 
+    # informed flow: dollars weighted by *pay-up* urgency (the dominant tell in
+    # TRADE_QUALITY) — only fills that crossed the mid in their favour contribute,
+    # signed by side. A consensus of aggressive, urgent fills, not raw volume.
+    mid = price_panel.ffill()
+    midser = mid.stack(); midser.index = midser.index.set_names(["day", "asset"])
+    T = T.merge(midser.rename("mid"), on=["day", "asset"], how="left").dropna(subset=["mid"])
+    prem = np.where(T["buy"].values, T["price"].values - T["mid"].values,
+                    T["mid"].values - T["price"].values)
+    T["informed"] = np.sign(T["signed_usd"].values) * T["usdcSize"].values * np.maximum(prem, 0.0)
+    inf_usd = T.groupby(["day", "asset"])["informed"].sum().unstack(fill_value=0.0)
+
     breadth   = _roll(buyers) - _roll(sellers)     # net distinct-trader consensus
     imbalance = _roll(net_usd)                      # net signed dollars
+    informed  = _roll(inf_usd)                      # pay-up-weighted directional flow
     # only meaningful where the token is live (priced) at t
     live = price_panel.notna()
-    return {"breadth": breadth.where(live), "imbalance": imbalance.where(live)}
+    return {"breadth": breadth.where(live), "imbalance": imbalance.where(live),
+            "informed": informed.where(live)}
 
 
 # ---------------------------------------------------------------------------

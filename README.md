@@ -355,6 +355,16 @@ mark themselves so the 11¢ drift is an upper bound, but the 83%-vs-57% resoluti
 mechanical. The composite — follow the aggressive, big, initiating fills of the smart crowd — is the
 natural sharpening of the order-flow breadth signal (`docs/polymarket/TRADE_QUALITY.md`).
 
+**Pay-up follow book** (`run_polymarket_payup.py`) fuses the two strongest tells — pay-up urgency
+(`TRADE_QUALITY`) and consensus breadth (`ORDER_FLOW`) — into one **informed-flow** signal (the
+pool's directional dollars weighted by how far each fill paid through the mid), traded
+dollar-neutral so the favorite-drift beta cancels. It nets Sharpe **0.70** after 50 bps, beating
+breadth (0.45) and imbalance (0.25) alone, and — the clincher — it **holds out of sample**: on a
+post-election slice (2025-01 →) it still nets **0.67** with gross rising to 1.87, so it is not a
+2024-cycle artefact. The closest thing to a deployable edge in the Polymarket thread, though still a
+long-tilt that needs honest spread modelling and walk-forward tuning before live use
+(`docs/polymarket/PAYUP_FOLLOW.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
