@@ -306,6 +306,19 @@ leader wins 83%, just size it" question: on the un-selected universe the leader 
 **only macro survives** (leaders win 93%, +19.8¢/event, t=2.96), the same favorite-longshot
 candidate as `STRATEGY_SYNTHESIS`, now confirmed at higher n (`docs/polymarket/FIELD_SHAPE.md`).
 
+**Follow the smart money?** (`run_polymarket_smart_money.py`) switches from trading *prices*
+to trading *trader flow*: pull the recent winners off the profit leaderboard, screen out market
+makers (a two-sidedness / turnover / edge-per-dollar fingerprint), and **mirror their positions**
+— trader momentum. The honesty is point-in-time: the end-of-sample leaderboard only seeds *which
+wallets exist*; who we follow on date *t* is ranked by PnL realised *strictly before t*,
+reconstructed from each wallet's own fills marked to the CLOB panel, then followed mirror-and-exit
+(hold proportional to their net dollar inventory, decay out as they exit). Four books on 98 pooled
+wallets × 48 priced tokens: following the top-20 winners is the **worst** book (net Sharpe 0.01),
+following the bottom-20 losers the **best** (0.33), and including market makers changes *nothing*
+(they never rank top by marked PnL). Selection is **inverse-predictive** and the result holds
+across cohort sizes — trader flow mean-reverts, i.e. the favorite-longshot bias in order-flow
+clothing, not a copy-trading edge (`docs/polymarket/SMART_MONEY.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi

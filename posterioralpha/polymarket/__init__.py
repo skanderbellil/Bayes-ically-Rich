@@ -42,6 +42,24 @@ from .signals import (
     logodds_momentum,
     to_logodds,
 )
+from .smartmoney import (
+    FollowParams,
+    FollowResult,
+    MMScreen,
+    cohort_token_notional,
+    mm_fingerprint,
+    run_smart_money_follow,
+    select_universe,
+    trader_equity_curve,
+)
+from .traders import (
+    build_token_panel,
+    candidate_universe,
+    fetch_leaderboard,
+    fetch_many_traders,
+    fetch_trader_trades,
+    fetch_volume_wallets,
+)
 from .trades import TradeParams, TradeResult, simulate_event_trades, summarize_trades
 from .volatility import (
     downside_vol,
@@ -105,4 +123,20 @@ __all__ = [
     "TradeResult",
     "simulate_event_trades",
     "summarize_trades",
+    # smart-money: trader-level data
+    "fetch_leaderboard",
+    "candidate_universe",
+    "fetch_volume_wallets",
+    "fetch_trader_trades",
+    "fetch_many_traders",
+    "build_token_panel",
+    # smart-money: follow engine
+    "MMScreen",
+    "mm_fingerprint",
+    "cohort_token_notional",
+    "select_universe",
+    "trader_equity_curve",
+    "FollowParams",
+    "FollowResult",
+    "run_smart_money_follow",
 ]
