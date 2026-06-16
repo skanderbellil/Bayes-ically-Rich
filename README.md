@@ -306,6 +306,79 @@ leader wins 83%, just size it" question: on the un-selected universe the leader 
 **only macro survives** (leaders win 93%, +19.8¢/event, t=2.96), the same favorite-longshot
 candidate as `STRATEGY_SYNTHESIS`, now confirmed at higher n (`docs/polymarket/FIELD_SHAPE.md`).
 
+**Follow the smart money?** (`run_polymarket_smart_money.py`) switches from trading *prices*
+to trading *trader flow*: pull the recent winners off the profit leaderboard, screen out market
+makers (a two-sidedness / turnover / edge-per-dollar fingerprint), and **mirror their positions**
+— trader momentum. The honesty is point-in-time: the end-of-sample leaderboard only seeds *which
+wallets exist*; who we follow on date *t* is ranked by PnL realised *strictly before t*,
+reconstructed from each wallet's own fills marked to the CLOB panel, then followed mirror-and-exit
+(hold proportional to their net dollar inventory, decay out as they exit). Four books on 98 pooled
+wallets × 48 priced tokens: following the top-20 winners is the **worst** book (net Sharpe 0.01),
+following the bottom-20 losers the **best** (0.33), and including market makers changes *nothing*
+(they never rank top by marked PnL). Selection is **inverse-predictive** and the result holds
+across cohort sizes — trader flow mean-reverts, i.e. the favorite-longshot bias in order-flow
+clothing, not a copy-trading edge (`docs/polymarket/SMART_MONEY.md`).
+
+**Domain specialists** (`run_polymarket_specialists.py`) rescues that null. Skill on
+Polymarket is *domain-specific* (the efficiency/field-shape studies), so ranking a wallet by
+*total* PnL blends its real politics edge with its sports noise. This tags every token by topic
+(`behavior.py`, reusing `categorize`), reconstructs each wallet's **point-in-time PnL within each
+domain**, and follows the per-domain specialists only on that domain's markets — same point-in-time,
+mirror-and-exit engine. On a deliberately **large** universe (177 wallets × 238 priced tokens, vs
+the 48-token election sliver before) the `specialist` book earns net Sharpe **0.99** (maxDD −0.38)
+and beats the domain-**blind** `global` book (0.84) on Sharpe *and* drawdown at every cohort size;
+the winner-beats-loser ordering — *inverted* on the small universe — is **restored** (0.99 vs anti
+0.74). Honest asterisks: `all_leaders` ties it (selection mostly avoids bad concentration) and a
+naive long-all-tokens beta is already 0.51, so it's a risk/selection refinement riding a
+favorite-drift tilt, not new alpha (`docs/polymarket/SPECIALISTS.md`).
+
+**Smart-crowd order flow** (`run_polymarket_flow.py`) drops trader identity and asks whether the
+pool's *aggregate flow* predicts the cross-section. Two signals over a trailing window — **breadth**
+(distinct wallets net-buying minus net-selling) and **imbalance** (net signed dollars) — traded
+**dollar-neutral** (long top 20% / short bottom 20%) so the favorite-drift beta cancels and only
+ranking power pays out. Breadth runs gross Sharpe **1.1** and the fade leg is its exact negative
+(sign is real); consensus beats raw dollar pressure. The effect is **top-quintile-loaded** (most-
+bought tokens drift +0.99¢/day, ~5–10× the middle) and **fast-decaying** — slowing the rebalance
+destroys the gross signal, so daily turnover is the binding constraint. The one config that clears
+cost: a 14-day formation window refreshed daily nets **0.45** after 50 bps — the first beta-neutral
+Polymarket signal in this thread to survive frictions, though still a long-tilt research signal, not
+a deployable strategy (`docs/polymarket/ORDER_FLOW.md`).
+
+**Trade-quality tells** (`run_polymarket_trade_quality.py`) zooms from positions to individual
+fills (28k non-MM trades) and asks which observable properties mark an *informed* trade. One tell
+towers over the rest: **aggressiveness** — fills that pay up >1¢ through the CLOB mid drift **+11.2¢**
+in their direction over 3 days (t≈36) and match the eventual resolution **83%** of the time, vs
+−4.8¢ / 57% for trades taking the passive/cheap side. Betting **big** (size >1σ above the wallet's
+norm, +3.0¢/74%) and **initiating** a position (+4.9¢/80%, small n) are real weaker tells; **patience**
+is not (the drift and resolution metrics disagree). Honest caveat: aggressive fills partly move the
+mark themselves so the 11¢ drift is an upper bound, but the 83%-vs-57% resolution gap isn't
+mechanical. The composite — follow the aggressive, big, initiating fills of the smart crowd — is the
+natural sharpening of the order-flow breadth signal (`docs/polymarket/TRADE_QUALITY.md`).
+
+**Pay-up follow book** (`run_polymarket_payup.py`) fuses the two strongest tells — pay-up urgency
+(`TRADE_QUALITY`) and consensus breadth (`ORDER_FLOW`) — into one **informed-flow** signal (the
+pool's directional dollars weighted by how far each fill paid through the mid), traded
+dollar-neutral so the favorite-drift beta cancels. It nets Sharpe **0.70** after 50 bps, beating
+breadth (0.45) and imbalance (0.25) alone, and — the clincher — it **holds out of sample**: on a
+post-election slice (2025-01 →) it still nets **0.67** with gross rising to 1.87, so it is not a
+2024-cycle artefact. The closest thing to a deployable edge in the Polymarket thread — but the last-mile validation
+(`run_polymarket_payup_validate.py`) shows it's **execution-cost-bound**: break-even is ≈1¢
+half-spread (the cost param is ¢/share here), so at a realistic liquidity-scaled spread (median
+1.5¢) it nets −0.72, and walk-forward hyper-parameter selection only claws it back to ≈break-even
+(−0.09, self-selecting the lowest-turnover config). The gross signal is real and OOS-stable; the net
+edge survives only at sub-1¢ execution, i.e. a liquidity-restricted book on headline markets
+(`docs/polymarket/PAYUP_FOLLOW.md`).
+
+**Pre-resolution timing** (`run_polymarket_timing.py`) asks the question that decides whether
+"some wallets buy before jumps" is exploitable: does timing skill *persist*? A strict split-half
+test (score each wallet's lead = mean forward drift in the first vs second half of its fills,
+correlate across wallets) finds **modest** persistence — robust **Spearman +0.28**, and top-half-early
+timers stay positive late (+0.042) while early-poor go negative (−0.026). Real but weak, and the raw
+"best timers" leaderboard is contaminated by survivorship artefacts (Pearson +0.73 is one mechanical
+outlier with t≈8,672), so standalone "follow the timers" is fragile. It mainly explains *why* the
+pay-up book works — informed wallets do lead moves repeatably — rather than beating it
+(`docs/polymarket/TIMING.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi

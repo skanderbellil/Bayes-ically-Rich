@@ -42,6 +42,46 @@ from .signals import (
     logodds_momentum,
     to_logodds,
 )
+from .smartmoney import (
+    FollowParams,
+    FollowResult,
+    MMScreen,
+    cohort_token_notional,
+    mm_fingerprint,
+    run_smart_money_follow,
+    screen_market_makers,
+    select_universe,
+    trader_equity_curve,
+)
+from .behavior import (
+    SpecialistParams,
+    SpecialistResult,
+    run_specialist_follow,
+    stack_trades,
+    token_domains,
+    trader_token_pnl,
+)
+from .flow import (
+    FlowParams,
+    FlowResult,
+    flow_signal_panels,
+    liquidity_spread,
+    run_flow_book,
+)
+from .tradequality import (
+    build_trade_features,
+    summarize_quality,
+    timing_persistence,
+    wallet_lead_scores,
+)
+from .traders import (
+    build_token_panel,
+    candidate_universe,
+    fetch_leaderboard,
+    fetch_many_traders,
+    fetch_trader_trades,
+    fetch_volume_wallets,
+)
 from .trades import TradeParams, TradeResult, simulate_event_trades, summarize_trades
 from .volatility import (
     downside_vol,
@@ -105,4 +145,39 @@ __all__ = [
     "TradeResult",
     "simulate_event_trades",
     "summarize_trades",
+    # smart-money: trader-level data
+    "fetch_leaderboard",
+    "candidate_universe",
+    "fetch_volume_wallets",
+    "fetch_trader_trades",
+    "fetch_many_traders",
+    "build_token_panel",
+    # smart-money: follow engine
+    "MMScreen",
+    "mm_fingerprint",
+    "cohort_token_notional",
+    "select_universe",
+    "trader_equity_curve",
+    "FollowParams",
+    "FollowResult",
+    "run_smart_money_follow",
+    "screen_market_makers",
+    # behaviour: shared primitives + domain-specialist follow
+    "stack_trades",
+    "token_domains",
+    "trader_token_pnl",
+    "SpecialistParams",
+    "SpecialistResult",
+    "run_specialist_follow",
+    # behaviour: order-flow signals (breadth / imbalance), beta-neutral
+    "flow_signal_panels",
+    "run_flow_book",
+    "liquidity_spread",
+    "FlowParams",
+    "FlowResult",
+    # behaviour: trade-level quality tells + timing persistence
+    "build_trade_features",
+    "summarize_quality",
+    "wallet_lead_scores",
+    "timing_persistence",
 ]
