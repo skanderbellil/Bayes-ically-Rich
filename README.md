@@ -369,6 +369,15 @@ half-spread (the cost param is ¢/share here), so at a realistic liquidity-scale
 edge survives only at sub-1¢ execution, i.e. a liquidity-restricted book on headline markets
 (`docs/polymarket/PAYUP_FOLLOW.md`).
 
+**Smart-money consensus paper-trade** (`run_smart_flow_paper_update.py`) takes the behaviour signals
+*live*: a forward, out-of-sample ledger (like the macro tracker) that each day logs a paper long in
+every open outcome token several non-MM leaderboard wallets have recently bought (consensus breadth),
+**entering at the live CLOB ask** so the real spread — the thing that made the backtest
+execution-bound — is captured, not assumed. Hold-to-resolution, idempotent CSV at
+`data/paper_trade/smart_flow_positions.csv`, daily GitHub-Actions cron. The honest, survivorship-free
+test of whether consensus buys actually resolve right and whether the gross edge clears real
+execution cost (`docs/polymarket/SMART_FLOW_PAPER.md`).
+
 **Pre-resolution timing** (`run_polymarket_timing.py`) asks the question that decides whether
 "some wallets buy before jumps" is exploitable: does timing skill *persist*? A strict split-half
 test (score each wallet's lead = mean forward drift in the first vs second half of its fills,
