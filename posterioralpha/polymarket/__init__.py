@@ -49,8 +49,17 @@ from .smartmoney import (
     cohort_token_notional,
     mm_fingerprint,
     run_smart_money_follow,
+    screen_market_makers,
     select_universe,
     trader_equity_curve,
+)
+from .behavior import (
+    SpecialistParams,
+    SpecialistResult,
+    run_specialist_follow,
+    stack_trades,
+    token_domains,
+    trader_token_pnl,
 )
 from .traders import (
     build_token_panel,
@@ -139,4 +148,12 @@ __all__ = [
     "FollowParams",
     "FollowResult",
     "run_smart_money_follow",
+    "screen_market_makers",
+    # behaviour: shared primitives + domain-specialist follow
+    "stack_trades",
+    "token_domains",
+    "trader_token_pnl",
+    "SpecialistParams",
+    "SpecialistResult",
+    "run_specialist_follow",
 ]

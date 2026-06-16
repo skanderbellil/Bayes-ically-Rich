@@ -140,6 +140,28 @@ def mm_fingerprint(
     return out
 
 
+def screen_market_makers(
+    traders: dict[str, pd.DataFrame],
+    price_panel: pd.DataFrame,
+    volume_watch: Optional[set] = None,
+    screen: "MMScreen" = None,
+) -> dict[str, bool]:
+    """Flag MM-like wallets across a pool → {wallet: is_mm}.
+
+    A wallet is flagged if its behavioural fingerprint trips the MM thresholds,
+    *or* it sits on the high-volume watchlist with many trades and a thin edge —
+    the two complementary signatures of spread-harvesting rather than forecasting.
+    """
+    screen = screen or MMScreen()
+    volume_watch = volume_watch or set()
+    out: dict[str, bool] = {}
+    for w, t in traders.items():
+        fp = mm_fingerprint(t, price_panel, asof=None, screen=screen)
+        out[w] = bool(fp["is_mm"] or (w in volume_watch and fp["n_trades"] >= 200
+                                      and fp["edge_per_dollar"] <= 0.01))
+    return out
+
+
 def _wallet_pnl_asof(
     trades: pd.DataFrame,
     price_panel: pd.DataFrame,
