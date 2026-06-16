@@ -16,6 +16,13 @@ log-odds.
 """
 from .backtest import PMParams, PMResult, run_polymarket_momentum
 from .categorize import classify_markets, market_category
+from .crossoutcome import (
+    coupling_summary,
+    event_panels,
+    rank_calibration,
+    redistribution_drift,
+    relative_value_reversion,
+)
 from .efficiency import brier_skill, build_brier_frame
 from .events import band_matched_calibration, bracket_outcomes, build_event_table
 from .fetch import (
@@ -70,6 +77,12 @@ __all__ = [
     # efficiency
     "build_brier_frame",
     "brier_skill",
+    # cross-outcome structure
+    "event_panels",
+    "coupling_summary",
+    "rank_calibration",
+    "redistribution_drift",
+    "relative_value_reversion",
     # events
     "build_event_table",
     "bracket_outcomes",
