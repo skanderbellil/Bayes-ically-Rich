@@ -332,6 +332,18 @@ the winner-beats-loser ordering — *inverted* on the small universe — is **re
 naive long-all-tokens beta is already 0.51, so it's a risk/selection refinement riding a
 favorite-drift tilt, not new alpha (`docs/polymarket/SPECIALISTS.md`).
 
+**Smart-crowd order flow** (`run_polymarket_flow.py`) drops trader identity and asks whether the
+pool's *aggregate flow* predicts the cross-section. Two signals over a trailing window — **breadth**
+(distinct wallets net-buying minus net-selling) and **imbalance** (net signed dollars) — traded
+**dollar-neutral** (long top 20% / short bottom 20%) so the favorite-drift beta cancels and only
+ranking power pays out. Breadth runs gross Sharpe **1.1** and the fade leg is its exact negative
+(sign is real); consensus beats raw dollar pressure. The effect is **top-quintile-loaded** (most-
+bought tokens drift +0.99¢/day, ~5–10× the middle) and **fast-decaying** — slowing the rebalance
+destroys the gross signal, so daily turnover is the binding constraint. The one config that clears
+cost: a 14-day formation window refreshed daily nets **0.45** after 50 bps — the first beta-neutral
+Polymarket signal in this thread to survive frictions, though still a long-tilt research signal, not
+a deployable strategy (`docs/polymarket/ORDER_FLOW.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi

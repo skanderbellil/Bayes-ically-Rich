@@ -61,6 +61,12 @@ from .behavior import (
     token_domains,
     trader_token_pnl,
 )
+from .flow import (
+    FlowParams,
+    FlowResult,
+    flow_signal_panels,
+    run_flow_book,
+)
 from .traders import (
     build_token_panel,
     candidate_universe,
@@ -156,4 +162,9 @@ __all__ = [
     "SpecialistParams",
     "SpecialistResult",
     "run_specialist_follow",
+    # behaviour: order-flow signals (breadth / imbalance), beta-neutral
+    "flow_signal_panels",
+    "run_flow_book",
+    "FlowParams",
+    "FlowResult",
 ]
