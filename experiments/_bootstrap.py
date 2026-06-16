@@ -1,0 +1,26 @@
+"""
+Make the repository root importable when an experiment is launched directly
+(e.g. ``python experiments/main.py``) without installing the package.
+
+Import this module first in every experiment script::
+
+    import _bootstrap  # noqa: F401  (adds repo root to sys.path)
+
+If you ``pip install -e .`` the project instead, this shim is a harmless no-op.
+"""
+import sys
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+# Public repo-root anchor: experiments use `_bootstrap.ROOT / "results"` so
+# output lands under the repo regardless of the current working directory.
+ROOT = _ROOT
+
+# Secrets (e.g. FRED_API_KEY) live in a gitignored <repo>/.env — load them so
+# every experiment that talks to keyed APIs just works.
+from posterioralpha.env import load_env  # noqa: E402
+
+load_env()
