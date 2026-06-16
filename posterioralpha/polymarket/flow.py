@@ -121,10 +121,36 @@ class FlowResult:
     params: FlowParams = field(default_factory=FlowParams)
 
 
+def liquidity_spread(
+    price_panel: pd.DataFrame,
+    cohort_notional: pd.Series,
+    mid: float = 0.015,
+    floor: float = 0.005,
+    cap: float = 0.04,
+) -> pd.Series:
+    """Per-token half-spread (price units/share) ~ illiquidity, as a cost vector.
+
+    Polymarket's real cost is the bid-ask spread, tight on liquid headline books
+    and wide on thin ones. With no historical books we proxy liquidity by each
+    token's cohort trading notional and anchor the spread to the universe's *own*
+    median liquidity::
+
+        half_spread_i = mid · sqrt(N_median / N_i)   clipped to [floor, cap]
+
+    so the median-liquidity token costs ``mid`` (default 1.5¢), a 4×-more-liquid
+    one ~0.75¢, a 4×-thinner one ~3¢ — a realistic 0.5–4¢ span. Charged on |Δw|.
+    """
+    N = cohort_notional.reindex(price_panel.columns)
+    N = N.fillna(N.median()).clip(lower=1.0)
+    hs = mid * np.sqrt(N.median() / N)
+    return hs.clip(lower=floor, upper=cap)
+
+
 def run_flow_book(
     price_panel: pd.DataFrame,
     signal_panel: pd.DataFrame,
     params: FlowParams = FlowParams(),
+    cost_by_token: pd.Series | None = None,
 ) -> FlowResult:
     """Dollar-neutral cross-sectional book on a flow signal.
 
@@ -133,6 +159,10 @@ def run_flow_book(
     hold into *t+1* for w·Δp, charge turnover cost. Dollar-neutrality strips the
     favorite-drift beta so the Sharpe reflects the signal's *ranking* power.
 
+    ``cost_by_token`` (a per-token half-spread Series, e.g. from
+    ``liquidity_spread``) charges turnover token-by-token; if ``None`` the scalar
+    ``params.cost`` half-spread applies uniformly.
+
     Also returns ``quantile_drift`` — mean next-day Δp by signal quintile, pooled
     over all token-days — the descriptive calibration behind the book.
     """
@@ -140,6 +170,7 @@ def run_flow_book(
     dates = p.index
     score = cross_sectional_score(signal_panel.reindex_like(p), min_names=params.min_names)
     dp_fwd = p.shift(-1) - p
+    cvec = cost_by_token.reindex(p.columns).fillna(params.cost) if cost_by_token is not None else None
 
     sign = -1.0 if params.contrarian else 1.0
     rets, gross_rets, turn = [], [], []
@@ -160,9 +191,11 @@ def run_flow_book(
             w = prev_w.copy()
             w[~p.columns.isin(score.loc[t].dropna().index)] = 0.0
 
-        to = float((w - prev_w).abs().sum())
+        dw = (w - prev_w).abs()
+        to = float(dw.sum())
+        cost = float((dw * cvec).sum()) if cvec is not None else params.cost * to
         pnl = float((w * dp_fwd.loc[t].reindex(p.columns).fillna(0.0)).sum()) if i + 1 < len(dates) else 0.0
-        rets.append(pnl - params.cost * to)
+        rets.append(pnl - cost)
         gross_rets.append(pnl)
         turn.append(to)
         prev_w = w

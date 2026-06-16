@@ -71,3 +71,40 @@ strongest in the thread. But "deployable" still needs work it hasn't had:
 
 Read it as: *the behavioural signal is real and robust; turning it into a live
 book requires honest spread modelling and walk-forward hyper-parameter selection.*
+
+## The last mile — realistic cost & walk-forward (it's execution-bound)
+
+`run_polymarket_payup_validate.py` answers the two objections head-on, and the
+answer is sobering: **the net edge is real but execution-cost-bound.**
+
+In this engine the cost parameter is a **half-spread in price (¢) per share**, so
+a break-even sweep reads directly as a cost budget:
+
+| half-spread | net Sharpe | net PnL |
+|------------:|-----------:|--------:|
+| 0.5¢ | **+0.70** | +0.38 |
+| 1.0¢ | −0.07 | −0.04 |
+| 1.5¢ | −0.84 | −0.46 |
+| 2.0¢ | −1.55 | −0.88 |
+| 3.0¢ | −2.74 | −1.73 |
+
+**Break-even is ≈ 1¢.** The signal's gross Sharpe is ~1.5, but it rebalances
+daily (turnover ~0.1/day), so it can only absorb about a 1¢ round-trip half-spread
+before the edge is gone.
+
+- **Liquidity-scaled cost** (per-token half-spread ≈ `mid·√(N_median/N)`, anchored
+  to a 1.5¢ median, 0.5–4¢ span): **net Sharpe −0.72**. At realistic, thin-book
+  spreads the book is underwater.
+- **Walk-forward HP selection** (train 180d / test 90d, pick lookback & top-frac
+  on the train block only, under the liquidity cost): **net Sharpe −0.09** — it
+  consistently selects the lowest-turnover config (lookback 7, top-frac 0.1),
+  clawing back to roughly break-even vs −0.27 for fixed 14/0.2, but **not into
+  profit.**
+
+**Verdict.** The behavioural signal is genuine, beta-neutral and OOS-stable
+*gross*, but its net edge survives only at **sub-1¢ execution** — i.e. on the
+most-liquid headline markets, which is exactly where Polymarket spreads actually
+are ~0.5¢. The honest next step is a **liquidity-restricted** book (trade only the
+top-liquidity quantile of tokens, where the signal's 1¢ budget is met); the broad,
+all-token version is a real signal that frictions eat. Walk-forward already points
+the way — it self-selects toward slower, cheaper books under cost pressure.

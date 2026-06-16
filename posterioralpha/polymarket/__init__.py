@@ -65,6 +65,7 @@ from .flow import (
     FlowParams,
     FlowResult,
     flow_signal_panels,
+    liquidity_spread,
     run_flow_book,
 )
 from .tradequality import (
@@ -171,6 +172,7 @@ __all__ = [
     # behaviour: order-flow signals (breadth / imbalance), beta-neutral
     "flow_signal_panels",
     "run_flow_book",
+    "liquidity_spread",
     "FlowParams",
     "FlowResult",
     # behaviour: trade-level quality tells + timing persistence

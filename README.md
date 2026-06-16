@@ -361,8 +361,12 @@ pool's directional dollars weighted by how far each fill paid through the mid), 
 dollar-neutral so the favorite-drift beta cancels. It nets Sharpe **0.70** after 50 bps, beating
 breadth (0.45) and imbalance (0.25) alone, and — the clincher — it **holds out of sample**: on a
 post-election slice (2025-01 →) it still nets **0.67** with gross rising to 1.87, so it is not a
-2024-cycle artefact. The closest thing to a deployable edge in the Polymarket thread, though still a
-long-tilt that needs honest spread modelling and walk-forward tuning before live use
+2024-cycle artefact. The closest thing to a deployable edge in the Polymarket thread — but the last-mile validation
+(`run_polymarket_payup_validate.py`) shows it's **execution-cost-bound**: break-even is ≈1¢
+half-spread (the cost param is ¢/share here), so at a realistic liquidity-scaled spread (median
+1.5¢) it nets −0.72, and walk-forward hyper-parameter selection only claws it back to ≈break-even
+(−0.09, self-selecting the lowest-turnover config). The gross signal is real and OOS-stable; the net
+edge survives only at sub-1¢ execution, i.e. a liquidity-restricted book on headline markets
 (`docs/polymarket/PAYUP_FOLLOW.md`).
 
 **Pre-resolution timing** (`run_polymarket_timing.py`) asks the question that decides whether
