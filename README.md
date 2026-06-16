@@ -282,6 +282,17 @@ edge is shown to be **volume-selection bias** (high-volume longshots are far mor
 "underpriced" — exciting underdogs only draw volume once they're winning). A single
 honestly-caveated candidate, not a free lunch (`docs/polymarket/STRATEGY_SYNTHESIS.md`).
 
+**Cross-outcome structure** (`run_polymarket_cross_outcome.py`) maps the *joint*
+behaviour of a multi-candidate event's outcomes (which the rest of the thread, treating
+each market alone, never did). Fields are internally **arbitrage-free** (sum-to-one to
+0.7%), substitution is **concentrated** — 82% of a shocked candidate's mass flows to one
+beneficiary, and the dominant negatively-correlated pair recovers each real head-to-head
+(Biden↔Harris −0.83, Republican↔Democrat −0.98, Fed cut↔hold), so any field reduces to a
+2-horse race plus dead longshots. Redistribution slightly over-reacts (beneficiary
+reverts, but not tradably), and within fields the favorite is under-bet / the challenger
+over-bet (one-regime caveat). A rich structural primitive for hedging/modelling, even
+without a new edge (`docs/polymarket/CROSS_OUTCOME.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
