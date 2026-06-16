@@ -67,6 +67,7 @@ from .flow import (
     flow_signal_panels,
     run_flow_book,
 )
+from .tradequality import build_trade_features, summarize_quality
 from .traders import (
     build_token_panel,
     candidate_universe,
@@ -167,4 +168,7 @@ __all__ = [
     "run_flow_book",
     "FlowParams",
     "FlowResult",
+    # behaviour: trade-level quality tells
+    "build_trade_features",
+    "summarize_quality",
 ]

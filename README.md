@@ -344,6 +344,17 @@ cost: a 14-day formation window refreshed daily nets **0.45** after 50 bps — t
 Polymarket signal in this thread to survive frictions, though still a long-tilt research signal, not
 a deployable strategy (`docs/polymarket/ORDER_FLOW.md`).
 
+**Trade-quality tells** (`run_polymarket_trade_quality.py`) zooms from positions to individual
+fills (28k non-MM trades) and asks which observable properties mark an *informed* trade. One tell
+towers over the rest: **aggressiveness** — fills that pay up >1¢ through the CLOB mid drift **+11.2¢**
+in their direction over 3 days (t≈36) and match the eventual resolution **83%** of the time, vs
+−4.8¢ / 57% for trades taking the passive/cheap side. Betting **big** (size >1σ above the wallet's
+norm, +3.0¢/74%) and **initiating** a position (+4.9¢/80%, small n) are real weaker tells; **patience**
+is not (the drift and resolution metrics disagree). Honest caveat: aggressive fills partly move the
+mark themselves so the 11¢ drift is an upper bound, but the 83%-vs-57% resolution gap isn't
+mechanical. The composite — follow the aggressive, big, initiating fills of the smart crowd — is the
+natural sharpening of the order-flow breadth signal (`docs/polymarket/TRADE_QUALITY.md`).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
