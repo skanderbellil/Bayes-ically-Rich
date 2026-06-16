@@ -27,6 +27,7 @@ from .efficiency import brier_skill, build_brier_frame
 from .events import band_matched_calibration, bracket_outcomes, build_event_table
 from .fieldshape import bucket_by_shape, constituent_rows, field_shape_events
 from .papertrade import load_ledger, update_ledger
+from . import smartflow_papertrade
 from .fetch import (
     build_price_panel,
     fetch_markets,
