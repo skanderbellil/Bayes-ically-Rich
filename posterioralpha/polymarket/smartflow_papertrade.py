@@ -47,7 +47,22 @@ logger = logging.getLogger(__name__)
 
 STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "paper_trade" / "smart_flow_positions.csv"
 
-_COLS = ["token", "condition_id", "question", "domain", "entry_date", "n_smart_buyers",
+
+def kelly_fraction(
+    n_smart_buyers: int,
+    base_fraction: float = 0.10,
+    ref_buyers: int = 4,
+    cap_multiple: float = 2.0,
+) -> float:
+    """Scale bet fraction proportionally to smart-buyer conviction.
+
+    3 buyers → 7.5%, 4 → 10%, 5 → 12.5%, 6 → 15%, capped at base * cap_multiple.
+    """
+    raw = base_fraction * (n_smart_buyers / ref_buyers)
+    return round(min(raw, base_fraction * cap_multiple), 6)
+
+_COLS = ["token", "condition_id", "question", "domain", "entry_date",
+         "n_smart_buyers", "bet_fraction",
          "entry_mid", "entry_ask", "spread", "current_price",
          "status", "exit_date", "outcome", "pnl"]
 
@@ -144,9 +159,16 @@ def scan_smart_flow_entries(
 # ---------------------------------------------------------------------------
 
 def load_ledger() -> pd.DataFrame:
-    if STATE_FILE.exists():
-        return pd.read_csv(STATE_FILE, dtype=str)
-    return pd.DataFrame(columns=_COLS)
+    if not STATE_FILE.exists():
+        return pd.DataFrame(columns=_COLS)
+    df = pd.read_csv(STATE_FILE, dtype=str)
+    if "bet_fraction" not in df.columns:
+        # Migrate legacy CSVs: assign flat-10% default so historical PnL is unchanged.
+        df.insert(df.columns.get_loc("n_smart_buyers") + 1, "bet_fraction", "0.1")
+    for col in _COLS:
+        if col not in df.columns:
+            df[col] = ""
+    return df[_COLS]
 
 
 def save_ledger(df: pd.DataFrame) -> None:
@@ -166,13 +188,32 @@ def _price(token: str) -> tuple[float | None, float | None]:
 # Daily update
 # ---------------------------------------------------------------------------
 
-def update_ledger(bet_fraction: float = 0.10, min_buyers: int = 3,
-                  window_days: int = 7) -> pd.DataFrame:
+def update_ledger(
+    bet_fraction: float = 0.10,
+    min_buyers: int = 3,
+    window_days: int = 7,
+    use_kelly: bool = False,
+    ref_buyers: int = 4,
+    kelly_cap: float = 2.0,
+    stop_loss: float | None = None,
+) -> pd.DataFrame:
     """One daily cycle: append new consensus longs, refresh prices, mark resolutions.
 
-    Idempotent on the token id. New positions enter at the live ask (spread paid);
-    open positions are marked to the current mid; a token resolving to ≈0/1 is
-    closed with realised PnL ``(outcome / entry_ask − 1) · bet_fraction``.
+    Parameters
+    ----------
+    bet_fraction : float
+        Base bankroll fraction per position. When use_kelly=True this is the
+        reference fraction for a ref_buyers-conviction trade; higher-conviction
+        trades are sized proportionally larger (capped at bet_fraction * kelly_cap).
+    use_kelly : bool
+        If True, scale each position's fraction by n_smart_buyers / ref_buyers.
+    ref_buyers : int
+        Buyer count that maps to exactly bet_fraction (Kelly reference point).
+    kelly_cap : float
+        Maximum Kelly multiple over bet_fraction (prevents runaway sizing).
+    stop_loss : float | None
+        Exit an open position when current_price ≤ entry_ask * (1 - stop_loss).
+        E.g. 0.35 exits when price falls to 65% of entry. None disables stops.
     """
     ledger = load_ledger()
     today = date.today().isoformat()
@@ -183,12 +224,14 @@ def update_ledger(bet_fraction: float = 0.10, min_buyers: int = 3,
     for c in scan_smart_flow_entries(window_days=window_days, min_buyers=min_buyers):
         if c["token"] in held:
             continue
-        logger.info("NEW long: %s  (%d smart buyers)  mid %.3f ask %.3f",
-                    (c["question"] or "")[:40], c["n_smart_buyers"], c["entry_mid"], c["entry_ask"])
+        n = c["n_smart_buyers"]
+        frac = kelly_fraction(n, bet_fraction, ref_buyers, kelly_cap) if use_kelly else bet_fraction
+        logger.info("NEW long: %s  (%d buyers)  mid %.3f ask %.3f  frac=%.3f",
+                    (c["question"] or "")[:40], n, c["entry_mid"], c["entry_ask"], frac)
         new_rows.append({
             "token": c["token"], "condition_id": c["condition_id"],
             "question": c["question"], "domain": c["domain"], "entry_date": today,
-            "n_smart_buyers": str(c["n_smart_buyers"]),
+            "n_smart_buyers": str(n), "bet_fraction": str(frac),
             "entry_mid": str(c["entry_mid"]), "entry_ask": str(c["entry_ask"]),
             "spread": str(c["spread"]), "current_price": str(c["entry_mid"]),
             "status": "open", "exit_date": "", "outcome": "", "pnl": "",
@@ -196,20 +239,36 @@ def update_ledger(bet_fraction: float = 0.10, min_buyers: int = 3,
     if new_rows:
         ledger = pd.concat([ledger, pd.DataFrame(new_rows)], ignore_index=True)
 
-    # ── 2. refresh + resolve open positions ───────────────────────────────
+    # ── 2. refresh + stop-loss + resolve open positions ───────────────────
     for i, row in ledger[ledger["status"] == "open"].iterrows():
         mid, _ = _price(row["token"])
         if mid is None:
             continue
         ledger.at[i, "current_price"] = str(round(mid, 4))
+        entry_ask = float(row["entry_ask"])
+        frac = float(row["bet_fraction"]) if row.get("bet_fraction") else bet_fraction
+
+        # stop-loss: check before resolution so we don't double-fire
+        if stop_loss is not None:
+            stop_floor = entry_ask * (1.0 - stop_loss)
+            if mid <= stop_floor:
+                pnl = (mid / entry_ask - 1.0) * frac
+                ledger.at[i, "status"]        = "stopped"
+                ledger.at[i, "exit_date"]     = today
+                ledger.at[i, "outcome"]       = ""
+                ledger.at[i, "pnl"]           = str(round(pnl, 4))
+                logger.info("STOPPED %s  mid=%.4f floor=%.4f pnl=%.4f",
+                            (row["question"] or "")[:40], mid, stop_floor, pnl)
+                continue
+
+        # resolution: price collapsed to 0 or 1
         outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
-            entry_ask = float(row["entry_ask"])
-            pnl = (outcome / entry_ask - 1.0) * bet_fraction
-            ledger.at[i, "status"]   = "won" if outcome == 1.0 else "lost"
-            ledger.at[i, "exit_date"] = today
-            ledger.at[i, "outcome"]  = str(outcome)
-            ledger.at[i, "pnl"]      = str(round(pnl, 4))
+            pnl = (outcome / entry_ask - 1.0) * frac
+            ledger.at[i, "status"]        = "won" if outcome == 1.0 else "lost"
+            ledger.at[i, "exit_date"]     = today
+            ledger.at[i, "outcome"]       = str(outcome)
+            ledger.at[i, "pnl"]          = str(round(pnl, 4))
             ledger.at[i, "current_price"] = str(outcome)
             logger.info("RESOLVED %s  %s  pnl=%.4f",
                         (row["question"] or "")[:40], ledger.at[i, "status"], pnl)
