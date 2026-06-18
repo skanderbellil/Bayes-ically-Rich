@@ -2,8 +2,8 @@ name: Smart-money consensus paper-trade tracker
 
 on:
   schedule:
-    # 09:30 UTC daily (just after the macro tracker)
-    - cron: "30 9 * * *"
+    # every 4 hours — catches same-day consensus flips without hammering the API
+    - cron: "30 */4 * * *"
   workflow_dispatch:       # run manually from the Actions tab any time
 
 jobs:
