@@ -301,6 +301,116 @@ def fetch_market_trades(
 
 
 # ---------------------------------------------------------------------------
+# Historical trade data — with hard cap awareness
+# ---------------------------------------------------------------------------
+
+def fetch_market_trades_historical(
+    condition_id: str,
+    start_ts: Optional[float] = None,
+    end_ts: Optional[float] = None,
+    max_trades: int = 3500,
+    sleep: float = 0.3,
+) -> pd.DataFrame:
+    """Attempt to fetch trade history for a market, filtered to [start_ts, end_ts].
+
+    **Critical limitation (verified 2025-06):**
+    ``data-api.polymarket.com/trades`` returns the *most-recent* ≤3,500 fills
+    per market, regardless of any time-range parameters supplied.  The
+    ``startTs``, ``endTs``, ``before``, ``after``, ``sort``, and ``order``
+    query parameters are all silently ignored by the server.  There is no
+    public API that exposes earlier fills for high-volume markets.
+
+    The function therefore:
+
+    1. Pages through the endpoint (newest → oldest, offset 0…3500).
+    2. If a ``start_ts`` or ``end_ts`` is given, filters the resulting rows
+       *client-side* — only rows actually within the window are returned.
+    3. Adds a ``coverage_full`` column that is ``True`` iff the oldest fetched
+       fill pre-dates ``start_ts``, meaning the requested window is completely
+       covered by the 3,500-fill cap.  If ``coverage_full=False`` the window
+       spans beyond what the API returned and the signal is incomplete.
+
+    Parameters
+    ----------
+    condition_id : Polymarket condition ID for the market.
+    start_ts     : Unix seconds — lower bound (inclusive). ``None`` = no lower
+                   bound.
+    end_ts       : Unix seconds — upper bound (exclusive). ``None`` = no upper
+                   bound.
+    max_trades   : Hard cap on total fills to fetch (≤3500 useful in practice).
+    sleep        : Delay between pagination requests (seconds).
+
+    Returns
+    -------
+    DataFrame with columns ``[wallet, side, size, price, timestamp]`` plus a
+    scalar attribute is not possible in pandas, so coverage information is
+    encoded as a one-row summary dict logged at INFO level.  The DataFrame is
+    sorted ascending by ``timestamp``.  Empty DataFrame if no fills match.
+
+    Alternative sources investigated (2025-06):
+    - The Graph (polymarket-orderbook-subgraph) — DNS unreachable / subgraph
+      removed.
+    - Goldsky (project_cl6mb8i9h0003e201j6li0diw) — 404 not found, deleted.
+    - Polygon public RPCs (polygon-rpc.com, ankr) — require paid API keys.
+    - Satsuma — DNS unreachable.
+    - Covalent / PolygonScan — not reachable without keys; would only give
+      on-chain ERC-1155 transfers that need mapping back to a specific
+      market's token IDs (complex, no marginal benefit given RPC block).
+    - CLOB prices-history — covers full market lifetime at daily/hourly
+      granularity but is *price* data only, not fills/flow.
+    """
+    raw = fetch_market_trades(condition_id, max_trades=max_trades, sleep=sleep)
+    if raw.empty:
+        return raw
+
+    # Rename to the documented output schema
+    df = raw.rename(columns={"proxyWallet": "wallet"})
+    # Keep only the five columns specified in the public interface
+    df = df[["wallet", "side", "size", "price", "timestamp"]].copy()
+
+    # Determine coverage: did we get back far enough to cover start_ts?
+    oldest_ts_unix = df["timestamp"].min().timestamp() if not df.empty else None
+    if start_ts is not None and oldest_ts_unix is not None:
+        coverage_full = oldest_ts_unix <= start_ts
+    else:
+        # No start_ts requested → can't assess coverage
+        coverage_full = True
+
+    logger.info(
+        "fetch_market_trades_historical %s: %d raw fills | oldest=%s | "
+        "start_ts=%s | coverage_full=%s",
+        condition_id[:16],
+        len(df),
+        pd.Timestamp(oldest_ts_unix, unit="s", tz="UTC").strftime("%Y-%m-%d") if oldest_ts_unix else "N/A",
+        pd.Timestamp(start_ts, unit="s", tz="UTC").strftime("%Y-%m-%d") if start_ts else "None",
+        coverage_full,
+    )
+
+    if not coverage_full:
+        logger.warning(
+            "fetch_market_trades_historical %s: window starts %s but oldest "
+            "available fill is %s — early-window data is MISSING.  "
+            "No public source provides earlier fills for this market.",
+            condition_id[:16],
+            pd.Timestamp(start_ts, unit="s", tz="UTC").strftime("%Y-%m-%d"),
+            pd.Timestamp(oldest_ts_unix, unit="s", tz="UTC").strftime("%Y-%m-%d") if oldest_ts_unix else "N/A",
+        )
+
+    # Apply time-range filter client-side
+    if start_ts is not None:
+        start_pd = pd.Timestamp(start_ts, unit="s", tz="UTC")
+        df = df[df["timestamp"] >= start_pd]
+    if end_ts is not None:
+        end_pd = pd.Timestamp(end_ts, unit="s", tz="UTC")
+        df = df[df["timestamp"] < end_pd]
+
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    # Attach coverage flag as metadata for callers that need it
+    df.attrs["coverage_full"] = coverage_full
+    return df
+
+
+# ---------------------------------------------------------------------------
 # Panel builder
 # ---------------------------------------------------------------------------
 

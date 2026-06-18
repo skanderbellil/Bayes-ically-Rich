@@ -38,6 +38,7 @@ from tabulate import tabulate
 
 from posterioralpha.polymarket.fetch import (
     fetch_market_trades,
+    fetch_market_trades_historical,
     fetch_markets,
     fetch_token_history,
 )
@@ -143,21 +144,41 @@ def _parse_close_time(row: object) -> pd.Timestamp | None:
 def run_backtest(
     markets_df: pd.DataFrame,
     window_days: int = 7,
+    historical: bool = False,
 ) -> pd.DataFrame:
     """Run the pre-close market-flow imbalance backtest.
 
     For each market:
       1. Determine the actual close time (``closed_time`` or ``end_date``).
       2. Fetch the CLOB daily price history → entry price at
-         ``close_time - window_days``.
+         ``close_time - window_days`` (REST mode) or ``start_date`` (historical
+         mode).
       3. Fetch the most-recent trades via the data API → compute net YES flow
-         in the ``[close_time - window_days, close_time)`` window.
+         in the chosen window.
       4. Baseline: always enter YES at entry_price;
          Strategy: enter only when net_flow_yes > 0.
+
+    Parameters
+    ----------
+    historical : If True, use ``fetch_market_trades_historical`` and anchor
+        the window to the market's ``start_date`` (open date) rather than
+        ``closed_time``.  This attempts to measure the *early-window* flow
+        signal (first ``window_days`` after market open).
+
+        **IMPORTANT:** As of 2025-06 there is no public source that provides
+        fills from earlier than the most-recent ~3,500 trades.  The
+        ``--historical`` flag applies client-side time filtering but cannot
+        retrieve data that is simply not available.  Markets whose 3,500-fill
+        window does not reach back to ``start_date + window_days`` will have
+        ``coverage_full=False`` logged as warnings and be dropped from the
+        results (no trades in window → skipped), so the result set will be
+        smaller than the REST mode.  Use this flag to measure the early-window
+        signal on *low-volume* markets that fit within the 3,500-fill cap.
 
     Returns a DataFrame sorted by resolution date (end_date).
     """
     records: list[dict] = []
+    n_no_coverage = 0
 
     for i, row in enumerate(markets_df.itertuples(index=False), 1):
         market_id    = str(row.id)
@@ -166,6 +187,7 @@ def run_backtest(
         question     = str(getattr(row, "question",     "") or "")
         outcome      = getattr(row, "outcome", float("nan"))
         end_date_raw = getattr(row, "end_date", None)
+        start_date_raw = getattr(row, "start_date", None)
 
         # Need a clean binary outcome
         if not isinstance(outcome, (int, float)) or np.isnan(outcome):
@@ -188,13 +210,29 @@ def run_backtest(
         except Exception:
             end_date = close_time
 
+        # ── Window anchor ─────────────────────────────────────────────────
+        if historical and start_date_raw is not None:
+            try:
+                market_open = pd.to_datetime(start_date_raw, utc=True)
+                window_start = market_open
+                window_end   = market_open + pd.Timedelta(days=window_days)
+                entry_ts     = market_open  # enter at open (first day price)
+            except Exception:
+                logger.debug("skip %s — bad start_date", market_id[:12])
+                continue
+        else:
+            window_end   = close_time
+            window_start = close_time - pd.Timedelta(days=window_days)
+            entry_ts     = window_start
+
         logger.info(
-            "[%d/%d] %s (close %s)…",
-            i, len(markets_df), market_id[:16], str(close_time)[:10],
+            "[%d/%d] %s (%s window %s → %s)…",
+            i, len(markets_df), market_id[:16],
+            "early" if historical else "pre-close",
+            str(window_start)[:10], str(window_end)[:10],
         )
 
         # ── Step 1: entry price from CLOB price history ───────────────────
-        entry_ts = close_time - pd.Timedelta(days=window_days)
         entry_price = get_entry_price_from_history(yes_token, entry_ts)
         if entry_price is None or not (0.0 < entry_price < 1.0):
             logger.debug(
@@ -205,16 +243,49 @@ def run_backtest(
             continue
 
         # ── Step 2: net YES flow from data-api trades ─────────────────────
-        trades = fetch_market_trades(condition_id, max_trades=2000, sleep=0.2)
+        if historical:
+            trades = fetch_market_trades_historical(
+                condition_id,
+                start_ts=window_start.timestamp(),
+                end_ts=window_end.timestamp(),
+                max_trades=3500,
+                sleep=0.2,
+            )
+            # Check coverage — if False, early-window data is missing
+            if not trades.attrs.get("coverage_full", True):
+                n_no_coverage += 1
+                logger.warning(
+                    "skip %s — early window not covered by available fills "
+                    "(market likely has >3500 lifetime trades)",
+                    market_id[:12],
+                )
+                continue
+            # Adapt column names for compute_net_flow_yes (expects 'outcome' column)
+            if not trades.empty and "outcome" not in trades.columns:
+                # fetch_market_trades_historical returns [wallet, side, size, price, timestamp]
+                # We need the raw trades for the outcome column; fall back to raw fetch
+                trades_raw = fetch_market_trades(condition_id, max_trades=3500, sleep=0.2)
+                # Apply the same time window filter client-side
+                if not trades_raw.empty:
+                    mask = (
+                        (trades_raw["timestamp"] >= window_start)
+                        & (trades_raw["timestamp"] < window_end)
+                    )
+                    trades = trades_raw[mask].copy()
+                else:
+                    trades = pd.DataFrame()
+        else:
+            trades = fetch_market_trades(condition_id, max_trades=2000, sleep=0.2)
+
         if trades.empty:
             logger.debug("skip %s — no trades returned", market_id[:12])
             continue
 
-        net_flow = compute_net_flow_yes(trades, entry_ts, close_time)
+        net_flow = compute_net_flow_yes(trades, window_start, window_end)
         if net_flow is None:
             logger.debug(
                 "skip %s — no YES trades in window [%s, %s)",
-                market_id[:12], str(entry_ts)[:10], str(close_time)[:10],
+                market_id[:12], str(window_start)[:10], str(window_end)[:10],
             )
             continue
 
@@ -227,12 +298,21 @@ def run_backtest(
             "question":     question,
             "end_date":     end_date,
             "close_time":   close_time,
+            "window_start": window_start,
+            "window_end":   window_end,
             "net_flow":     net_flow,
             "entry_price":  entry_price,
             "outcome":      float(outcome),
             "baseline_pnl": pnl,                           # always enter YES
             "strategy_pnl": pnl if net_flow > 0 else 0.0, # enter only when flow > 0
         })
+
+    if historical and n_no_coverage > 0:
+        logger.warning(
+            "%d markets skipped: early window not covered by API's 3500-fill cap.  "
+            "These are high-volume markets — no public source provides their early fills.",
+            n_no_coverage,
+        )
 
     if not records:
         return pd.DataFrame()
@@ -407,14 +487,30 @@ def main() -> None:
         "--no-plots", action="store_true",
         help="Skip chart generation",
     )
+    ap.add_argument(
+        "--historical", action="store_true",
+        help=(
+            "Use early-window mode: measure flow signal in the first "
+            "``--window`` days after market open (start_date) rather than "
+            "the last ``--window`` days before close.  "
+            "NOTE: as of 2025-06, data-api.polymarket.com returns only the "
+            "most-recent ≤3,500 fills regardless of any time filter.  "
+            "High-volume markets (>3,500 lifetime fills) will be dropped "
+            "because their early-window data is unavailable.  Only markets "
+            "whose full lifetime fits inside the 3,500-fill cap will be "
+            "included — these tend to be lower-volume markets."
+        ),
+    )
     args = ap.parse_args()
 
     ensure_dirs()
 
-    print("""
+    mode_label = "EARLY-WINDOW (historical)" if args.historical else "PRE-CLOSE (REST)"
+    print(f"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║   P O L Y M A R K E T   ·   Market-Flow Imbalance Backtest       ║
-║   Does pre-close buy pressure on YES predict final resolution?    ║
+║   Does buy pressure on YES predict final resolution?              ║
+║   Mode: {mode_label:<56}║
 ╚══════════════════════════════════════════════════════════════════╝""")
     logger.info(
         "Fetching %d resolved markets (min_volume=%.0f)…",
@@ -440,17 +536,27 @@ def main() -> None:
         sys.exit(1)
 
     logger.info(
-        "Running backtest (window=%d days, sizing=%.0f%%)…",
+        "Running backtest (mode=%s, window=%d days, sizing=%.0f%%)…",
+        "historical" if args.historical else "pre-close",
         args.window, SIZING * 100,
     )
-    results = run_backtest(markets_df, window_days=args.window)
+    results = run_backtest(markets_df, window_days=args.window, historical=args.historical)
 
     if results.empty:
-        logger.error(
-            "No tradeable markets found after all filters.\n"
-            "  Try: --window %d (wider window) or --min-volume 50000 (more markets).",
-            args.window * 2,
-        )
+        if args.historical:
+            logger.error(
+                "No tradeable markets found.\n"
+                "  In --historical mode all high-volume markets are dropped because\n"
+                "  data-api.polymarket.com only returns the most-recent ≤3,500 fills.\n"
+                "  Try: --min-volume 10000 (smaller markets with full history) or\n"
+                "       omit --historical to use pre-close mode (always works).",
+            )
+        else:
+            logger.error(
+                "No tradeable markets found after all filters.\n"
+                "  Try: --window %d (wider window) or --min-volume 50000 (more markets).",
+                args.window * 2,
+            )
         sys.exit(1)
 
     logger.info("Backtest complete: %d tradeable markets", len(results))
@@ -469,7 +575,8 @@ def main() -> None:
     ))
 
     if not args.no_plots:
-        out_path = RESULTS_DIR / "market_flow_backtest.png"
+        suffix = "_historical" if args.historical else ""
+        out_path = RESULTS_DIR / f"market_flow_backtest{suffix}.png"
         plot_results(results, out_path)
         print(f"\n  Chart saved → {out_path}")
 
