@@ -23,6 +23,7 @@ import argparse
 import logging
 
 import _bootstrap  # noqa: F401
+import pandas as pd
 from tabulate import tabulate
 
 from posterioralpha.polymarket.smartflow_papertrade import (
