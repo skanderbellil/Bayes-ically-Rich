@@ -46,6 +46,10 @@ def main() -> None:
     ap.add_argument("--kelly-cap",  type=float, default=2.0,   help="Kelly cap multiple over base fraction")
     ap.add_argument("--stop-loss",  type=float, default=None,  metavar="FRAC",
                     help="exit when price ≤ entry_ask*(1-FRAC), e.g. 0.35")
+    ap.add_argument("--consensus-exit", action="store_true",
+                    help="exit when smart-wallet net flow flips bearish (sellers > buyers)")
+    ap.add_argument("--flip-threshold", type=int, default=1, metavar="N",
+                    help="sellers must exceed buyers by at least N to trigger consensus exit (default: 1)")
     ap.add_argument("--dry-run",    action="store_true",       help="scan and print, no write")
     args = ap.parse_args()
 
@@ -73,9 +77,12 @@ def main() -> None:
         ref_buyers=args.ref_buyers,
         kelly_cap=args.kelly_cap,
         stop_loss=args.stop_loss,
+        consensus_exit=args.consensus_exit,
+        flip_threshold=args.flip_threshold,
     )
     open_pos = ledger[ledger["status"] == "open"]
     stopped  = ledger[ledger["status"] == "stopped"]
+    flipped  = ledger[ledger["status"] == "flipped"]
     closed   = ledger[ledger["status"].isin(["won", "lost"])]
 
     print(f"\n{'═'*82}")
@@ -106,6 +113,19 @@ def main() -> None:
             headers=["question", "entered", "exited", "ask@entry", "stopped@", "frac", "PnL"],
             tablefmt="rounded_grid"))
 
+    if not flipped.empty:
+        print(f"\n{'═'*82}")
+        print(f"  FLIPPED POSITIONS  ({len(flipped)})  — exited on consensus reversal")
+        print(f"{'═'*82}")
+        print(tabulate(
+            [[(r["question"] or "")[:40], r["entry_date"], r["exit_date"],
+              f"{float(r['entry_ask']):.3f}", f"{float(r['current_price']):.3f}",
+              r.get("bet_fraction", "—"),
+              f"{float(r['pnl']):+.4f}" if r["pnl"] else "—"]
+             for _, r in flipped.iterrows()],
+            headers=["question", "entered", "exited", "ask@entry", "flipped@", "frac", "PnL"],
+            tablefmt="rounded_grid"))
+
     print(f"\n{'═'*82}")
     print(f"  RESOLVED POSITIONS  ({len(closed)})")
     print(f"{'═'*82}")
@@ -122,9 +142,10 @@ def main() -> None:
             tablefmt="rounded_grid"))
         won  = (closed["status"] == "won").sum()
         lost = (closed["status"] == "lost").sum()
-        all_closed = pd.concat([closed, stopped])
+        n_flip = len(flipped)
+        all_closed = pd.concat([closed, stopped, flipped])
         pnls = all_closed["pnl"].replace("", float("nan")).astype(float).dropna()
-        print(f"\n  W/L/Stopped: {won}W / {lost}L / {len(stopped)}S   "
+        print(f"\n  W/L/Stopped/Flipped: {won}W / {lost}L / {len(stopped)}S / {n_flip}F   "
               f"cumulative PnL (additive): {pnls.sum():+.4f}")
 
     print(f"\n  Ledger → data/paper_trade/smart_flow_positions.csv  ({len(ledger)} rows)")

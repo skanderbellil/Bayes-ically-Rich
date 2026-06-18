@@ -95,39 +95,61 @@ def smart_pool(per_window: int = 60) -> list[str]:
 # Scan recent consensus buys on currently-open markets
 # ---------------------------------------------------------------------------
 
+def _build_flow_index(pool: list[str], window_days: int) -> dict[str, dict]:
+    """Fetch recent trades for all pool wallets; index by token with buyer/seller sets.
+
+    Returns {token: {"token", "condition_id", "question", "slug", "buyers": set, "sellers": set}}.
+    Fetching once and sharing between entry scan and exit check avoids duplicate API calls.
+    """
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
+    index: dict[str, dict] = {}
+    for w in pool:
+        df = fetch_trader_trades(w, max_trades=500, use_cache=False)
+        if df.empty:
+            continue
+        recent = df[df["timestamp"] >= cutoff]
+        for r in recent.itertuples(index=False):
+            tok = str(r.asset)
+            if not tok:
+                continue
+            e = index.setdefault(tok, {
+                "token": tok,
+                "condition_id": getattr(r, "conditionId", ""),
+                "question": getattr(r, "title", ""),
+                "slug": getattr(r, "slug", ""),
+                "buyers": set(),
+                "sellers": set(),
+            })
+            side = getattr(r, "side", "")
+            if side == "BUY":
+                e["buyers"].add(w)
+            elif side == "SELL":
+                e["sellers"].add(w)
+    logger.info("_build_flow_index: %d tokens seen across %d wallets", len(index), len(pool))
+    return index
+
+
 def scan_smart_flow_entries(
     window_days: int = 7,
     min_buyers: int = 3,
     per_window: int = 60,
     min_price: float = 0.05,
     max_price: float = 0.90,
+    _flow_index: dict | None = None,
 ) -> list[dict]:
     """Open outcome tokens with ≥``min_buyers`` distinct non-MM wallets buying recently.
 
-    Pulls each pool wallet's most recent fills (one page, uncached — this is a
-    *live* signal), keeps BUYs in the trailing ``window_days`` window, counts
-    distinct buyers per token, and for tokens clearing ``min_buyers`` fetches the
-    live order book to confirm the market is open and price it (mid/ask/spread).
+    Pass a pre-built ``_flow_index`` (from ``_build_flow_index``) to avoid
+    re-fetching trades when called from within ``update_ledger``.
     """
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
-    pool = smart_pool(per_window)
-
-    buys: dict[str, dict] = {}
-    for w in pool:
-        df = fetch_trader_trades(w, max_trades=500, use_cache=False)
-        if df.empty:
-            continue
-        recent = df[(df["timestamp"] >= cutoff) & (df["side"] == "BUY")]
-        for r in recent.itertuples(index=False):
-            tok = str(r.asset)
-            if not tok:
-                continue
-            e = buys.setdefault(tok, {"token": tok, "condition_id": r.conditionId,
-                                      "question": r.title, "slug": r.slug, "buyers": set()})
-            e["buyers"].add(w)
+    if _flow_index is not None:
+        flow = _flow_index
+    else:
+        pool = smart_pool(per_window)
+        flow = _build_flow_index(pool, window_days)
 
     candidates = []
-    for tok, e in buys.items():
+    for tok, e in flow.items():
         n = len(e["buyers"])
         if n < min_buyers:
             continue
@@ -152,6 +174,30 @@ def scan_smart_flow_entries(
     logger.info("scan_smart_flow_entries: %d tokens with ≥%d smart buyers (open)",
                 len(candidates), min_buyers)
     return candidates
+
+
+def consensus_reversal_check(
+    token: str,
+    flow_index: dict,
+    flip_threshold: int = 1,
+) -> bool:
+    """Return True if smart-wallet net flow for this token has turned bearish.
+
+    Fires when distinct sellers >= distinct buyers + flip_threshold in the
+    trailing window, meaning the smart-money crowd has more sellers than buyers.
+    Returns False silently if the token was not seen in any wallet's trades
+    (no recent activity either way is not a reversal).
+    """
+    e = flow_index.get(token)
+    if e is None:
+        return False
+    n_buy  = len(e.get("buyers",  set()))
+    n_sell = len(e.get("sellers", set()))
+    fired  = n_sell >= n_buy + flip_threshold
+    if fired:
+        logger.info("CONSENSUS FLIP candidate: token=%s  buy=%d sell=%d threshold=%d",
+                    token[:20], n_buy, n_sell, flip_threshold)
+    return fired
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +242,9 @@ def update_ledger(
     ref_buyers: int = 4,
     kelly_cap: float = 2.0,
     stop_loss: float | None = None,
+    consensus_exit: bool = False,
+    flip_threshold: int = 1,
+    per_window: int = 60,
 ) -> pd.DataFrame:
     """One daily cycle: append new consensus longs, refresh prices, mark resolutions.
 
@@ -214,14 +263,26 @@ def update_ledger(
     stop_loss : float | None
         Exit an open position when current_price ≤ entry_ask * (1 - stop_loss).
         E.g. 0.35 exits when price falls to 65% of entry. None disables stops.
+    consensus_exit : bool
+        If True, exit positions where smart-wallet net flow has flipped bearish
+        (more distinct sellers than buyers in the trailing window).
+    flip_threshold : int
+        Sellers must exceed buyers by at least this many to trigger consensus exit.
+    per_window : int
+        Number of wallets to fetch from the leaderboard for the smart pool.
     """
     ledger = load_ledger()
     today = date.today().isoformat()
     held = set(ledger["token"].tolist()) if not ledger.empty else set()
 
-    # ── 1. new consensus entries ──────────────────────────────────────────
+    # ── 1. build shared flow index (entries + exits share the same API fetch) ─
+    pool       = smart_pool(per_window)
+    flow_index = _build_flow_index(pool, window_days)
+
+    # ── 2. new consensus entries ──────────────────────────────────────────
     new_rows = []
-    for c in scan_smart_flow_entries(window_days=window_days, min_buyers=min_buyers):
+    for c in scan_smart_flow_entries(window_days=window_days, min_buyers=min_buyers,
+                                     _flow_index=flow_index):
         if c["token"] in held:
             continue
         n = c["n_smart_buyers"]
@@ -239,7 +300,7 @@ def update_ledger(
     if new_rows:
         ledger = pd.concat([ledger, pd.DataFrame(new_rows)], ignore_index=True)
 
-    # ── 2. refresh + stop-loss + resolve open positions ───────────────────
+    # ── 3. refresh + stop-loss + consensus-exit + resolve open positions ──
     for i, row in ledger[ledger["status"] == "open"].iterrows():
         mid, _ = _price(row["token"])
         if mid is None:
@@ -259,6 +320,18 @@ def update_ledger(
                 ledger.at[i, "pnl"]           = str(round(pnl, 4))
                 logger.info("STOPPED %s  mid=%.4f floor=%.4f pnl=%.4f",
                             (row["question"] or "")[:40], mid, stop_floor, pnl)
+                continue
+
+        # consensus exit: signal reversal
+        if consensus_exit:
+            if consensus_reversal_check(row["token"], flow_index, flip_threshold):
+                pnl = (mid / entry_ask - 1.0) * frac
+                ledger.at[i, "status"]    = "flipped"
+                ledger.at[i, "exit_date"] = today
+                ledger.at[i, "outcome"]   = ""
+                ledger.at[i, "pnl"]      = str(round(pnl, 4))
+                logger.info("FLIPPED  %s  mid=%.4f  pnl=%.4f",
+                            (row["question"] or "")[:40], mid, pnl)
                 continue
 
         # resolution: price collapsed to 0 or 1
