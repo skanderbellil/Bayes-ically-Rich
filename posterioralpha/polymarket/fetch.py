@@ -183,16 +183,18 @@ def fetch_markets(
                 continue
             ev_ticker, ev_title = _event_fields(m)
             rows.append({
-                "id":         str(m.get("id")),
-                "question":   m.get("question"),
-                "slug":       m.get("slug"),
-                "yes_token":  yes_token,
-                "volume":     vol,
-                "liquidity":  liq,
-                "start_date": m.get("startDate"),
-                "end_date":   m.get("endDate"),
-                "closed":     bool(m.get("closed")),
-                "outcome":    _yes_outcome(m.get("outcomePrices", ""), m.get("outcomes", "")),
+                "id":           str(m.get("id")),
+                "condition_id": str(m.get("conditionId") or ""),
+                "question":     m.get("question"),
+                "slug":         m.get("slug"),
+                "yes_token":    yes_token,
+                "volume":       vol,
+                "liquidity":    liq,
+                "start_date":   m.get("startDate"),
+                "end_date":     m.get("endDate"),
+                "closed_time":  m.get("closedTime"),   # actual close (may be after endDate)
+                "closed":       bool(m.get("closed")),
+                "outcome":      _yes_outcome(m.get("outcomePrices", ""), m.get("outcomes", "")),
                 "event_ticker": ev_ticker,
                 "event_title":  ev_title,
             })
@@ -252,6 +254,50 @@ def fetch_token_history(
         ensure_dirs()
         s.to_frame(name="p").to_csv(cache)
     return s
+
+
+# ---------------------------------------------------------------------------
+# Trade history (data-api) — all fills for a market
+# ---------------------------------------------------------------------------
+
+def fetch_market_trades(
+    condition_id: str,
+    max_trades: int = 2000,
+    sleep: float = 0.3,
+) -> pd.DataFrame:
+    """All fills for a given market (condition_id), oldest → newest.
+
+    Paginates data-api.polymarket.com/trades?market=<condition_id>.
+    Returns DataFrame[proxyWallet, side, asset, outcome, size, price, timestamp].
+    Empty DataFrame if the market has no trades.
+    """
+    url  = "https://data-api.polymarket.com/trades"
+    rows: list[dict] = []
+    offset = 0
+    limit  = 500
+    while len(rows) < max_trades:
+        try:
+            r = _get(url, {"market": condition_id, "limit": limit, "offset": offset})
+        except Exception as e:
+            logger.warning("fetch_market_trades %s offset=%d: %s", condition_id[:12], offset, e)
+            break
+        batch = r if isinstance(r, list) else []
+        if not batch:
+            break
+        rows.extend(batch)
+        if len(batch) < limit:
+            break
+        offset += limit
+        time.sleep(sleep)
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)[["proxyWallet", "side", "asset", "outcome", "size", "price", "timestamp"]]
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
+    df["size"]      = df["size"].astype(float)
+    df["price"]     = df["price"].astype(float)
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    logger.info("fetch_market_trades %s: %d fills", condition_id[:16], len(df))
+    return df
 
 
 # ---------------------------------------------------------------------------
