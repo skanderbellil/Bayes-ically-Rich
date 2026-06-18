@@ -47,7 +47,22 @@ logger = logging.getLogger(__name__)
 
 STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "paper_trade" / "smart_flow_positions.csv"
 
-_COLS = ["token", "condition_id", "question", "domain", "entry_date", "n_smart_buyers",
+
+def kelly_fraction(
+    n_smart_buyers: int,
+    base_fraction: float = 0.10,
+    ref_buyers: int = 4,
+    cap_multiple: float = 2.0,
+) -> float:
+    """Scale bet fraction proportionally to smart-buyer conviction.
+
+    3 buyers → 7.5%, 4 → 10%, 5 → 12.5%, 6 → 15%, capped at base * cap_multiple.
+    """
+    raw = base_fraction * (n_smart_buyers / ref_buyers)
+    return round(min(raw, base_fraction * cap_multiple), 6)
+
+_COLS = ["token", "condition_id", "question", "domain", "entry_date",
+         "n_smart_buyers", "bet_fraction",
          "entry_mid", "entry_ask", "spread", "current_price",
          "status", "exit_date", "outcome", "pnl"]
 
@@ -80,39 +95,61 @@ def smart_pool(per_window: int = 60) -> list[str]:
 # Scan recent consensus buys on currently-open markets
 # ---------------------------------------------------------------------------
 
+def _build_flow_index(pool: list[str], window_days: int) -> dict[str, dict]:
+    """Fetch recent trades for all pool wallets; index by token with buyer/seller sets.
+
+    Returns {token: {"token", "condition_id", "question", "slug", "buyers": set, "sellers": set}}.
+    Fetching once and sharing between entry scan and exit check avoids duplicate API calls.
+    """
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
+    index: dict[str, dict] = {}
+    for w in pool:
+        df = fetch_trader_trades(w, max_trades=500, use_cache=False)
+        if df.empty:
+            continue
+        recent = df[df["timestamp"] >= cutoff]
+        for r in recent.itertuples(index=False):
+            tok = str(r.asset)
+            if not tok:
+                continue
+            e = index.setdefault(tok, {
+                "token": tok,
+                "condition_id": getattr(r, "conditionId", ""),
+                "question": getattr(r, "title", ""),
+                "slug": getattr(r, "slug", ""),
+                "buyers": set(),
+                "sellers": set(),
+            })
+            side = getattr(r, "side", "")
+            if side == "BUY":
+                e["buyers"].add(w)
+            elif side == "SELL":
+                e["sellers"].add(w)
+    logger.info("_build_flow_index: %d tokens seen across %d wallets", len(index), len(pool))
+    return index
+
+
 def scan_smart_flow_entries(
     window_days: int = 7,
     min_buyers: int = 3,
     per_window: int = 60,
     min_price: float = 0.05,
     max_price: float = 0.90,
+    _flow_index: dict | None = None,
 ) -> list[dict]:
     """Open outcome tokens with ≥``min_buyers`` distinct non-MM wallets buying recently.
 
-    Pulls each pool wallet's most recent fills (one page, uncached — this is a
-    *live* signal), keeps BUYs in the trailing ``window_days`` window, counts
-    distinct buyers per token, and for tokens clearing ``min_buyers`` fetches the
-    live order book to confirm the market is open and price it (mid/ask/spread).
+    Pass a pre-built ``_flow_index`` (from ``_build_flow_index``) to avoid
+    re-fetching trades when called from within ``update_ledger``.
     """
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
-    pool = smart_pool(per_window)
-
-    buys: dict[str, dict] = {}
-    for w in pool:
-        df = fetch_trader_trades(w, max_trades=500, use_cache=False)
-        if df.empty:
-            continue
-        recent = df[(df["timestamp"] >= cutoff) & (df["side"] == "BUY")]
-        for r in recent.itertuples(index=False):
-            tok = str(r.asset)
-            if not tok:
-                continue
-            e = buys.setdefault(tok, {"token": tok, "condition_id": r.conditionId,
-                                      "question": r.title, "slug": r.slug, "buyers": set()})
-            e["buyers"].add(w)
+    if _flow_index is not None:
+        flow = _flow_index
+    else:
+        pool = smart_pool(per_window)
+        flow = _build_flow_index(pool, window_days)
 
     candidates = []
-    for tok, e in buys.items():
+    for tok, e in flow.items():
         n = len(e["buyers"])
         if n < min_buyers:
             continue
@@ -139,14 +176,45 @@ def scan_smart_flow_entries(
     return candidates
 
 
+def consensus_reversal_check(
+    token: str,
+    flow_index: dict,
+    flip_threshold: int = 1,
+) -> bool:
+    """Return True if smart-wallet net flow for this token has turned bearish.
+
+    Fires when distinct sellers >= distinct buyers + flip_threshold in the
+    trailing window, meaning the smart-money crowd has more sellers than buyers.
+    Returns False silently if the token was not seen in any wallet's trades
+    (no recent activity either way is not a reversal).
+    """
+    e = flow_index.get(token)
+    if e is None:
+        return False
+    n_buy  = len(e.get("buyers",  set()))
+    n_sell = len(e.get("sellers", set()))
+    fired  = n_sell >= n_buy + flip_threshold
+    if fired:
+        logger.info("CONSENSUS FLIP candidate: token=%s  buy=%d sell=%d threshold=%d",
+                    token[:20], n_buy, n_sell, flip_threshold)
+    return fired
+
+
 # ---------------------------------------------------------------------------
 # Ledger I/O
 # ---------------------------------------------------------------------------
 
 def load_ledger() -> pd.DataFrame:
-    if STATE_FILE.exists():
-        return pd.read_csv(STATE_FILE, dtype=str)
-    return pd.DataFrame(columns=_COLS)
+    if not STATE_FILE.exists():
+        return pd.DataFrame(columns=_COLS)
+    df = pd.read_csv(STATE_FILE, dtype=str)
+    if "bet_fraction" not in df.columns:
+        # Migrate legacy CSVs: assign flat-10% default so historical PnL is unchanged.
+        df.insert(df.columns.get_loc("n_smart_buyers") + 1, "bet_fraction", "0.1")
+    for col in _COLS:
+        if col not in df.columns:
+            df[col] = ""
+    return df[_COLS]
 
 
 def save_ledger(df: pd.DataFrame) -> None:
@@ -166,29 +234,65 @@ def _price(token: str) -> tuple[float | None, float | None]:
 # Daily update
 # ---------------------------------------------------------------------------
 
-def update_ledger(bet_fraction: float = 0.10, min_buyers: int = 3,
-                  window_days: int = 7) -> pd.DataFrame:
+def update_ledger(
+    bet_fraction: float = 0.10,
+    min_buyers: int = 3,
+    window_days: int = 7,
+    use_kelly: bool = False,
+    ref_buyers: int = 4,
+    kelly_cap: float = 2.0,
+    stop_loss: float | None = None,
+    consensus_exit: bool = False,
+    flip_threshold: int = 1,
+    per_window: int = 60,
+) -> pd.DataFrame:
     """One daily cycle: append new consensus longs, refresh prices, mark resolutions.
 
-    Idempotent on the token id. New positions enter at the live ask (spread paid);
-    open positions are marked to the current mid; a token resolving to ≈0/1 is
-    closed with realised PnL ``(outcome / entry_ask − 1) · bet_fraction``.
+    Parameters
+    ----------
+    bet_fraction : float
+        Base bankroll fraction per position. When use_kelly=True this is the
+        reference fraction for a ref_buyers-conviction trade; higher-conviction
+        trades are sized proportionally larger (capped at bet_fraction * kelly_cap).
+    use_kelly : bool
+        If True, scale each position's fraction by n_smart_buyers / ref_buyers.
+    ref_buyers : int
+        Buyer count that maps to exactly bet_fraction (Kelly reference point).
+    kelly_cap : float
+        Maximum Kelly multiple over bet_fraction (prevents runaway sizing).
+    stop_loss : float | None
+        Exit an open position when current_price ≤ entry_ask * (1 - stop_loss).
+        E.g. 0.35 exits when price falls to 65% of entry. None disables stops.
+    consensus_exit : bool
+        If True, exit positions where smart-wallet net flow has flipped bearish
+        (more distinct sellers than buyers in the trailing window).
+    flip_threshold : int
+        Sellers must exceed buyers by at least this many to trigger consensus exit.
+    per_window : int
+        Number of wallets to fetch from the leaderboard for the smart pool.
     """
     ledger = load_ledger()
     today = date.today().isoformat()
     held = set(ledger["token"].tolist()) if not ledger.empty else set()
 
-    # ── 1. new consensus entries ──────────────────────────────────────────
+    # ── 1. build shared flow index (entries + exits share the same API fetch) ─
+    pool       = smart_pool(per_window)
+    flow_index = _build_flow_index(pool, window_days)
+
+    # ── 2. new consensus entries ──────────────────────────────────────────
     new_rows = []
-    for c in scan_smart_flow_entries(window_days=window_days, min_buyers=min_buyers):
+    for c in scan_smart_flow_entries(window_days=window_days, min_buyers=min_buyers,
+                                     _flow_index=flow_index):
         if c["token"] in held:
             continue
-        logger.info("NEW long: %s  (%d smart buyers)  mid %.3f ask %.3f",
-                    (c["question"] or "")[:40], c["n_smart_buyers"], c["entry_mid"], c["entry_ask"])
+        n = c["n_smart_buyers"]
+        frac = kelly_fraction(n, bet_fraction, ref_buyers, kelly_cap) if use_kelly else bet_fraction
+        logger.info("NEW long: %s  (%d buyers)  mid %.3f ask %.3f  frac=%.3f",
+                    (c["question"] or "")[:40], n, c["entry_mid"], c["entry_ask"], frac)
         new_rows.append({
             "token": c["token"], "condition_id": c["condition_id"],
             "question": c["question"], "domain": c["domain"], "entry_date": today,
-            "n_smart_buyers": str(c["n_smart_buyers"]),
+            "n_smart_buyers": str(n), "bet_fraction": str(frac),
             "entry_mid": str(c["entry_mid"]), "entry_ask": str(c["entry_ask"]),
             "spread": str(c["spread"]), "current_price": str(c["entry_mid"]),
             "status": "open", "exit_date": "", "outcome": "", "pnl": "",
@@ -196,20 +300,48 @@ def update_ledger(bet_fraction: float = 0.10, min_buyers: int = 3,
     if new_rows:
         ledger = pd.concat([ledger, pd.DataFrame(new_rows)], ignore_index=True)
 
-    # ── 2. refresh + resolve open positions ───────────────────────────────
+    # ── 3. refresh + stop-loss + consensus-exit + resolve open positions ──
     for i, row in ledger[ledger["status"] == "open"].iterrows():
         mid, _ = _price(row["token"])
         if mid is None:
             continue
         ledger.at[i, "current_price"] = str(round(mid, 4))
+        entry_ask = float(row["entry_ask"])
+        frac = float(row["bet_fraction"]) if row.get("bet_fraction") else bet_fraction
+
+        # stop-loss: check before resolution so we don't double-fire
+        if stop_loss is not None:
+            stop_floor = entry_ask * (1.0 - stop_loss)
+            if mid <= stop_floor:
+                pnl = (mid / entry_ask - 1.0) * frac
+                ledger.at[i, "status"]        = "stopped"
+                ledger.at[i, "exit_date"]     = today
+                ledger.at[i, "outcome"]       = ""
+                ledger.at[i, "pnl"]           = str(round(pnl, 4))
+                logger.info("STOPPED %s  mid=%.4f floor=%.4f pnl=%.4f",
+                            (row["question"] or "")[:40], mid, stop_floor, pnl)
+                continue
+
+        # consensus exit: signal reversal
+        if consensus_exit:
+            if consensus_reversal_check(row["token"], flow_index, flip_threshold):
+                pnl = (mid / entry_ask - 1.0) * frac
+                ledger.at[i, "status"]    = "flipped"
+                ledger.at[i, "exit_date"] = today
+                ledger.at[i, "outcome"]   = ""
+                ledger.at[i, "pnl"]      = str(round(pnl, 4))
+                logger.info("FLIPPED  %s  mid=%.4f  pnl=%.4f",
+                            (row["question"] or "")[:40], mid, pnl)
+                continue
+
+        # resolution: price collapsed to 0 or 1
         outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
-            entry_ask = float(row["entry_ask"])
-            pnl = (outcome / entry_ask - 1.0) * bet_fraction
-            ledger.at[i, "status"]   = "won" if outcome == 1.0 else "lost"
-            ledger.at[i, "exit_date"] = today
-            ledger.at[i, "outcome"]  = str(outcome)
-            ledger.at[i, "pnl"]      = str(round(pnl, 4))
+            pnl = (outcome / entry_ask - 1.0) * frac
+            ledger.at[i, "status"]        = "won" if outcome == 1.0 else "lost"
+            ledger.at[i, "exit_date"]     = today
+            ledger.at[i, "outcome"]       = str(outcome)
+            ledger.at[i, "pnl"]          = str(round(pnl, 4))
             ledger.at[i, "current_price"] = str(outcome)
             logger.info("RESOLVED %s  %s  pnl=%.4f",
                         (row["question"] or "")[:40], ledger.at[i, "status"], pnl)
