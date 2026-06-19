@@ -1,0 +1,26 @@
+question,domain,condition_id,flip_time,price_before,price_after,move,outcome,n_pre_buyers
+ Iran agrees to end enrichment of uranium by June 30?,geopolitics,0x9d3f02264a94bafc676afd7add8b11442e6ec72dabaa69cefef835f0672275c7,2026-06-15,0.17,0.395,0.225,,0
+ Iran agrees to end enrichment of uranium by June 30?,geopolitics,0x9d3f02264a94bafc676afd7add8b11442e6ec72dabaa69cefef835f0672275c7,2026-06-16,0.155,0.415,0.26,,0
+ Iran agrees to end enrichment of uranium by June 30?,geopolitics,0x9d3f02264a94bafc676afd7add8b11442e6ec72dabaa69cefef835f0672275c7,2026-06-17,0.11,0.465,0.355,,0
+ Iran agrees to end enrichment of uranium by June 30?,geopolitics,0x9d3f02264a94bafc676afd7add8b11442e6ec72dabaa69cefef835f0672275c7,2026-06-18,0.11,0.605,0.495,,0
+Will Trump agree to unfreeze Iranian assets by June 30?,politics,0xed25d03a2589af03a7a603e7c07c36d53baf38c148e50cc1f5a6a6f285d68862,2026-06-13,0.32,0.52,0.2,,37
+Will Trump agree to unfreeze Iranian assets by June 30?,politics,0xed25d03a2589af03a7a603e7c07c36d53baf38c148e50cc1f5a6a6f285d68862,2026-06-14,0.265,0.725,0.46,,75
+Will Trump agree to unfreeze Iranian assets by June 30?,politics,0xed25d03a2589af03a7a603e7c07c36d53baf38c148e50cc1f5a6a6f285d68862,2026-06-15,0.265,0.675,0.41,,126
+Will Trump agree to unfreeze Iranian assets by June 30?,politics,0xed25d03a2589af03a7a603e7c07c36d53baf38c148e50cc1f5a6a6f285d68862,2026-06-16,0.335,0.835,0.5,,210
+Will Trump agree to unfreeze Iranian assets by June 30?,politics,0xed25d03a2589af03a7a603e7c07c36d53baf38c148e50cc1f5a6a6f285d68862,2026-06-17,0.315,0.996,0.681,,276
+Will Trump agree to unfreeze Iranian assets by June 30?,politics,0xed25d03a2589af03a7a603e7c07c36d53baf38c148e50cc1f5a6a6f285d68862,2026-06-18,0.275,0.998,0.723,,323
+Will Trump agree to withdraw troops from the Iranian region ,politics,0xfa08848205da5717b79e5bc21e7dbd31264fb01acc98bd1436b95870e8fec409,2026-06-13,0.2,0.555,0.355,,0
+Will Trump agree to withdraw troops from the Iranian region ,politics,0xfa08848205da5717b79e5bc21e7dbd31264fb01acc98bd1436b95870e8fec409,2026-06-14,0.16,0.695,0.535,,0
+Will Trump agree to withdraw troops from the Iranian region ,politics,0xfa08848205da5717b79e5bc21e7dbd31264fb01acc98bd1436b95870e8fec409,2026-06-16,0.195,0.69,0.495,,0
+Will Trump agree to withdraw troops from the Iranian region ,politics,0xfa08848205da5717b79e5bc21e7dbd31264fb01acc98bd1436b95870e8fec409,2026-06-17,0.165,0.645,0.48,,0
+Will Trump agree to withdraw troops from the Iranian region ,politics,0xfa08848205da5717b79e5bc21e7dbd31264fb01acc98bd1436b95870e8fec409,2026-06-18,0.155,0.9995,0.8445,,0
+Will Trump agree to withdraw troops from the Iranian region ,politics,0xfa08848205da5717b79e5bc21e7dbd31264fb01acc98bd1436b95870e8fec409,2026-06-19,0.145,0.9995,0.8545,,611
+Will Trump agree to Iranian enrichment of uranium by June 30,politics,0x41ba322441190c465ec75e5866c6a5a3d429cf4d1efe2682026e8dcd5dbc37db,2026-06-16,0.0365,0.275,0.2385,,67
+"Israel x Iran permanent peace deal by June 30, 2026?",geopolitics,0x5efa976ebe94080bbda7e45605333ff8f30156cc91604d66c41eb52fd3e25f3e,2026-06-08,0.8095,0.9715,0.162,,0
+Will Norway win on 2026-06-16?,other,0xcee0d9074a1f8766b4f66d806608a4097d027c94f85de367410fbbb166a29424,2026-06-17,0.805,0.9995,0.1945,,652
+Iraq vs. Norway: O/U 2.5,other,0x75632c047c314459500d1efb10e00ede9926af2143d165112d92a0ee9dad3dc0,2026-06-16,0.605,0.9995,0.3945,,30
+Iraq vs. Norway: O/U 2.5,other,0x75632c047c314459500d1efb10e00ede9926af2143d165112d92a0ee9dad3dc0,2026-06-17,0.605,0.9995,0.3945,,1152
+Norway leading at halftime?,other,0xe7a8b810e0f4a6dd1bc096be0804abdbf00b1b0bc1996a6214bb45bf9a3e98e7,2026-06-03,0.51,0.66,0.15,,0
+Will Portugal win on 2026-06-17?,other,0xcaaa1338d38b5c614196c9a926dd84babc3984442f2ec9b937a16284a199ec3a,2026-06-17,0.225,0.995,0.77,,0
+Will Czechia win on 2026-06-18?,other,0x825bc4151fd9c139c4f0400c1a6f5d60cf67b2d04f12d69fd9fb5de67b13e4bc,2026-06-18,0.505,0.9995,0.4945,,0
+Will Korea Republic win on 2026-06-18?,other,0xa6ae199ce172475dd0e29d7584810a15a1d4608398d2f42d7ca39bfac45ed52b,2026-06-19,0.795,0.9995,0.2045,,0

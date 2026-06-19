@@ -12,5 +12,7 @@ results/
 # Paper-trade ledgers are tracked (the forward out-of-sample record)
 !data/paper_trade/macro_positions.csv
 !data/paper_trade/smart_flow_positions.csv
+!data/paper_trade/insider_scorecard.csv
+!data/paper_trade/insider_scorecard
 .DS_Store
 .claude/
