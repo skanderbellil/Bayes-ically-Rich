@@ -2,8 +2,8 @@ name: Smart-money consensus paper-trade tracker
 
 on:
   schedule:
-    # 09:30 UTC daily (just after the macro tracker)
-    - cron: "30 9 * * *"
+    # every 4 hours — catches same-day consensus flips without hammering the API
+    - cron: "30 */4 * * *"
   workflow_dispatch:       # run manually from the Actions tab any time
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
         run: pip install -e ".[dev]" 2>/dev/null || pip install pandas numpy scipy requests tabulate scikit-learn matplotlib seaborn tqdm
 
       - name: Run daily update
-        run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --min-buyers 3
+        run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
 
       - name: Commit ledger if changed
         run: |
