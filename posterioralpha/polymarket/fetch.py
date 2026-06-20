@@ -301,6 +301,86 @@ def fetch_market_trades(
 
 
 # ---------------------------------------------------------------------------
+# Market wallet sentiment — YES vs NO wallet counts
+# ---------------------------------------------------------------------------
+
+def market_wallet_sentiment(
+    condition_id: str,
+    max_trades: int = 3500,
+    window_hours: int | None = None,
+) -> dict:
+    """Count unique wallets net-long YES vs net-long NO for a market.
+
+    A wallet is net-long YES if its cumulative (BUY YES - SELL YES) shares > 0,
+    and net-long NO otherwise. Wallets that are flat or only traded one side once
+    are bucketed by their last action.
+
+    Parameters
+    ----------
+    condition_id  : Polymarket condition ID
+    max_trades    : fill cap (3500 is the API hard limit)
+    window_hours  : if set, only consider trades in the last N hours
+
+    Returns
+    -------
+    dict with keys:
+      yes_wallets   : int — unique wallets net-long YES
+      no_wallets    : int — unique wallets net-long NO
+      yes_vol       : float — total dollar volume on YES side (BUY YES)
+      no_vol        : float — total dollar volume on NO side (BUY NO)
+      yes_pct       : float — yes_wallets / total_wallets
+      total_wallets : int
+      top_yes       : list[str] — top 5 YES wallets by size
+      top_no        : list[str] — top 5 NO wallets by size
+    """
+    trades = fetch_market_trades(condition_id, max_trades=max_trades, sleep=0)
+    if trades.empty:
+        return {"yes_wallets": 0, "no_wallets": 0, "total_wallets": 0,
+                "yes_vol": 0.0, "no_vol": 0.0, "yes_pct": float("nan"),
+                "top_yes": [], "top_no": []}
+
+    if window_hours is not None:
+        cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=window_hours)
+        trades = trades[trades["timestamp"] >= cutoff]
+
+    # Normalise outcome to uppercase
+    trades = trades.copy()
+    trades["outcome"] = trades["outcome"].str.upper()
+
+    # Net position per wallet: +size for BUY YES / SELL NO, -size for SELL YES / BUY NO
+    def signed_size(row):
+        if (row["side"] == "BUY"  and row["outcome"] == "YES") or \
+           (row["side"] == "SELL" and row["outcome"] == "NO"):
+            return row["size"]
+        return -row["size"]
+
+    trades["signed"] = trades.apply(signed_size, axis=1)
+    net = trades.groupby("proxyWallet")["signed"].sum()
+
+    yes_wallets_series = net[net > 0]
+    no_wallets_series  = net[net < 0]
+
+    # Dollar volume: BUY YES and BUY NO
+    yes_vol = trades[(trades["side"] == "BUY") & (trades["outcome"] == "YES")]["size"].sum()
+    no_vol  = trades[(trades["side"] == "BUY") & (trades["outcome"] == "NO")]["size"].sum()
+
+    top_yes = yes_wallets_series.nlargest(5).index.tolist()
+    top_no  = no_wallets_series.nsmallest(5).index.tolist()  # most negative = biggest NO
+
+    total = len(yes_wallets_series) + len(no_wallets_series)
+    return {
+        "yes_wallets":   len(yes_wallets_series),
+        "no_wallets":    len(no_wallets_series),
+        "total_wallets": total,
+        "yes_vol":       round(yes_vol, 2),
+        "no_vol":        round(no_vol, 2),
+        "yes_pct":       round(len(yes_wallets_series) / total * 100, 1) if total else float("nan"),
+        "top_yes":       top_yes,
+        "top_no":        top_no,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Historical trade data — with hard cap awareness
 # ---------------------------------------------------------------------------
 
