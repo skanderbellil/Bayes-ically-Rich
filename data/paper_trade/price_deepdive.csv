@@ -1,0 +1,746 @@
+question,horizon_d,price,outcome
+Will Donald Trump win the 2024 US Presidential Ele,7,0.6655,1.0
+Will Donald Trump win the 2024 US Presidential Ele,5,0.6325,1.0
+Will Donald Trump win the 2024 US Presidential Ele,3,0.5585,1.0
+Will Donald Trump win the 2024 US Presidential Ele,2,0.5635,1.0
+Will Donald Trump win the 2024 US Presidential Ele,1,0.5855,1.0
+Will Kamala Harris win the 2024 US Presidential El,7,0.3345,0.0
+Will Kamala Harris win the 2024 US Presidential El,5,0.368,0.0
+Will Kamala Harris win the 2024 US Presidential El,3,0.4415,0.0
+Will Kamala Harris win the 2024 US Presidential El,2,0.435,0.0
+Will Kamala Harris win the 2024 US Presidential El,1,0.4145,0.0
+Will Donald Trump be inaugurated?,7,0.9935,1.0
+Will Donald Trump be inaugurated?,5,0.9935,1.0
+Will Donald Trump be inaugurated?,3,0.9945,1.0
+Will Donald Trump be inaugurated?,2,0.992,1.0
+Will Donald Trump be inaugurated?,1,0.9915,1.0
+Will the Sacramento Kings win the 2025 NBA Finals?,7,0.0005,0.0
+Will the Sacramento Kings win the 2025 NBA Finals?,5,0.0005,0.0
+Will the Sacramento Kings win the 2025 NBA Finals?,3,0.0005,0.0
+Will the Sacramento Kings win the 2025 NBA Finals?,2,0.0005,0.0
+Will the Sacramento Kings win the 2025 NBA Finals?,1,0.0005,0.0
+"MicroStrategy sells any Bitcoin by May 31, 2026?",7,0.0705,0.0
+"MicroStrategy sells any Bitcoin by May 31, 2026?",5,0.256,0.0
+"MicroStrategy sells any Bitcoin by May 31, 2026?",3,0.123,0.0
+"MicroStrategy sells any Bitcoin by May 31, 2026?",2,0.0065,0.0
+"MicroStrategy sells any Bitcoin by May 31, 2026?",1,0.0085,0.0
+Will Nicolae Ciucă win the 2024 Romanian President,7,0.0015,0.0
+Will Nicolae Ciucă win the 2024 Romanian President,5,0.0015,0.0
+Will Nicolae Ciucă win the 2024 Romanian President,3,0.0015,0.0
+Will Nicolae Ciucă win the 2024 Romanian President,2,0.0015,0.0
+Will Nicolae Ciucă win the 2024 Romanian President,1,0.0015,0.0
+US forces enter Iran by April 30?,7,0.585,1.0
+US forces enter Iran by April 30?,5,0.585,1.0
+US forces enter Iran by April 30?,3,0.915,1.0
+US forces enter Iran by April 30?,2,0.915,1.0
+US forces enter Iran by April 30?,1,0.915,1.0
+Will Zelenskyy wear a suit before July?,7,0.0095,0.0
+Will Zelenskyy wear a suit before July?,5,0.022,0.0
+Will Zelenskyy wear a suit before July?,3,0.0125,0.0
+Will Zelenskyy wear a suit before July?,2,0.025,0.0
+Will Zelenskyy wear a suit before July?,1,0.032,0.0
+Will any other Republican Politician win the 2024 ,7,0.0005,0.0
+Will any other Republican Politician win the 2024 ,5,0.0005,0.0
+Will any other Republican Politician win the 2024 ,3,0.0005,0.0
+Will any other Republican Politician win the 2024 ,2,0.0005,0.0
+Will any other Republican Politician win the 2024 ,1,0.0005,0.0
+Fed decreases interest rates by 50+ bps after Janu,7,0.0015,0.0
+Fed decreases interest rates by 50+ bps after Janu,5,0.0015,0.0
+Fed decreases interest rates by 50+ bps after Janu,3,0.0005,0.0
+Fed decreases interest rates by 50+ bps after Janu,2,0.0005,0.0
+Fed decreases interest rates by 50+ bps after Janu,1,0.0005,0.0
+Fed increases interest rates by 25+ bps after Janu,7,0.0005,0.0
+Fed increases interest rates by 25+ bps after Janu,5,0.0005,0.0
+Fed increases interest rates by 25+ bps after Janu,3,0.0005,0.0
+Fed increases interest rates by 25+ bps after Janu,2,0.0005,0.0
+Fed increases interest rates by 25+ bps after Janu,1,0.0015,0.0
+"US x Iran ceasefire extended by April 22, 2026?",7,0.0015,0.0
+"US x Iran ceasefire extended by April 22, 2026?",5,0.0005,0.0
+"US x Iran ceasefire extended by April 22, 2026?",3,0.0025,0.0
+"US x Iran ceasefire extended by April 22, 2026?",2,0.0035,0.0
+"US x Iran ceasefire extended by April 22, 2026?",1,0.0025,0.0
+"US x Iran permanent peace deal by June 15, 2026?",7,0.039,1.0
+"US x Iran permanent peace deal by June 15, 2026?",5,0.175,1.0
+"US x Iran permanent peace deal by June 15, 2026?",3,0.8155,1.0
+"US x Iran permanent peace deal by June 15, 2026?",2,0.9585,1.0
+"US x Iran permanent peace deal by June 15, 2026?",1,0.9945,1.0
+US x Iran ceasefire by April 7?,7,0.105,1.0
+US x Iran ceasefire by April 7?,5,0.105,1.0
+US x Iran ceasefire by April 7?,3,0.105,1.0
+US x Iran ceasefire by April 7?,2,0.105,1.0
+US x Iran ceasefire by April 7?,1,0.105,1.0
+Will the Fed increase interest rates by 25+ bps af,7,0.0025,0.0
+Will the Fed increase interest rates by 25+ bps af,5,0.0015,0.0
+Will the Fed increase interest rates by 25+ bps af,3,0.0015,0.0
+Will the Fed increase interest rates by 25+ bps af,2,0.0015,0.0
+Will the Fed increase interest rates by 25+ bps af,1,0.0005,0.0
+Kamala Harris wins the popular vote?,7,0.7265,0.0
+Kamala Harris wins the popular vote?,5,0.001,0.0
+Kamala Harris wins the popular vote?,3,0.0025,0.0
+Kamala Harris wins the popular vote?,2,0.003,0.0
+Kamala Harris wins the popular vote?,1,0.002,0.0
+Fed decreases interest rates by 50+ bps after Dece,7,0.0075,0.0
+Fed decreases interest rates by 50+ bps after Dece,5,0.0045,0.0
+Fed decreases interest rates by 50+ bps after Dece,3,0.0065,0.0
+Fed decreases interest rates by 50+ bps after Dece,2,0.0065,0.0
+Fed decreases interest rates by 50+ bps after Dece,1,0.008,0.0
+US government shutdown Saturday?,7,0.725,1.0
+US government shutdown Saturday?,5,0.41,1.0
+US government shutdown Saturday?,3,0.9955,1.0
+US government shutdown Saturday?,2,0.9975,1.0
+US government shutdown Saturday?,1,0.9975,1.0
+Will the Toronto Raptors win the 2025 NBA Finals?,7,0.0005,0.0
+Will the Toronto Raptors win the 2025 NBA Finals?,5,0.0005,0.0
+Will the Toronto Raptors win the 2025 NBA Finals?,3,0.0005,0.0
+Will the Toronto Raptors win the 2025 NBA Finals?,2,0.0005,0.0
+Will the Toronto Raptors win the 2025 NBA Finals?,1,0.0005,0.0
+Will Michelle Obama win the 2024 US Presidential E,7,0.0005,0.0
+Will Michelle Obama win the 2024 US Presidential E,5,0.0005,0.0
+Will Michelle Obama win the 2024 US Presidential E,3,0.0005,0.0
+Will Michelle Obama win the 2024 US Presidential E,2,0.0005,0.0
+Will Michelle Obama win the 2024 US Presidential E,1,0.0005,0.0
+Will Zohran Mamdani win the 2025 NYC mayoral elect,7,0.8825,1.0
+Will Zohran Mamdani win the 2025 NYC mayoral elect,5,0.9415,1.0
+Will Zohran Mamdani win the 2025 NYC mayoral elect,3,0.9345,1.0
+Will Zohran Mamdani win the 2025 NYC mayoral elect,2,0.9375,1.0
+Will Zohran Mamdani win the 2025 NYC mayoral elect,1,0.9095,1.0
+Will Robert F. Kennedy Jr. win the 2024 US Preside,7,0.0005,0.0
+Will Robert F. Kennedy Jr. win the 2024 US Preside,5,0.0005,0.0
+Will Robert F. Kennedy Jr. win the 2024 US Preside,3,0.0005,0.0
+Will Robert F. Kennedy Jr. win the 2024 US Preside,2,0.0005,0.0
+Will Robert F. Kennedy Jr. win the 2024 US Preside,1,0.0005,0.0
+"Russia x Ukraine ceasefire by May 31, 2026?",7,0.09,1.0
+"Russia x Ukraine ceasefire by May 31, 2026?",5,0.0625,1.0
+"Russia x Ukraine ceasefire by May 31, 2026?",3,0.0605,1.0
+"Russia x Ukraine ceasefire by May 31, 2026?",2,0.0555,1.0
+"Russia x Ukraine ceasefire by May 31, 2026?",1,0.042,1.0
+Will the Panthers win Super Bowl 2025?,7,0.0005,0.0
+Will the Panthers win Super Bowl 2025?,5,0.0005,0.0
+Will the Panthers win Super Bowl 2025?,3,0.0005,0.0
+Will the Panthers win Super Bowl 2025?,2,0.0015,0.0
+Will the Panthers win Super Bowl 2025?,1,0.0005,0.0
+Fed increases interest rates by 25+ bps after Nove,7,0.002,0.0
+Fed increases interest rates by 25+ bps after Nove,5,0.0015,0.0
+Fed increases interest rates by 25+ bps after Nove,3,0.0015,0.0
+Fed increases interest rates by 25+ bps after Nove,2,0.002,0.0
+Fed increases interest rates by 25+ bps after Nove,1,0.0035,0.0
+Fed increases interest rates by 25+ bps after Dece,7,0.0025,0.0
+Fed increases interest rates by 25+ bps after Dece,5,0.0015,0.0
+Fed increases interest rates by 25+ bps after Dece,3,0.0015,0.0
+Fed increases interest rates by 25+ bps after Dece,2,0.0005,0.0
+Fed increases interest rates by 25+ bps after Dece,1,0.0005,0.0
+Will Aston Villa win the UEFA Champions League?,7,0.0275,0.0
+Will Aston Villa win the UEFA Champions League?,5,0.0075,0.0
+Will Aston Villa win the UEFA Champions League?,3,0.0075,0.0
+Will Aston Villa win the UEFA Champions League?,2,0.013,0.0
+Will Aston Villa win the UEFA Champions League?,1,0.012,0.0
+Khamenei out as Supreme Leader of Iran by February,7,0.0185,1.0
+Khamenei out as Supreme Leader of Iran by February,5,0.0155,1.0
+Khamenei out as Supreme Leader of Iran by February,3,0.9525,1.0
+Khamenei out as Supreme Leader of Iran by February,2,0.9985,1.0
+Khamenei out as Supreme Leader of Iran by February,1,0.9985,1.0
+Will the Washington Wizards win the 2025 NBA Final,7,0.0015,0.0
+Will the Washington Wizards win the 2025 NBA Final,5,0.0015,0.0
+Will the Washington Wizards win the 2025 NBA Final,3,0.0015,0.0
+Will the Washington Wizards win the 2025 NBA Final,2,0.0015,0.0
+Will the Washington Wizards win the 2025 NBA Final,1,0.0015,0.0
+Will the Utah Jazz win the 2025 NBA Finals?,7,0.0015,0.0
+Will the Utah Jazz win the 2025 NBA Finals?,5,0.0015,0.0
+Will the Utah Jazz win the 2025 NBA Finals?,3,0.0015,0.0
+Will the Utah Jazz win the 2025 NBA Finals?,2,0.0015,0.0
+Will the Utah Jazz win the 2025 NBA Finals?,1,0.0015,0.0
+Will Trump nominate Judy Shelton as the next Fed c,7,0.0335,0.0
+Will Trump nominate Judy Shelton as the next Fed c,5,0.0395,0.0
+Will Trump nominate Judy Shelton as the next Fed c,3,0.054,0.0
+Will Trump nominate Judy Shelton as the next Fed c,2,0.037,0.0
+Will Trump nominate Judy Shelton as the next Fed c,1,0.0405,0.0
+Will the Raiders win Super Bowl 2025?,7,0.0035,0.0
+Will the Raiders win Super Bowl 2025?,5,0.0035,0.0
+Will the Raiders win Super Bowl 2025?,3,0.0035,0.0
+Will the Raiders win Super Bowl 2025?,2,0.0035,0.0
+Will the Raiders win Super Bowl 2025?,1,0.0035,0.0
+Will Donald Trump win the popular vote in the 2024,7,0.2565,1.0
+Will Donald Trump win the popular vote in the 2024,5,0.2855,1.0
+Will Donald Trump win the popular vote in the 2024,3,0.9975,1.0
+Will Donald Trump win the popular vote in the 2024,2,0.9935,1.0
+Will Donald Trump win the popular vote in the 2024,1,0.995,1.0
+TikTok banned in the US before May 2025?,7,0.63,1.0
+TikTok banned in the US before May 2025?,5,0.63,1.0
+TikTok banned in the US before May 2025?,3,0.84,1.0
+TikTok banned in the US before May 2025?,2,0.954,1.0
+TikTok banned in the US before May 2025?,1,0.9955,1.0
+Will the Titans win Super Bowl 2025?,7,0.0015,0.0
+Will the Titans win Super Bowl 2025?,5,0.0015,0.0
+Will the Titans win Super Bowl 2025?,3,0.0015,0.0
+Will the Titans win Super Bowl 2025?,2,0.0015,0.0
+Will the Titans win Super Bowl 2025?,1,0.0005,0.0
+Will the Charlotte Hornets win the 2025 NBA Finals,7,0.0005,0.0
+Will the Charlotte Hornets win the 2025 NBA Finals,5,0.0005,0.0
+Will the Charlotte Hornets win the 2025 NBA Finals,3,0.0005,0.0
+Will the Charlotte Hornets win the 2025 NBA Finals,2,0.0005,0.0
+Will the Charlotte Hornets win the 2025 NBA Finals,1,0.0005,0.0
+Will any other Democratic Politician win the 2024 ,7,0.0005,0.0
+Will any other Democratic Politician win the 2024 ,5,0.0005,0.0
+Will any other Democratic Politician win the 2024 ,3,0.0005,0.0
+Will any other Democratic Politician win the 2024 ,2,0.0005,0.0
+Will any other Democratic Politician win the 2024 ,1,0.0005,0.0
+Will the Browns win Super Bowl 2025?,7,0.0005,0.0
+Will the Browns win Super Bowl 2025?,5,0.0015,0.0
+Will the Browns win Super Bowl 2025?,3,0.0005,0.0
+Will the Browns win Super Bowl 2025?,2,0.0015,0.0
+Will the Browns win Super Bowl 2025?,1,0.001,0.0
+Will Frances Fitzgerald win the Irish Presidential,7,0.0005,0.0
+Will Frances Fitzgerald win the Irish Presidential,5,0.0005,0.0
+Will Frances Fitzgerald win the Irish Presidential,3,0.0005,0.0
+Will Frances Fitzgerald win the Irish Presidential,2,0.0005,0.0
+Will Frances Fitzgerald win the Irish Presidential,1,0.0005,0.0
+Will the Democratic candidate win Pennsylvania by ,7,0.001,0.0
+Will the Democratic candidate win Pennsylvania by ,5,0.001,0.0
+Will the Democratic candidate win Pennsylvania by ,3,0.0005,0.0
+Will the Democratic candidate win Pennsylvania by ,2,0.0005,0.0
+Will the Democratic candidate win Pennsylvania by ,1,0.0005,0.0
+Will the Giants win Super Bowl 2025?,7,0.0035,0.0
+Will the Giants win Super Bowl 2025?,5,0.0035,0.0
+Will the Giants win Super Bowl 2025?,3,0.0035,0.0
+Will the Giants win Super Bowl 2025?,2,0.0035,0.0
+Will the Giants win Super Bowl 2025?,1,0.0035,0.0
+Will Nikki Haley win the 2024 US Presidential Elec,7,0.0005,0.0
+Will Nikki Haley win the 2024 US Presidential Elec,5,0.0005,0.0
+Will Nikki Haley win the 2024 US Presidential Elec,3,0.0005,0.0
+Will Nikki Haley win the 2024 US Presidential Elec,2,0.0005,0.0
+Will Nikki Haley win the 2024 US Presidential Elec,1,0.0005,0.0
+No change in Fed interest rates after January 2026,7,0.9715,1.0
+No change in Fed interest rates after January 2026,5,0.9805,1.0
+No change in Fed interest rates after January 2026,3,0.9905,1.0
+No change in Fed interest rates after January 2026,2,0.9905,1.0
+No change in Fed interest rates after January 2026,1,0.988,1.0
+Netanyahu out by March 31?,7,0.007,0.0
+Netanyahu out by March 31?,5,0.0035,0.0
+Netanyahu out by March 31?,3,0.0015,0.0
+Netanyahu out by March 31?,2,0.0005,0.0
+Netanyahu out by March 31?,1,0.0005,0.0
+Fed increases interest rates by 25+ bps after Octo,7,0.0015,0.0
+Fed increases interest rates by 25+ bps after Octo,5,0.0015,0.0
+Fed increases interest rates by 25+ bps after Octo,3,0.0005,0.0
+Fed increases interest rates by 25+ bps after Octo,2,0.0005,0.0
+Fed increases interest rates by 25+ bps after Octo,1,0.0005,0.0
+Nottingham Forest wins the Premier League?,7,0.0025,0.0
+Nottingham Forest wins the Premier League?,5,0.0025,0.0
+Nottingham Forest wins the Premier League?,3,0.0005,0.0
+Nottingham Forest wins the Premier League?,2,0.0005,0.0
+Nottingham Forest wins the Premier League?,1,0.0005,0.0
+Fed decreases interest rates by 25 bps after Janua,7,0.0245,0.0
+Fed decreases interest rates by 25 bps after Janua,5,0.0165,0.0
+Fed decreases interest rates by 25 bps after Janua,3,0.0065,0.0
+Fed decreases interest rates by 25 bps after Janua,2,0.0065,0.0
+Fed decreases interest rates by 25 bps after Janua,1,0.0075,0.0
+Will Hillary Clinton win the 2024 US Presidential ,7,0.0005,0.0
+Will Hillary Clinton win the 2024 US Presidential ,5,0.0005,0.0
+Will Hillary Clinton win the 2024 US Presidential ,3,0.0005,0.0
+Will Hillary Clinton win the 2024 US Presidential ,2,0.0005,0.0
+Will Hillary Clinton win the 2024 US Presidential ,1,0.0005,0.0
+Will Gavin Newsom be D-nom for VP on Election Day?,7,0.0005,0.0
+Will Gavin Newsom be D-nom for VP on Election Day?,5,0.0005,0.0
+Will Gavin Newsom be D-nom for VP on Election Day?,3,0.0005,0.0
+Will Gavin Newsom be D-nom for VP on Election Day?,2,0.0005,0.0
+Will Gavin Newsom be D-nom for VP on Election Day?,1,0.0005,0.0
+Will Chelsea win the 2025–26 English Premier Leagu,7,0.0005,0.0
+Will Chelsea win the 2025–26 English Premier Leagu,5,0.0005,0.0
+Will Chelsea win the 2025–26 English Premier Leagu,3,0.0005,0.0
+Will Chelsea win the 2025–26 English Premier Leagu,2,0.0005,0.0
+Will Chelsea win the 2025–26 English Premier Leagu,1,0.0005,0.0
+Will Trump release the Epstein files by December 1,7,0.645,1.0
+Will Trump release the Epstein files by December 1,5,0.625,1.0
+Will Trump release the Epstein files by December 1,3,0.9985,1.0
+Will Trump release the Epstein files by December 1,2,0.9965,1.0
+Will Trump release the Epstein files by December 1,1,0.9975,1.0
+"US strikes Iran by February 28, 2026?",7,0.255,1.0
+"US strikes Iran by February 28, 2026?",5,0.195,1.0
+"US strikes Iran by February 28, 2026?",3,0.175,1.0
+"US strikes Iran by February 28, 2026?",2,0.095,1.0
+"US strikes Iran by February 28, 2026?",1,0.085,1.0
+Southampton wins the Premier League?,7,0.0025,0.0
+Southampton wins the Premier League?,5,0.0025,0.0
+Southampton wins the Premier League?,3,0.0025,0.0
+Southampton wins the Premier League?,2,0.0015,0.0
+Southampton wins the Premier League?,1,0.0015,0.0
+Will Lee Jae-myung be elected the next president o,7,0.901,1.0
+Will Lee Jae-myung be elected the next president o,5,0.9345,1.0
+Will Lee Jae-myung be elected the next president o,3,0.9545,1.0
+Will Lee Jae-myung be elected the next president o,2,0.9515,1.0
+Will Lee Jae-myung be elected the next president o,1,0.9465,1.0
+"US x Iran permanent peace deal by May 31, 2026?",7,0.235,0.0
+"US x Iran permanent peace deal by May 31, 2026?",5,0.235,0.0
+"US x Iran permanent peace deal by May 31, 2026?",3,0.115,0.0
+"US x Iran permanent peace deal by May 31, 2026?",2,0.055,0.0
+"US x Iran permanent peace deal by May 31, 2026?",1,0.0205,0.0
+Will the Fed decrease interest rates by 25 bps aft,7,0.0065,0.0
+Will the Fed decrease interest rates by 25 bps aft,5,0.0035,0.0
+Will the Fed decrease interest rates by 25 bps aft,3,0.0025,0.0
+Will the Fed decrease interest rates by 25 bps aft,2,0.0035,0.0
+Will the Fed decrease interest rates by 25 bps aft,1,0.0035,0.0
+Will the Miami Heat win the 2025 NBA Finals?,7,0.0005,0.0
+Will the Miami Heat win the 2025 NBA Finals?,5,0.0005,0.0
+Will the Miami Heat win the 2025 NBA Finals?,3,0.0005,0.0
+Will the Miami Heat win the 2025 NBA Finals?,2,0.0005,0.0
+Will the Miami Heat win the 2025 NBA Finals?,1,0.0005,0.0
+Will Inter Milan win the UEFA Champions League?,7,0.4115,0.0
+Will Inter Milan win the UEFA Champions League?,5,0.4195,0.0
+Will Inter Milan win the UEFA Champions League?,3,0.411,0.0
+Will Inter Milan win the UEFA Champions League?,2,0.4105,0.0
+Will Inter Milan win the UEFA Champions League?,1,0.405,0.0
+Will Hunor Kelemen win the Romanian presidential e,7,0.0005,0.0
+Will Hunor Kelemen win the Romanian presidential e,5,0.0005,0.0
+Will Hunor Kelemen win the Romanian presidential e,3,0.0005,0.0
+Will Hunor Kelemen win the Romanian presidential e,2,0.0005,0.0
+Will Hunor Kelemen win the Romanian presidential e,1,0.0005,0.0
+"Will Eleven die in ""Stranger Things: Season 5""?",7,0.455,0.0
+"Will Eleven die in ""Stranger Things: Season 5""?",5,0.23,0.0
+"Will Eleven die in ""Stranger Things: Season 5""?",3,0.0025,0.0
+"Will Eleven die in ""Stranger Things: Season 5""?",2,0.0035,0.0
+"Will Eleven die in ""Stranger Things: Season 5""?",1,0.002,0.0
+Xi Jinping out in 2025?,7,0.0045,0.0
+Xi Jinping out in 2025?,5,0.004,0.0
+Xi Jinping out in 2025?,3,0.0035,0.0
+Xi Jinping out in 2025?,2,0.0035,0.0
+Xi Jinping out in 2025?,1,0.0015,0.0
+Will there be no change in Fed interest rates afte,7,0.9935,1.0
+Will there be no change in Fed interest rates afte,5,0.9945,1.0
+Will there be no change in Fed interest rates afte,3,0.9965,1.0
+Will there be no change in Fed interest rates afte,2,0.9985,1.0
+Will there be no change in Fed interest rates afte,1,0.9985,1.0
+Will Trump launch a coin before the election?,7,0.44,1.0
+Will Trump launch a coin before the election?,5,0.67,1.0
+Will Trump launch a coin before the election?,3,0.845,1.0
+Will Trump launch a coin before the election?,2,0.9955,1.0
+Will Trump launch a coin before the election?,1,0.9875,1.0
+Will the Fed increase interest rates by 25+ bps af,7,0.0025,0.0
+Will the Fed increase interest rates by 25+ bps af,5,0.0025,0.0
+Will the Fed increase interest rates by 25+ bps af,3,0.0015,0.0
+Will the Fed increase interest rates by 25+ bps af,2,0.0005,0.0
+Will the Fed increase interest rates by 25+ bps af,1,0.0005,0.0
+Will the Patriots win Super Bowl 2025?,7,0.0035,0.0
+Will the Patriots win Super Bowl 2025?,5,0.0035,0.0
+Will the Patriots win Super Bowl 2025?,3,0.0035,0.0
+Will the Patriots win Super Bowl 2025?,2,0.0035,0.0
+Will the Patriots win Super Bowl 2025?,1,0.0035,0.0
+US forces enter Iran by March 31?,7,0.165,0.0
+US forces enter Iran by March 31?,5,0.165,0.0
+US forces enter Iran by March 31?,3,0.165,0.0
+US forces enter Iran by March 31?,2,0.165,0.0
+US forces enter Iran by March 31?,1,0.165,0.0
+Russia x Ukraine ceasefire in 2025?,7,0.0085,0.0
+Russia x Ukraine ceasefire in 2025?,5,0.0165,0.0
+Russia x Ukraine ceasefire in 2025?,3,0.0065,0.0
+Russia x Ukraine ceasefire in 2025?,2,0.0015,0.0
+Russia x Ukraine ceasefire in 2025?,1,0.0025,0.0
+Will the Indiana Pacers win the 2025 NBA Finals?,7,0.197,0.0
+Will the Indiana Pacers win the 2025 NBA Finals?,5,0.0775,0.0
+Will the Indiana Pacers win the 2025 NBA Finals?,3,0.089,0.0
+Will the Indiana Pacers win the 2025 NBA Finals?,2,0.2815,0.0
+Will the Indiana Pacers win the 2025 NBA Finals?,1,0.278,0.0
+Will Kim Moon-soo be elected the next president of,7,0.0895,0.0
+Will Kim Moon-soo be elected the next president of,5,0.0625,0.0
+Will Kim Moon-soo be elected the next president of,3,0.041,0.0
+Will Kim Moon-soo be elected the next president of,2,0.0455,0.0
+Will Kim Moon-soo be elected the next president of,1,0.052,0.0
+Will Kamala Harris be inaugurated?,7,0.0015,0.0
+Will Kamala Harris be inaugurated?,5,0.0035,0.0
+Will Kamala Harris be inaugurated?,3,0.0035,0.0
+Will Kamala Harris be inaugurated?,2,0.0015,0.0
+Will Kamala Harris be inaugurated?,1,0.0015,0.0
+Will Joe Biden win the 2024 US Presidential Electi,7,0.0005,0.0
+Will Joe Biden win the 2024 US Presidential Electi,5,0.0005,0.0
+Will Joe Biden win the 2024 US Presidential Electi,3,0.0005,0.0
+Will Joe Biden win the 2024 US Presidential Electi,2,0.0005,0.0
+Will Joe Biden win the 2024 US Presidential Electi,1,0.0005,0.0
+Will Real Betis win La Liga?,7,0.0015,0.0
+Will Real Betis win La Liga?,5,0.0015,0.0
+Will Real Betis win La Liga?,3,0.0015,0.0
+Will Real Betis win La Liga?,2,0.0015,0.0
+Will Real Betis win La Liga?,1,0.001,0.0
+Will the Charlotte Hornets win the Eastern Confere,7,0.0015,0.0
+Will the Charlotte Hornets win the Eastern Confere,5,0.002,0.0
+Will the Charlotte Hornets win the Eastern Confere,3,0.0015,0.0
+Will the Charlotte Hornets win the Eastern Confere,2,0.001,0.0
+Will the Charlotte Hornets win the Eastern Confere,1,0.0005,0.0
+Manchester United wins the Premier League?,7,0.0015,0.0
+Manchester United wins the Premier League?,5,0.0015,0.0
+Manchester United wins the Premier League?,3,0.0015,0.0
+Manchester United wins the Premier League?,2,0.0015,0.0
+Manchester United wins the Premier League?,1,0.0015,0.0
+Will the Tennessee Titans win Super Bowl 2026?,7,0.0025,0.0
+Will the Tennessee Titans win Super Bowl 2026?,5,0.0015,0.0
+Will the Tennessee Titans win Super Bowl 2026?,3,0.0015,0.0
+Will the Tennessee Titans win Super Bowl 2026?,2,0.0015,0.0
+Will the Tennessee Titans win Super Bowl 2026?,1,0.0015,0.0
+Will Hillary Clinton win the popular vote in the 2,7,0.0005,0.0
+Will Hillary Clinton win the popular vote in the 2,5,0.0005,0.0
+Will Hillary Clinton win the popular vote in the 2,3,0.0005,0.0
+Will Hillary Clinton win the popular vote in the 2,2,0.0005,0.0
+Will Hillary Clinton win the popular vote in the 2,1,0.0005,0.0
+Will the LA Clippers win the 2025 NBA Finals?,7,0.062,0.0
+Will the LA Clippers win the 2025 NBA Finals?,5,0.037,0.0
+Will the LA Clippers win the 2025 NBA Finals?,3,0.02,0.0
+Will the LA Clippers win the 2025 NBA Finals?,2,0.019,0.0
+Will the LA Clippers win the 2025 NBA Finals?,1,0.0275,0.0
+Will Red Star Belgrade win the UEFA Champions Leag,7,0.0055,0.0
+Will Red Star Belgrade win the UEFA Champions Leag,5,0.0015,0.0
+Will Red Star Belgrade win the UEFA Champions Leag,3,0.0005,0.0
+Will Red Star Belgrade win the UEFA Champions Leag,2,0.0005,0.0
+Will Red Star Belgrade win the UEFA Champions Leag,1,0.0005,0.0
+Will Pierre Poilievre be the next Canadian Prime M,7,0.195,0.0
+Will Pierre Poilievre be the next Canadian Prime M,5,0.179,0.0
+Will Pierre Poilievre be the next Canadian Prime M,3,0.229,0.0
+Will Pierre Poilievre be the next Canadian Prime M,2,0.222,0.0
+Will Pierre Poilievre be the next Canadian Prime M,1,0.2815,0.0
+No change in Fed interest rates after September 20,7,0.0395,0.0
+No change in Fed interest rates after September 20,5,0.0245,0.0
+No change in Fed interest rates after September 20,3,0.021,0.0
+No change in Fed interest rates after September 20,2,0.0275,0.0
+No change in Fed interest rates after September 20,1,0.024,0.0
+Brighton & Hove Albion wins the Premier League?,7,0.0005,0.0
+Brighton & Hove Albion wins the Premier League?,5,0.0005,0.0
+Brighton & Hove Albion wins the Premier League?,3,0.0005,0.0
+Brighton & Hove Albion wins the Premier League?,2,0.0005,0.0
+Brighton & Hove Albion wins the Premier League?,1,0.0005,0.0
+Will Austin Scott be the first elected Speaker of ,7,0.0075,0.0
+Will Austin Scott be the first elected Speaker of ,5,0.007,0.0
+Will Austin Scott be the first elected Speaker of ,3,0.0075,0.0
+Will Austin Scott be the first elected Speaker of ,2,0.007,0.0
+Will Austin Scott be the first elected Speaker of ,1,0.006,0.0
+Fed increases interest rates by 25+ bps after Sept,7,0.0025,0.0
+Fed increases interest rates by 25+ bps after Sept,5,0.0015,0.0
+Fed increases interest rates by 25+ bps after Sept,3,0.0015,0.0
+Fed increases interest rates by 25+ bps after Sept,2,0.0015,0.0
+Fed increases interest rates by 25+ bps after Sept,1,0.0015,0.0
+Will the Fed decrease interest rates by 50+ bps af,7,0.0015,0.0
+Will the Fed decrease interest rates by 50+ bps af,5,0.0015,0.0
+Will the Fed decrease interest rates by 50+ bps af,3,0.0005,0.0
+Will the Fed decrease interest rates by 50+ bps af,2,0.0005,0.0
+Will the Fed decrease interest rates by 50+ bps af,1,0.0005,0.0
+Will Polymarket US go live in 2025?,7,0.7845,1.0
+Will Polymarket US go live in 2025?,5,0.8255,1.0
+Will Polymarket US go live in 2025?,3,0.9635,1.0
+Will Polymarket US go live in 2025?,2,0.9935,1.0
+Will Polymarket US go live in 2025?,1,0.9925,1.0
+Will the Fed decrease interest rates by 25 bps aft,7,0.0025,0.0
+Will the Fed decrease interest rates by 25 bps aft,5,0.0025,0.0
+Will the Fed decrease interest rates by 25 bps aft,3,0.0015,0.0
+Will the Fed decrease interest rates by 25 bps aft,2,0.0005,0.0
+Will the Fed decrease interest rates by 25 bps aft,1,0.0005,0.0
+Will Biden finish his term?,7,0.9905,1.0
+Will Biden finish his term?,5,0.993,1.0
+Will Biden finish his term?,3,0.9935,1.0
+Will Biden finish his term?,2,0.9925,1.0
+Will Biden finish his term?,1,0.992,1.0
+Will the Miami Dolphins win Super Bowl 2026?,7,0.0005,0.0
+Will the Miami Dolphins win Super Bowl 2026?,5,0.0005,0.0
+Will the Miami Dolphins win Super Bowl 2026?,3,0.0005,0.0
+Will the Miami Dolphins win Super Bowl 2026?,2,0.0005,0.0
+Will the Miami Dolphins win Super Bowl 2026?,1,0.0005,0.0
+Khamenei out as Supreme Leader of Iran by March 31,7,0.205,1.0
+Khamenei out as Supreme Leader of Iran by March 31,5,0.175,1.0
+Khamenei out as Supreme Leader of Iran by March 31,3,0.9675,1.0
+Khamenei out as Supreme Leader of Iran by March 31,2,0.9985,1.0
+Khamenei out as Supreme Leader of Iran by March 31,1,0.9985,1.0
+Will the Iranian regime fall by March 31?,7,0.0145,0.0
+Will the Iranian regime fall by March 31?,5,0.0175,0.0
+Will the Iranian regime fall by March 31?,3,0.0095,0.0
+Will the Iranian regime fall by March 31?,2,0.0075,0.0
+Will the Iranian regime fall by March 31?,1,0.0055,0.0
+Will the Atlanta Hawks win the 2025 NBA Finals?,7,0.0015,0.0
+Will the Atlanta Hawks win the 2025 NBA Finals?,5,0.0005,0.0
+Will the Atlanta Hawks win the 2025 NBA Finals?,3,0.0005,0.0
+Will the Atlanta Hawks win the 2025 NBA Finals?,2,0.0005,0.0
+Will the Atlanta Hawks win the 2025 NBA Finals?,1,0.0005,0.0
+Will Turkiye win the 2026 FIFA World Cup?,7,0.0125,0.0
+Will Turkiye win the 2026 FIFA World Cup?,5,0.0045,0.0
+Will Turkiye win the 2026 FIFA World Cup?,3,0.0045,0.0
+Will Turkiye win the 2026 FIFA World Cup?,2,0.0045,0.0
+Will Turkiye win the 2026 FIFA World Cup?,1,0.0045,0.0
+Will the Detroit Pistons win the 2025 NBA Finals?,7,0.0045,0.0
+Will the Detroit Pistons win the 2025 NBA Finals?,5,0.0025,0.0
+Will the Detroit Pistons win the 2025 NBA Finals?,3,0.0005,0.0
+Will the Detroit Pistons win the 2025 NBA Finals?,2,0.001,0.0
+Will the Detroit Pistons win the 2025 NBA Finals?,1,0.002,0.0
+"Russia x Ukraine ceasefire by June 30, 2026?",7,0.135,1.0
+"Russia x Ukraine ceasefire by June 30, 2026?",5,0.095,1.0
+"Russia x Ukraine ceasefire by June 30, 2026?",3,0.105,1.0
+"Russia x Ukraine ceasefire by June 30, 2026?",2,0.105,1.0
+"Russia x Ukraine ceasefire by June 30, 2026?",1,0.075,1.0
+Will Curtis Sliwa win the 2025 NYC mayoral electio,7,0.0025,0.0
+Will Curtis Sliwa win the 2025 NYC mayoral electio,5,0.0025,0.0
+Will Curtis Sliwa win the 2025 NYC mayoral electio,3,0.0015,0.0
+Will Curtis Sliwa win the 2025 NYC mayoral electio,2,0.0015,0.0
+Will Curtis Sliwa win the 2025 NYC mayoral electio,1,0.0015,0.0
+Will the Detroit Pistons win the Eastern Conferenc,7,0.0135,0.0
+Will the Detroit Pistons win the Eastern Conferenc,5,0.007,0.0
+Will the Detroit Pistons win the Eastern Conferenc,3,0.0035,0.0
+Will the Detroit Pistons win the Eastern Conferenc,2,0.0035,0.0
+Will the Detroit Pistons win the Eastern Conferenc,1,0.0045,0.0
+Will the Carolina Panthers win Super Bowl 2026?,7,0.0105,0.0
+Will the Carolina Panthers win Super Bowl 2026?,5,0.0055,0.0
+Will the Carolina Panthers win Super Bowl 2026?,3,0.0055,0.0
+Will the Carolina Panthers win Super Bowl 2026?,2,0.0065,0.0
+Will the Carolina Panthers win Super Bowl 2026?,1,0.0065,0.0
+Will Trump nominate Kevin Warsh as the next Fed ch,7,0.9425,1.0
+Will Trump nominate Kevin Warsh as the next Fed ch,5,0.9385,1.0
+Will Trump nominate Kevin Warsh as the next Fed ch,3,0.9345,1.0
+Will Trump nominate Kevin Warsh as the next Fed ch,2,0.9345,1.0
+Will Trump nominate Kevin Warsh as the next Fed ch,1,0.9345,1.0
+Will the New Orleans Pelicans win the 2025 NBA Fin,7,0.0015,0.0
+Will the New Orleans Pelicans win the 2025 NBA Fin,5,0.0015,0.0
+Will the New Orleans Pelicans win the 2025 NBA Fin,3,0.0015,0.0
+Will the New Orleans Pelicans win the 2025 NBA Fin,2,0.0005,0.0
+Will the New Orleans Pelicans win the 2025 NBA Fin,1,0.0005,0.0
+Will Jack Bergman be the first elected Speaker of ,7,0.0075,0.0
+Will Jack Bergman be the first elected Speaker of ,5,0.0065,0.0
+Will Jack Bergman be the first elected Speaker of ,3,0.0075,0.0
+Will Jack Bergman be the first elected Speaker of ,2,0.006,0.0
+Will Jack Bergman be the first elected Speaker of ,1,0.0065,0.0
+Will Joe Biden win the 2024 Democratic Presidentia,7,0.0005,0.0
+Will Joe Biden win the 2024 Democratic Presidentia,5,0.0005,0.0
+Will Joe Biden win the 2024 Democratic Presidentia,3,0.0005,0.0
+Will Joe Biden win the 2024 Democratic Presidentia,2,0.0005,0.0
+Will Joe Biden win the 2024 Democratic Presidentia,1,0.0005,0.0
+Will the New York Jets win Super Bowl 2026?,7,0.0005,0.0
+Will the New York Jets win Super Bowl 2026?,5,0.0005,0.0
+Will the New York Jets win Super Bowl 2026?,3,0.0005,0.0
+Will the New York Jets win Super Bowl 2026?,2,0.0005,0.0
+Will the New York Jets win Super Bowl 2026?,1,0.0005,0.0
+Fed increases interest rates by 25+ bps after Janu,7,0.0025,0.0
+Fed increases interest rates by 25+ bps after Janu,5,0.0015,0.0
+Fed increases interest rates by 25+ bps after Janu,3,0.0015,0.0
+Fed increases interest rates by 25+ bps after Janu,2,0.0015,0.0
+Fed increases interest rates by 25+ bps after Janu,1,0.0015,0.0
+Will the Brooklyn Nets win the 2025 NBA Finals?,7,0.0005,0.0
+Will the Brooklyn Nets win the 2025 NBA Finals?,5,0.0005,0.0
+Will the Brooklyn Nets win the 2025 NBA Finals?,3,0.0005,0.0
+Will the Brooklyn Nets win the 2025 NBA Finals?,2,0.0005,0.0
+Will the Brooklyn Nets win the 2025 NBA Finals?,1,0.0005,0.0
+Trump ends Ukraine war in first 90 days?,7,0.008,0.0
+Trump ends Ukraine war in first 90 days?,5,0.0115,0.0
+Trump ends Ukraine war in first 90 days?,3,0.0035,0.0
+Trump ends Ukraine war in first 90 days?,2,0.0015,0.0
+Trump ends Ukraine war in first 90 days?,1,0.0015,0.0
+Lighter market cap (FDV) >$1B one day after launch,7,0.925,1.0
+Lighter market cap (FDV) >$1B one day after launch,5,0.855,1.0
+Lighter market cap (FDV) >$1B one day after launch,3,0.9975,1.0
+Lighter market cap (FDV) >$1B one day after launch,2,0.9985,1.0
+Lighter market cap (FDV) >$1B one day after launch,1,0.9985,1.0
+Fed decreases interest rates by 25 bps after Decem,7,0.915,1.0
+Fed decreases interest rates by 25 bps after Decem,5,0.925,1.0
+Fed decreases interest rates by 25 bps after Decem,3,0.925,1.0
+Fed decreases interest rates by 25 bps after Decem,2,0.925,1.0
+Fed decreases interest rates by 25 bps after Decem,1,0.935,1.0
+Will Kamala Harris win the 2024 Democratic Preside,7,0.964,1.0
+Will Kamala Harris win the 2024 Democratic Preside,5,0.9825,1.0
+Will Kamala Harris win the 2024 Democratic Preside,3,0.9895,1.0
+Will Kamala Harris win the 2024 Democratic Preside,2,0.988,1.0
+Will Kamala Harris win the 2024 Democratic Preside,1,0.9885,1.0
+Will Gavin Newsom win the 2024 US Presidential Ele,7,0.0005,0.0
+Will Gavin Newsom win the 2024 US Presidential Ele,5,0.0005,0.0
+Will Gavin Newsom win the 2024 US Presidential Ele,3,0.0005,0.0
+Will Gavin Newsom win the 2024 US Presidential Ele,2,0.0005,0.0
+Will Gavin Newsom win the 2024 US Presidential Ele,1,0.0005,0.0
+Will Elise Stefanik be the first elected Speaker o,7,0.0095,0.0
+Will Elise Stefanik be the first elected Speaker o,5,0.009,0.0
+Will Elise Stefanik be the first elected Speaker o,3,0.0095,0.0
+Will Elise Stefanik be the first elected Speaker o,2,0.007,0.0
+Will Elise Stefanik be the first elected Speaker o,1,0.007,0.0
+Will there be a US Government shutdown? ,7,0.0745,1.0
+Will there be a US Government shutdown? ,5,0.7545,1.0
+Will there be a US Government shutdown? ,3,0.9935,1.0
+Will there be a US Government shutdown? ,2,0.9835,1.0
+Will there be a US Government shutdown? ,1,0.9955,1.0
+Will the Chicago Bulls win the 2025 NBA Finals?,7,0.0005,0.0
+Will the Chicago Bulls win the 2025 NBA Finals?,5,0.0005,0.0
+Will the Chicago Bulls win the 2025 NBA Finals?,3,0.0005,0.0
+Will the Chicago Bulls win the 2025 NBA Finals?,2,0.0005,0.0
+Will the Chicago Bulls win the 2025 NBA Finals?,1,0.0005,0.0
+Will the Iranian regime fall by April 30?,7,0.0075,0.0
+Will the Iranian regime fall by April 30?,5,0.0035,0.0
+Will the Iranian regime fall by April 30?,3,0.0025,0.0
+Will the Iranian regime fall by April 30?,2,0.0025,0.0
+Will the Iranian regime fall by April 30?,1,0.0005,0.0
+Fed decreases interest rates by 50+ bps after Octo,7,0.017,0.0
+Fed decreases interest rates by 50+ bps after Octo,5,0.015,0.0
+Fed decreases interest rates by 50+ bps after Octo,3,0.0065,0.0
+Fed decreases interest rates by 50+ bps after Octo,2,0.0065,0.0
+Fed decreases interest rates by 50+ bps after Octo,1,0.0045,0.0
+Will Lee Jun-seok be elected the next president of,7,0.011,0.0
+Will Lee Jun-seok be elected the next president of,5,0.0035,0.0
+Will Lee Jun-seok be elected the next president of,3,0.0055,0.0
+Will Lee Jun-seok be elected the next president of,2,0.0045,0.0
+Will Lee Jun-seok be elected the next president of,1,0.0015,0.0
+Israel x Iran ceasefire before July? ,7,0.9975,1.0
+Israel x Iran ceasefire before July? ,5,0.994,1.0
+Israel x Iran ceasefire before July? ,3,0.5,1.0
+Israel x Iran ceasefire before July? ,2,0.9975,1.0
+Israel x Iran ceasefire before July? ,1,0.996,1.0
+Fed decreases interest rates by 25 bps after Octob,7,0.96,1.0
+Fed decreases interest rates by 25 bps after Octob,5,0.962,1.0
+Fed decreases interest rates by 25 bps after Octob,3,0.9825,1.0
+Fed decreases interest rates by 25 bps after Octob,2,0.9835,1.0
+Fed decreases interest rates by 25 bps after Octob,1,0.9845,1.0
+Will the Cleveland Browns win Super Bowl 2026?,7,0.0015,0.0
+Will the Cleveland Browns win Super Bowl 2026?,5,0.0005,0.0
+Will the Cleveland Browns win Super Bowl 2026?,3,0.0005,0.0
+Will the Cleveland Browns win Super Bowl 2026?,2,0.0005,0.0
+Will the Cleveland Browns win Super Bowl 2026?,1,0.0005,0.0
+Will Paris Saint-Germain win the UEFA Champions Le,7,0.5865,1.0
+Will Paris Saint-Germain win the UEFA Champions Le,5,0.586,1.0
+Will Paris Saint-Germain win the UEFA Champions Le,3,0.59,1.0
+Will Paris Saint-Germain win the UEFA Champions Le,2,0.5885,1.0
+Will Paris Saint-Germain win the UEFA Champions Le,1,0.5895,1.0
+US x Venezuela military engagement by December 31?,7,0.0685,0.0
+US x Venezuela military engagement by December 31?,5,0.0205,0.0
+US x Venezuela military engagement by December 31?,3,0.0025,0.0
+US x Venezuela military engagement by December 31?,2,0.0025,0.0
+US x Venezuela military engagement by December 31?,1,0.0025,0.0
+Will Nicușor Dan win the Romanian presidential ele,7,0.335,1.0
+Will Nicușor Dan win the Romanian presidential ele,5,0.375,1.0
+Will Nicușor Dan win the Romanian presidential ele,3,0.485,1.0
+Will Nicușor Dan win the Romanian presidential ele,2,0.52,1.0
+Will Nicușor Dan win the Romanian presidential ele,1,0.48,1.0
+Will New Hampshire be the closest state?,7,0.0025,0.0
+Will New Hampshire be the closest state?,5,0.0025,0.0
+Will New Hampshire be the closest state?,3,0.0035,0.0
+Will New Hampshire be the closest state?,2,0.001,0.0
+Will New Hampshire be the closest state?,1,0.003,0.0
+Will the Las Vegas Raiders win Super Bowl 2026?,7,0.0025,0.0
+Will the Las Vegas Raiders win Super Bowl 2026?,5,0.0015,0.0
+Will the Las Vegas Raiders win Super Bowl 2026?,3,0.0015,0.0
+Will the Las Vegas Raiders win Super Bowl 2026?,2,0.0015,0.0
+Will the Las Vegas Raiders win Super Bowl 2026?,1,0.0015,0.0
+Fed decreases interest rates by 50+ bps after Sept,7,0.1455,0.0
+Fed decreases interest rates by 50+ bps after Sept,5,0.113,0.0
+Fed decreases interest rates by 50+ bps after Sept,3,0.0725,0.0
+Fed decreases interest rates by 50+ bps after Sept,2,0.0685,0.0
+Fed decreases interest rates by 50+ bps after Sept,1,0.068,0.0
+Will the Falcons win Super Bowl 2025?,7,0.0055,0.0
+Will the Falcons win Super Bowl 2025?,5,0.0035,0.0
+Will the Falcons win Super Bowl 2025?,3,0.0035,0.0
+Will the Falcons win Super Bowl 2025?,2,0.004,0.0
+Will the Falcons win Super Bowl 2025?,1,0.0045,0.0
+Khamenei out as Supreme Leader of Iran by January ,7,0.055,0.0
+Khamenei out as Supreme Leader of Iran by January ,5,0.0265,0.0
+Khamenei out as Supreme Leader of Iran by January ,3,0.0185,0.0
+Khamenei out as Supreme Leader of Iran by January ,2,0.0195,0.0
+Khamenei out as Supreme Leader of Iran by January ,1,0.0095,0.0
+Will Jim Walden win the 2025 NYC mayoral election?,7,0.0005,0.0
+Will Jim Walden win the 2025 NYC mayoral election?,5,0.0005,0.0
+Will Jim Walden win the 2025 NYC mayoral election?,3,0.0005,0.0
+Will Jim Walden win the 2025 NYC mayoral election?,2,0.0005,0.0
+Will Jim Walden win the 2025 NYC mayoral election?,1,0.0005,0.0
+"US x Iran permanent peace deal by June 30, 2026?",7,0.155,1.0
+"US x Iran permanent peace deal by June 30, 2026?",5,0.41,1.0
+"US x Iran permanent peace deal by June 30, 2026?",3,0.925,1.0
+"US x Iran permanent peace deal by June 30, 2026?",2,0.9685,1.0
+"US x Iran permanent peace deal by June 30, 2026?",1,0.9965,1.0
+Fed decreases interest rates by 75+ bps after Janu,7,0.0015,0.0
+Fed decreases interest rates by 75+ bps after Janu,5,0.0005,0.0
+Fed decreases interest rates by 75+ bps after Janu,3,0.0015,0.0
+Fed decreases interest rates by 75+ bps after Janu,2,0.0005,0.0
+Fed decreases interest rates by 75+ bps after Janu,1,0.0005,0.0
+Will Andrew Cuomo win the 2025 NYC mayoral electio,7,0.1165,0.0
+Will Andrew Cuomo win the 2025 NYC mayoral electio,5,0.0535,0.0
+Will Andrew Cuomo win the 2025 NYC mayoral electio,3,0.0625,0.0
+Will Andrew Cuomo win the 2025 NYC mayoral electio,2,0.062,0.0
+Will Andrew Cuomo win the 2025 NYC mayoral electio,1,0.088,0.0
+Iran x Israel/US conflict ends by April 7?,7,0.886,1.0
+Iran x Israel/US conflict ends by April 7?,5,0.886,1.0
+Iran x Israel/US conflict ends by April 7?,3,0.9965,1.0
+Iran x Israel/US conflict ends by April 7?,2,0.999,1.0
+Iran x Israel/US conflict ends by April 7?,1,0.9995,1.0
+Will the New Orleans Saints win Super Bowl 2026?,7,0.0015,0.0
+Will the New Orleans Saints win Super Bowl 2026?,5,0.0005,0.0
+Will the New Orleans Saints win Super Bowl 2026?,3,0.0005,0.0
+Will the New Orleans Saints win Super Bowl 2026?,2,0.0005,0.0
+Will the New Orleans Saints win Super Bowl 2026?,1,0.0005,0.0
+Will the Democratic candidate win Nevada by 3.0%-4,7,0.001,0.0
+Will the Democratic candidate win Nevada by 3.0%-4,5,0.0005,0.0
+Will the Democratic candidate win Nevada by 3.0%-4,3,0.0005,0.0
+Will the Democratic candidate win Nevada by 3.0%-4,2,0.0005,0.0
+Will the Democratic candidate win Nevada by 3.0%-4,1,0.0005,0.0
+Will RFK Jr. win the popular vote in the 2024 Pres,7,0.0005,0.0
+Will RFK Jr. win the popular vote in the 2024 Pres,5,0.0005,0.0
+Will RFK Jr. win the popular vote in the 2024 Pres,3,0.0005,0.0
+Will RFK Jr. win the popular vote in the 2024 Pres,2,0.0005,0.0
+Will RFK Jr. win the popular vote in the 2024 Pres,1,0.0005,0.0
+Everton wins the Premier League?,7,0.0005,0.0
+Everton wins the Premier League?,5,0.0015,0.0
+Everton wins the Premier League?,3,0.0005,0.0
+Everton wins the Premier League?,2,0.0005,0.0
+Everton wins the Premier League?,1,0.0005,0.0
+Will Michelle Obama win the 2024 Democratic Presid,7,0.017,0.0
+Will Michelle Obama win the 2024 Democratic Presid,5,0.0125,0.0
+Will Michelle Obama win the 2024 Democratic Presid,3,0.006,0.0
+Will Michelle Obama win the 2024 Democratic Presid,2,0.01,0.0
+Will Michelle Obama win the 2024 Democratic Presid,1,0.0085,0.0
+Will Bayer Leverkusen win the UEFA Champions Leagu,7,0.0355,0.0
+Will Bayer Leverkusen win the UEFA Champions Leagu,5,0.0035,0.0
+Will Bayer Leverkusen win the UEFA Champions Leagu,3,0.0035,0.0
+Will Bayer Leverkusen win the UEFA Champions Leagu,2,0.0035,0.0
+Will Bayer Leverkusen win the UEFA Champions Leagu,1,0.0025,0.0
+Will Ron DeSantis win the 2024 US Presidential Ele,7,0.0005,0.0
+Will Ron DeSantis win the 2024 US Presidential Ele,5,0.0005,0.0
+Will Ron DeSantis win the 2024 US Presidential Ele,3,0.0005,0.0
+Will Ron DeSantis win the 2024 US Presidential Ele,2,0.0005,0.0
+Will Ron DeSantis win the 2024 US Presidential Ele,1,0.0005,0.0
+Will another team win La Liga?,7,0.0005,0.0
+Will another team win La Liga?,5,0.0005,0.0
+Will another team win La Liga?,3,0.0005,0.0
+Will another team win La Liga?,2,0.0005,0.0
+Will another team win La Liga?,1,0.0005,0.0
+No change in Fed interest rates after October 2025,7,0.0225,0.0
+No change in Fed interest rates after October 2025,5,0.0225,0.0
+No change in Fed interest rates after October 2025,3,0.01,0.0
+No change in Fed interest rates after October 2025,2,0.0085,0.0
+No change in Fed interest rates after October 2025,1,0.0115,0.0
+Fulham wins the Premier League?,7,0.0005,0.0
+Fulham wins the Premier League?,5,0.0005,0.0
+Fulham wins the Premier League?,3,0.0005,0.0
+Fulham wins the Premier League?,2,0.0005,0.0
+Fulham wins the Premier League?,1,0.0005,0.0
+Will the Philadelphia Flyers win the 2025 Stanley ,7,0.0005,0.0
+Will the Philadelphia Flyers win the 2025 Stanley ,5,0.0005,0.0
+Will the Philadelphia Flyers win the 2025 Stanley ,3,0.0005,0.0
+Will the Philadelphia Flyers win the 2025 Stanley ,2,0.0005,0.0
+Will the Philadelphia Flyers win the 2025 Stanley ,1,0.0005,0.0
+Bournemouth wins the Premier League?,7,0.0005,0.0
+Bournemouth wins the Premier League?,5,0.0005,0.0
+Bournemouth wins the Premier League?,3,0.0005,0.0
+Bournemouth wins the Premier League?,2,0.0005,0.0
+Bournemouth wins the Premier League?,1,0.0005,0.0
+Will Keith Rabois be appointed as the next Florida,7,0.0065,0.0
+Will Keith Rabois be appointed as the next Florida,5,0.0015,0.0
+Will Keith Rabois be appointed as the next Florida,3,0.003,0.0
+Will Keith Rabois be appointed as the next Florida,2,0.0015,0.0
+Will Keith Rabois be appointed as the next Florida,1,0.0015,0.0
+No change in Fed interest rates after December 202,7,0.075,0.0
+No change in Fed interest rates after December 202,5,0.075,0.0
+No change in Fed interest rates after December 202,3,0.075,0.0
+No change in Fed interest rates after December 202,2,0.065,0.0
+No change in Fed interest rates after December 202,1,0.055,0.0
+US x Iran ceasefire by March 31?,7,0.085,0.0
+US x Iran ceasefire by March 31?,5,0.12,0.0
+US x Iran ceasefire by March 31?,3,0.195,0.0
+US x Iran ceasefire by March 31?,2,0.135,0.0
+US x Iran ceasefire by March 31?,1,0.065,0.0
+Will Satoshi move any Bitcoin in 2025?,7,0.004,0.0
+Will Satoshi move any Bitcoin in 2025?,5,0.0035,0.0
+Will Satoshi move any Bitcoin in 2025?,3,0.0035,0.0
+Will Satoshi move any Bitcoin in 2025?,2,0.0055,0.0
+Will Satoshi move any Bitcoin in 2025?,1,0.0025,0.0
+Will the San Jose Sharks win the 2025 Stanley Cup?,7,0.0015,0.0
+Will the San Jose Sharks win the 2025 Stanley Cup?,5,0.0015,0.0
+Will the San Jose Sharks win the 2025 Stanley Cup?,3,0.0005,0.0
+Will the San Jose Sharks win the 2025 Stanley Cup?,2,0.0005,0.0
+Will the San Jose Sharks win the 2025 Stanley Cup?,1,0.0005,0.0
+Fed increases interest rates by 25+ bps after July,7,0.0015,0.0
+Fed increases interest rates by 25+ bps after July,5,0.0005,0.0
+Fed increases interest rates by 25+ bps after July,3,0.0005,0.0
+Fed increases interest rates by 25+ bps after July,2,0.0005,0.0
+Fed increases interest rates by 25+ bps after July,1,0.0005,0.0

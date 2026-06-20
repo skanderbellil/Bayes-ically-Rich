@@ -1,0 +1,121 @@
+question,outcome,yes_wallets,no_wallets,p_count,p_shares,p_dollar,dispersion,yes_dollar,no_dollar
+Will Donald Trump win the 2024 US Presidential Election,1.0,678,2167,0.2383,0.8747,0.9997,0.7614,13933110.4,4608.98
+Will Kamala Harris win the 2024 US Presidential Electio,0.0,1031,1130,0.4771,0.9871,0.2612,-0.2159,98754.14,279283.35
+Will Donald Trump be inaugurated?,1.0,1771,729,0.7084,0.596,0.9946,0.2862,1490646.57,8020.1
+Will the Sacramento Kings win the 2025 NBA Finals?,0.0,295,1891,0.1349,0.4408,0.0012,-0.1338,425.29,368621.28
+"MicroStrategy sells any Bitcoin by May 31, 2026?",0.0,896,379,0.7027,0.8301,0.0193,-0.6835,197969.59,10073470.86
+Will Nicolae Ciucă win the 2024 Romanian Presidential e,0.0,1104,659,0.6262,0.9977,0.4596,-0.1666,148355.93,174460.83
+US forces enter Iran by April 30?,1.0,445,1797,0.1985,0.091,0.9798,0.7813,4600611.66,94739.52
+Will Zelenskyy wear a suit before July?,0.0,845,679,0.5545,0.5573,0.0095,-0.545,137648.13,14344594.46
+Will any other Republican Politician win the 2024 US Pr,0.0,1301,473,0.7334,0.9838,0.0669,-0.6664,25486.96,355264.69
+Fed decreases interest rates by 50+ bps after January 2,0.0,1158,960,0.5467,0.8402,0.01,-0.5368,46763.08,4644162.93
+Fed increases interest rates by 25+ bps after January 2,0.0,1491,780,0.6565,0.8165,0.0056,-0.6509,43800.31,7753800.93
+"US x Iran ceasefire extended by April 22, 2026?",0.0,559,748,0.4277,0.4368,0.0022,-0.4255,86660.6,39154410.98
+"US x Iran permanent peace deal by June 15, 2026?",1.0,261,1155,0.1843,0.1888,0.9924,0.8081,15098051.39,115607.27
+US x Iran ceasefire by April 7?,1.0,457,1520,0.2312,0.1314,0.9921,0.7609,7815884.44,62388.05
+Will the Fed increase interest rates by 25+ bps after t,0.0,1237,764,0.6182,0.7864,0.0042,-0.614,35456.42,8378364.64
+Kamala Harris wins the popular vote?,0.0,606,853,0.4154,0.9361,0.1128,-0.3025,59266.88,465935.07
+Fed decreases interest rates by 50+ bps after December ,0.0,1754,405,0.8124,0.7513,0.013,-0.7994,55712.94,4236385.2
+US government shutdown Saturday?,1.0,648,1007,0.3915,0.107,0.9842,0.5927,1866183.32,29864.6
+Will the Toronto Raptors win the 2025 NBA Finals?,0.0,145,2582,0.0532,0.3608,0.0008,-0.0524,224.4,296354.75
+Will Michelle Obama win the 2024 US Presidential Electi,0.0,1620,219,0.8809,0.9835,0.0566,-0.8244,17390.09,290126.03
+Will Zohran Mamdani win the 2025 NYC mayoral election?,1.0,837,1137,0.424,0.5693,0.9901,0.5661,5871941.94,58542.07
+Will Robert F. Kennedy Jr. win the 2024 US Presidential,0.0,1541,400,0.7939,0.8908,0.0083,-0.7856,2677.74,318273.81
+"Russia x Ukraine ceasefire by May 31, 2026?",1.0,208,1471,0.1239,0.0898,0.9764,0.8525,12168781.5,293783.99
+Will the Panthers win Super Bowl 2025?,0.0,849,576,0.5958,0.6383,0.0019,-0.5939,3395.62,1819962.79
+Fed increases interest rates by 25+ bps after November ,0.0,246,553,0.3079,0.641,0.0039,-0.304,1842.48,468999.04
+Fed increases interest rates by 25+ bps after December ,0.0,1164,647,0.6427,0.8632,0.007,-0.6358,20828.7,2970208.54
+Will Aston Villa win the UEFA Champions League?,0.0,764,818,0.4829,0.7001,0.0164,-0.4665,3542.2,212291.81
+Khamenei out as Supreme Leader of Iran by February 28?,1.0,502,1151,0.3037,0.1583,0.9914,0.6877,3613068.81,31290.36
+Will the Washington Wizards win the 2025 NBA Finals?,0.0,124,1267,0.0891,0.2125,0.0005,-0.0886,317.08,635748.0
+Will the Utah Jazz win the 2025 NBA Finals?,0.0,98,2558,0.0369,0.3315,0.0006,-0.0363,940.41,1691979.53
+Will Trump nominate Judy Shelton as the next Fed chair?,0.0,319,464,0.4074,0.5402,0.0026,-0.4048,23270.35,8972064.22
+Will the Raiders win Super Bowl 2025?,0.0,491,441,0.5268,0.2665,0.0014,-0.5254,677.21,486931.34
+Will Donald Trump win the popular vote in the 2024 Pres,1.0,1151,315,0.7851,0.6299,0.998,0.2128,1047794.63,2127.92
+TikTok banned in the US before May 2025?,1.0,661,1120,0.3711,0.1979,0.9672,0.5961,7801165.69,264395.19
+Will the Titans win Super Bowl 2025?,0.0,596,578,0.5077,0.089,0.0002,-0.5075,76.55,461622.23
+Will the Charlotte Hornets win the 2025 NBA Finals?,0.0,96,2579,0.0359,0.2296,0.0004,-0.0355,127.47,358954.14
+Will any other Democratic Politician win the 2024 US Pr,0.0,1486,418,0.7805,0.9153,0.0116,-0.7688,6322.99,537333.06
+Will the Browns win Super Bowl 2025?,0.0,808,534,0.6021,0.6641,0.0024,-0.5997,550.69,232333.72
+Will Frances Fitzgerald win the Irish Presidential Elec,0.0,1105,476,0.6989,0.9991,0.5323,-0.1667,115044.08,101097.11
+Will the Democratic candidate win Pennsylvania by 1.5%-,0.0,746,3,0.996,1.0,0.9965,0.0006,27526.46,95.4
+Will the Giants win Super Bowl 2025?,0.0,479,478,0.5005,0.0059,0.0,-0.5005,86.82,3677292.98
+Will Nikki Haley win the 2024 US Presidential Election?,0.0,2036,244,0.893,0.8721,0.0068,-0.8862,2255.42,328607.1
+No change in Fed interest rates after January 2026 meet,1.0,1234,1000,0.5524,0.5079,0.9956,0.4433,5692677.85,24901.38
+Netanyahu out by March 31?,0.0,739,1322,0.3586,0.2671,0.0006,-0.358,7089.31,12485625.42
+Fed increases interest rates by 25+ bps after October 2,0.0,865,603,0.5892,0.7605,0.0032,-0.586,13091.65,4047446.37
+Nottingham Forest wins the Premier League?,0.0,104,3239,0.0311,0.0234,0.0,-0.0311,5.5,137396.39
+Fed decreases interest rates by 25 bps after January 20,0.0,1254,1452,0.4634,0.8943,0.0295,-0.4339,47332.71,1558284.68
+"Israel x Hezbollah ceasefire by April 18, 2026?",1.0,91,978,0.0851,0.0197,0.9507,0.8655,1134682.05,58874.55
+Will Hillary Clinton win the 2024 US Presidential Elect,0.0,843,526,0.6158,0.8288,0.0048,-0.6109,6035.45,1243807.39
+Will Gavin Newsom be D-nom for VP on Election Day?,0.0,432,282,0.605,0.9961,0.2053,-0.3998,89153.97,345133.93
+Will Chelsea win the 2025–26 English Premier League?,0.0,300,191,0.611,0.9962,0.207,-0.404,85218.36,326399.23
+Will Trump release the Epstein files by December 19?,1.0,469,1065,0.3057,0.2188,0.9921,0.6864,4606766.15,36627.22
+"US strikes Iran by February 28, 2026?",1.0,842,1533,0.3545,0.2616,0.9892,0.6347,1921326.68,20965.0
+Southampton wins the Premier League?,0.0,1234,801,0.6064,0.9616,0.0791,-0.5273,75835.4,882701.79
+Will Lee Jae-myung be elected the next president of Sou,1.0,465,687,0.4036,0.4421,0.9846,0.581,4868380.52,76152.9
+"US x Iran permanent peace deal by May 31, 2026?",0.0,1070,479,0.6908,0.1389,0.0017,-0.689,4363.91,2532457.3
+Will the Fed decrease interest rates by 25 bps after th,0.0,900,1262,0.4163,0.8487,0.0193,-0.397,44214.49,2248734.81
+Will the Miami Heat win the 2025 NBA Finals?,0.0,230,1070,0.1769,0.5875,0.0023,-0.1746,1485.84,650828.36
+Will Inter Milan win the UEFA Champions League?,0.0,1103,386,0.7408,0.5451,0.3518,-0.389,247983.24,456902.56
+Will Hunor Kelemen win the Romanian presidential electi,0.0,954,127,0.8825,0.9988,0.4538,-0.4287,80486.25,96875.29
+"Will Eleven die in ""Stranger Things: Season 5""?",0.0,1196,344,0.7766,0.7389,0.0061,-0.7705,35744.04,5807667.82
+Xi Jinping out in 2025?,0.0,424,2149,0.1648,0.1061,0.0003,-0.1644,755.05,2158630.88
+Will there be no change in Fed interest rates after the,1.0,1041,838,0.554,0.2154,0.9918,0.4378,3080474.98,25342.23
+Will Trump launch a coin before the election?,1.0,425,1510,0.2196,0.2914,0.9824,0.7627,6724951.02,120761.14
+Will the Fed increase interest rates by 25+ bps after t,0.0,884,986,0.4727,0.8246,0.0069,-0.4659,30671.82,4436939.35
+Will the Patriots win Super Bowl 2025?,0.0,553,546,0.5032,0.069,0.0003,-0.5029,347.92,1179482.11
+US forces enter Iran by March 31?,0.0,1762,308,0.8512,0.4072,0.0011,-0.8501,10141.89,8943853.42
+Russia x Ukraine ceasefire in 2025?,0.0,710,1715,0.2928,0.6889,0.0195,-0.2733,14430.17,725679.14
+Will the Indiana Pacers win the 2025 NBA Finals?,0.0,584,407,0.5893,0.7042,0.4228,-0.1665,357978.53,488755.44
+Will Kim Moon-soo be elected the next president of Sout,0.0,684,390,0.6369,0.8495,0.0457,-0.5911,147534.46,3077461.01
+Will Kamala Harris be inaugurated?,0.0,325,1850,0.1494,0.6078,0.003,-0.1465,1303.5,436849.66
+Will Joe Biden win the 2024 US Presidential Election?,0.0,2736,139,0.9517,0.9993,0.6039,-0.3477,29273.63,19198.15
+Will Real Betis win La Liga?,0.0,976,509,0.6572,0.987,0.1148,-0.5424,69733.38,537713.07
+Will the Charlotte Hornets win the Eastern Conference?,0.0,263,1025,0.2042,0.3609,0.0028,-0.2014,1071.25,375898.19
+Manchester United wins the Premier League?,0.0,113,1680,0.063,0.2065,0.0005,-0.0625,705.73,1368746.88
+Will the Tennessee Titans win Super Bowl 2026?,0.0,115,525,0.1797,0.2269,0.0009,-0.1788,937.78,1054413.62
+Will Hillary Clinton win the popular vote in the 2024 P,0.0,636,286,0.6898,0.387,0.0008,-0.689,277.66,340212.0
+Will the LA Clippers win the 2025 NBA Finals?,0.0,411,458,0.473,0.4184,0.03,-0.443,22931.53,742557.69
+Will Red Star Belgrade win the UEFA Champions League?,0.0,252,1301,0.1623,0.688,0.0073,-0.155,270.78,36839.53
+Will Pierre Poilievre be the next Canadian Prime Minist,0.0,806,980,0.4513,0.7732,0.0791,-0.3722,152513.96,1776657.48
+No change in Fed interest rates after September 2025 me,0.0,1120,338,0.7682,0.7848,0.0867,-0.6814,142167.68,1496720.96
+Brighton & Hove Albion wins the Premier League?,0.0,482,1925,0.2002,0.7772,0.005,-0.1952,1016.05,201162.21
+Will Austin Scott be the first elected Speaker of the H,0.0,585,597,0.4949,0.9302,0.097,-0.3979,156920.67,1461214.77
+Fed increases interest rates by 25+ bps after September,0.0,724,462,0.6105,0.9161,0.0142,-0.5962,27789.44,1927381.79
+Will the Fed decrease interest rates by 50+ bps after t,0.0,856,697,0.5512,0.6725,0.0023,-0.5489,10930.08,4761458.53
+Will Polymarket US go live in 2025?,1.0,615,904,0.4049,0.3486,0.9961,0.5912,5967867.78,23264.2
+Will the Fed decrease interest rates by 25 bps after th,0.0,1053,669,0.6115,0.7965,0.0057,-0.6058,26010.69,4560889.24
+Will Biden finish his term?,1.0,2448,417,0.8545,0.891,0.9991,0.1446,972537.92,905.64
+Will the Miami Dolphins win Super Bowl 2026?,0.0,249,586,0.2982,0.7177,0.0039,-0.2943,2069.3,529982.87
+Khamenei out as Supreme Leader of Iran by March 31?,1.0,858,1466,0.3692,0.2888,0.9961,0.6269,1298807.17,5087.08
+Will the Iranian regime fall by March 31?,0.0,703,1556,0.3112,0.421,0.0016,-0.3096,5673.23,3472784.65
+Will the Atlanta Hawks win the 2025 NBA Finals?,0.0,470,880,0.3481,0.5234,0.0018,-0.3464,1055.17,597572.18
+Will Turkiye win the 2026 FIFA World Cup?,0.0,600,547,0.5231,0.9907,0.3923,-0.1308,58869.0,91197.01
+Will the Detroit Pistons win the 2025 NBA Finals?,0.0,292,642,0.3126,0.7075,0.0073,-0.3053,2766.98,376996.04
+"Russia x Ukraine ceasefire by June 30, 2026?",1.0,255,1273,0.1669,0.0199,0.8456,0.6788,581180.6,106081.6
+Will Curtis Sliwa win the 2025 NYC mayoral election?,0.0,298,707,0.2965,0.7366,0.0036,-0.2929,6076.94,1684303.16
+Will the Detroit Pistons win the Eastern Conference?,0.0,384,1762,0.1789,0.479,0.0089,-0.17,1071.0,119354.39
+Will the Carolina Panthers win Super Bowl 2026?,0.0,142,391,0.2664,0.5619,0.0096,-0.2569,7294.88,755395.82
+Will Trump nominate Kevin Warsh as the next Fed chair?,1.0,659,459,0.5894,0.5252,0.9973,0.4078,6490720.08,17845.71
+Will the New Orleans Pelicans win the 2025 NBA Finals?,0.0,148,2277,0.061,0.4844,0.0015,-0.0595,372.3,241935.34
+Will Jack Bergman be the first elected Speaker of the H,0.0,520,372,0.583,0.9978,0.7813,0.1984,203709.09,57005.39
+Will Joe Biden win the 2024 Democratic Presidential Nom,0.0,905,288,0.7586,0.9003,0.4555,-0.3031,470095.19,561853.56
+Will the New York Jets win Super Bowl 2026?,0.0,196,560,0.2593,0.2663,0.0008,-0.2584,485.96,586091.3
+Fed increases interest rates by 25+ bps after January 2,0.0,583,466,0.5558,0.7069,0.008,-0.5478,30623.9,3800307.75
+Will the Brooklyn Nets win the 2025 NBA Finals?,0.0,412,819,0.3347,0.9579,0.0435,-0.2912,24968.85,549299.79
+Trump ends Ukraine war in first 90 days?,0.0,1132,680,0.6247,0.6193,0.0386,-0.5862,102196.31,2547628.18
+Lighter market cap (FDV) >$1B one day after launch?,1.0,1136,1044,0.5211,0.3395,0.996,0.4749,3998572.58,16052.56
+Fed decreases interest rates by 25 bps after December 2,1.0,782,1087,0.4184,0.4132,0.9618,0.5434,1765733.08,70068.74
+Will Kamala Harris win the 2024 Democratic Presidential,1.0,987,560,0.638,0.7737,0.995,0.357,7080093.93,35249.62
+Will Gavin Newsom win the 2024 US Presidential Election,0.0,2029,91,0.9571,0.985,0.0748,-0.8823,10854.44,134291.23
+Will Elise Stefanik be the first elected Speaker of the,0.0,716,335,0.6813,0.9934,0.6004,-0.0808,219652.84,146170.16
+Will there be a US Government shutdown? ,1.0,293,483,0.3776,0.3562,0.9952,0.6176,5264768.56,25369.01
+Will the Chicago Bulls win the 2025 NBA Finals?,0.0,455,1059,0.3005,0.727,0.003,-0.2975,2438.27,810964.68
+Will the Iranian regime fall by April 30?,0.0,873,858,0.5043,0.6752,0.0056,-0.4988,11868.12,2117065.63
+Fed decreases interest rates by 50+ bps after October 2,0.0,1065,750,0.5868,0.8484,0.0321,-0.5547,51192.65,1542756.37
+Will Lee Jun-seok be elected the next president of Sout,0.0,90,72,0.5556,0.6371,0.0079,-0.5476,14895.97,1860247.89
+Israel x Iran ceasefire before July? ,1.0,803,605,0.5703,0.2587,0.9916,0.4212,2962576.68,25233.1
+Fed decreases interest rates by 25 bps after October 20,1.0,1003,789,0.5597,0.529,0.9874,0.4277,4429112.13,56511.11
+Will the Cleveland Browns win Super Bowl 2026?,0.0,167,576,0.2248,0.2573,0.0011,-0.2237,858.75,815576.53
+Will Paris Saint-Germain win the UEFA Champions League?,1.0,745,479,0.6087,0.672,0.8824,0.2737,617606.64,82303.21

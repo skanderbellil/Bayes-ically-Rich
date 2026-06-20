@@ -183,16 +183,18 @@ def fetch_markets(
                 continue
             ev_ticker, ev_title = _event_fields(m)
             rows.append({
-                "id":         str(m.get("id")),
-                "question":   m.get("question"),
-                "slug":       m.get("slug"),
-                "yes_token":  yes_token,
-                "volume":     vol,
-                "liquidity":  liq,
-                "start_date": m.get("startDate"),
-                "end_date":   m.get("endDate"),
-                "closed":     bool(m.get("closed")),
-                "outcome":    _yes_outcome(m.get("outcomePrices", ""), m.get("outcomes", "")),
+                "id":           str(m.get("id")),
+                "condition_id": str(m.get("conditionId") or ""),
+                "question":     m.get("question"),
+                "slug":         m.get("slug"),
+                "yes_token":    yes_token,
+                "volume":       vol,
+                "liquidity":    liq,
+                "start_date":   m.get("startDate"),
+                "end_date":     m.get("endDate"),
+                "closed_time":  m.get("closedTime"),   # actual close (may be after endDate)
+                "closed":       bool(m.get("closed")),
+                "outcome":      _yes_outcome(m.get("outcomePrices", ""), m.get("outcomes", "")),
                 "event_ticker": ev_ticker,
                 "event_title":  ev_title,
             })
@@ -252,6 +254,299 @@ def fetch_token_history(
         ensure_dirs()
         s.to_frame(name="p").to_csv(cache)
     return s
+
+
+def fetch_token_history_raw(
+    token_id: str,
+    fidelity_minutes: int = 60,
+    use_cache: bool = True,
+) -> pd.Series:
+    """Full-life price series at the requested fidelity, indexed by UTC timestamp.
+
+    Unlike ``fetch_token_history`` this keeps the native (e.g. hourly) timestamps
+    rather than collapsing to one mark per calendar day — needed for event-time
+    (hours-before-resolution) analysis. The CLOB ``prices-history`` endpoint with
+    ``interval=max`` returns the token's entire lifetime, so there is **no**
+    3,500-fill cap here (that cap is on the trades endpoint, not prices).
+    """
+    cache = RAW_DIR / f"tokenhr_{token_id}.csv"
+    if use_cache and cache.exists():
+        s = pd.read_csv(cache, index_col=0, parse_dates=True).iloc[:, 0]
+        s.name = token_id
+        return s
+
+    data = _get(CLOB_URL, {"market": token_id, "interval": "max", "fidelity": fidelity_minutes})
+    history = (data or {}).get("history", []) if isinstance(data, dict) else []
+    if not history:
+        s = pd.Series(dtype=float, name=token_id)
+    else:
+        df = pd.DataFrame(history)
+        df["ts"] = pd.to_datetime(df["t"], unit="s", utc=True)
+        s = df.set_index("ts")["p"].astype(float).sort_index()
+        s.name = token_id
+
+    if use_cache:
+        ensure_dirs()
+        s.to_frame(name="p").to_csv(cache)
+    return s
+
+
+# ---------------------------------------------------------------------------
+# Trade history (data-api) — all fills for a market
+# ---------------------------------------------------------------------------
+
+def fetch_market_trades(
+    condition_id: str,
+    max_trades: int = 2000,
+    sleep: float = 0.3,
+) -> pd.DataFrame:
+    """All fills for a given market (condition_id), oldest → newest.
+
+    Paginates data-api.polymarket.com/trades?market=<condition_id>.
+    Returns DataFrame[proxyWallet, side, asset, outcome, size, price, timestamp].
+    Empty DataFrame if the market has no trades.
+    """
+    url  = "https://data-api.polymarket.com/trades"
+    rows: list[dict] = []
+    offset = 0
+    limit  = 500
+    while len(rows) < max_trades:
+        try:
+            r = _get(url, {"market": condition_id, "limit": limit, "offset": offset})
+        except Exception as e:
+            logger.warning("fetch_market_trades %s offset=%d: %s", condition_id[:12], offset, e)
+            break
+        batch = r if isinstance(r, list) else []
+        if not batch:
+            break
+        rows.extend(batch)
+        if len(batch) < limit:
+            break
+        offset += limit
+        time.sleep(sleep)
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)[["proxyWallet", "side", "asset", "outcome", "size", "price", "timestamp"]]
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
+    df["size"]      = df["size"].astype(float)
+    df["price"]     = df["price"].astype(float)
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    logger.info("fetch_market_trades %s: %d fills", condition_id[:16], len(df))
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Market wallet sentiment — YES vs NO wallet counts
+# ---------------------------------------------------------------------------
+
+def market_wallet_sentiment(
+    condition_id: str,
+    max_trades: int = 3500,
+    window_hours: int | None = None,
+) -> dict:
+    """Count unique wallets net-long YES vs net-long NO for a market.
+
+    A wallet is net-long YES if its cumulative (BUY YES - SELL YES) shares > 0,
+    and net-long NO otherwise. Wallets that are flat or only traded one side once
+    are bucketed by their last action.
+
+    Parameters
+    ----------
+    condition_id  : Polymarket condition ID
+    max_trades    : fill cap (3500 is the API hard limit)
+    window_hours  : if set, only consider trades in the last N hours
+
+    Note on units
+    -------------
+    The data-api ``size`` field is the number of outcome *shares*, and ``price``
+    is the per-share price in USDC, so the **dollar** value of a fill is
+    ``size * price``.  Three weightings are therefore reported, and they answer
+    different questions:
+
+      * BINARY  (yes_wallets / total)      — one wallet = one vote
+      * SHARES  (yes_shares / total_shares) — one share  = one vote
+      * DOLLARS (yes_dollar / total_dollar) — one dollar = one vote
+
+    Share- and dollar-weighting diverge most on longshots: a cheap YES share
+    buys many shares per dollar, so share-weighting structurally overstates the
+    cheap side.  For "where did the money go" use the dollar figures.
+
+    Returns
+    -------
+    dict with keys:
+      yes_wallets   : int — unique wallets net-long YES
+      no_wallets    : int — unique wallets net-long NO
+      total_wallets : int
+      yes_shares    : float — BUY YES share volume
+      no_shares     : float — BUY NO share volume
+      yes_dollar    : float — BUY YES dollar volume (size*price)
+      no_dollar     : float — BUY NO dollar volume (size*price)
+      yes_pct       : float — yes_wallets / total_wallets (binary, %)
+      top_yes       : list[str] — top 5 YES wallets by net shares
+      top_no        : list[str] — top 5 NO wallets by net shares
+    """
+    trades = fetch_market_trades(condition_id, max_trades=max_trades, sleep=0)
+    if trades.empty:
+        return {"yes_wallets": 0, "no_wallets": 0, "total_wallets": 0,
+                "yes_shares": 0.0, "no_shares": 0.0,
+                "yes_dollar": 0.0, "no_dollar": 0.0,
+                "yes_pct": float("nan"), "top_yes": [], "top_no": []}
+
+    if window_hours is not None:
+        cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=window_hours)
+        trades = trades[trades["timestamp"] >= cutoff]
+
+    # Normalise outcome to uppercase; dollar value per fill = shares * price
+    trades = trades.copy()
+    trades["outcome"] = trades["outcome"].str.upper()
+    trades["dollar"]  = trades["size"] * trades["price"]
+
+    # Net position per wallet: +size for BUY YES / SELL NO, -size for SELL YES / BUY NO
+    def signed_size(row):
+        if (row["side"] == "BUY"  and row["outcome"] == "YES") or \
+           (row["side"] == "SELL" and row["outcome"] == "NO"):
+            return row["size"]
+        return -row["size"]
+
+    trades["signed"] = trades.apply(signed_size, axis=1)
+    net = trades.groupby("proxyWallet")["signed"].sum()
+
+    yes_wallets_series = net[net > 0]
+    no_wallets_series  = net[net < 0]
+
+    buy_yes = trades[(trades["side"] == "BUY") & (trades["outcome"] == "YES")]
+    buy_no  = trades[(trades["side"] == "BUY") & (trades["outcome"] == "NO")]
+    yes_shares = buy_yes["size"].sum()
+    no_shares  = buy_no["size"].sum()
+    yes_dollar = buy_yes["dollar"].sum()
+    no_dollar  = buy_no["dollar"].sum()
+
+    top_yes = yes_wallets_series.nlargest(5).index.tolist()
+    top_no  = no_wallets_series.nsmallest(5).index.tolist()  # most negative = biggest NO
+
+    total = len(yes_wallets_series) + len(no_wallets_series)
+    return {
+        "yes_wallets":   len(yes_wallets_series),
+        "no_wallets":    len(no_wallets_series),
+        "total_wallets": total,
+        "yes_shares":    round(yes_shares, 2),
+        "no_shares":     round(no_shares, 2),
+        "yes_dollar":    round(yes_dollar, 2),
+        "no_dollar":     round(no_dollar, 2),
+        "yes_pct":       round(len(yes_wallets_series) / total * 100, 1) if total else float("nan"),
+        "top_yes":       top_yes,
+        "top_no":        top_no,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Historical trade data — with hard cap awareness
+# ---------------------------------------------------------------------------
+
+def fetch_market_trades_historical(
+    condition_id: str,
+    start_ts: Optional[float] = None,
+    end_ts: Optional[float] = None,
+    max_trades: int = 3500,
+    sleep: float = 0.3,
+) -> pd.DataFrame:
+    """Attempt to fetch trade history for a market, filtered to [start_ts, end_ts].
+
+    **Critical limitation (verified 2025-06):**
+    ``data-api.polymarket.com/trades`` returns the *most-recent* ≤3,500 fills
+    per market, regardless of any time-range parameters supplied.  The
+    ``startTs``, ``endTs``, ``before``, ``after``, ``sort``, and ``order``
+    query parameters are all silently ignored by the server.  There is no
+    public API that exposes earlier fills for high-volume markets.
+
+    The function therefore:
+
+    1. Pages through the endpoint (newest → oldest, offset 0…3500).
+    2. If a ``start_ts`` or ``end_ts`` is given, filters the resulting rows
+       *client-side* — only rows actually within the window are returned.
+    3. Adds a ``coverage_full`` column that is ``True`` iff the oldest fetched
+       fill pre-dates ``start_ts``, meaning the requested window is completely
+       covered by the 3,500-fill cap.  If ``coverage_full=False`` the window
+       spans beyond what the API returned and the signal is incomplete.
+
+    Parameters
+    ----------
+    condition_id : Polymarket condition ID for the market.
+    start_ts     : Unix seconds — lower bound (inclusive). ``None`` = no lower
+                   bound.
+    end_ts       : Unix seconds — upper bound (exclusive). ``None`` = no upper
+                   bound.
+    max_trades   : Hard cap on total fills to fetch (≤3500 useful in practice).
+    sleep        : Delay between pagination requests (seconds).
+
+    Returns
+    -------
+    DataFrame with columns ``[wallet, side, size, price, timestamp]`` plus a
+    scalar attribute is not possible in pandas, so coverage information is
+    encoded as a one-row summary dict logged at INFO level.  The DataFrame is
+    sorted ascending by ``timestamp``.  Empty DataFrame if no fills match.
+
+    Alternative sources investigated (2025-06):
+    - The Graph (polymarket-orderbook-subgraph) — DNS unreachable / subgraph
+      removed.
+    - Goldsky (project_cl6mb8i9h0003e201j6li0diw) — 404 not found, deleted.
+    - Polygon public RPCs (polygon-rpc.com, ankr) — require paid API keys.
+    - Satsuma — DNS unreachable.
+    - Covalent / PolygonScan — not reachable without keys; would only give
+      on-chain ERC-1155 transfers that need mapping back to a specific
+      market's token IDs (complex, no marginal benefit given RPC block).
+    - CLOB prices-history — covers full market lifetime at daily/hourly
+      granularity but is *price* data only, not fills/flow.
+    """
+    raw = fetch_market_trades(condition_id, max_trades=max_trades, sleep=sleep)
+    if raw.empty:
+        return raw
+
+    # Rename to the documented output schema
+    df = raw.rename(columns={"proxyWallet": "wallet"})
+    # Keep only the five columns specified in the public interface
+    df = df[["wallet", "side", "size", "price", "timestamp"]].copy()
+
+    # Determine coverage: did we get back far enough to cover start_ts?
+    oldest_ts_unix = df["timestamp"].min().timestamp() if not df.empty else None
+    if start_ts is not None and oldest_ts_unix is not None:
+        coverage_full = oldest_ts_unix <= start_ts
+    else:
+        # No start_ts requested → can't assess coverage
+        coverage_full = True
+
+    logger.info(
+        "fetch_market_trades_historical %s: %d raw fills | oldest=%s | "
+        "start_ts=%s | coverage_full=%s",
+        condition_id[:16],
+        len(df),
+        pd.Timestamp(oldest_ts_unix, unit="s", tz="UTC").strftime("%Y-%m-%d") if oldest_ts_unix else "N/A",
+        pd.Timestamp(start_ts, unit="s", tz="UTC").strftime("%Y-%m-%d") if start_ts else "None",
+        coverage_full,
+    )
+
+    if not coverage_full:
+        logger.warning(
+            "fetch_market_trades_historical %s: window starts %s but oldest "
+            "available fill is %s — early-window data is MISSING.  "
+            "No public source provides earlier fills for this market.",
+            condition_id[:16],
+            pd.Timestamp(start_ts, unit="s", tz="UTC").strftime("%Y-%m-%d"),
+            pd.Timestamp(oldest_ts_unix, unit="s", tz="UTC").strftime("%Y-%m-%d") if oldest_ts_unix else "N/A",
+        )
+
+    # Apply time-range filter client-side
+    if start_ts is not None:
+        start_pd = pd.Timestamp(start_ts, unit="s", tz="UTC")
+        df = df[df["timestamp"] >= start_pd]
+    if end_ts is not None:
+        end_pd = pd.Timestamp(end_ts, unit="s", tz="UTC")
+        df = df[df["timestamp"] < end_pd]
+
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    # Attach coverage flag as metadata for callers that need it
+    df.attrs["coverage_full"] = coverage_full
+    return df
 
 
 # ---------------------------------------------------------------------------

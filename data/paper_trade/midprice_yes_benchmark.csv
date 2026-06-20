@@ -1,0 +1,2 @@
+n,win_rate,mean_ret,median_ret,sharpe,total_pnl,band_lo,band_hi,days_min,days_max,haircut,computed
+944,0.4110169491525424,0.46212785764858344,-1.0,0.2238411255556361,436.24869762026276,0.1,0.5,2,10,0.02,2026-06-20T14:01:25.068459+00:00
