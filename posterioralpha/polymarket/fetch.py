@@ -321,31 +321,50 @@ def market_wallet_sentiment(
     max_trades    : fill cap (3500 is the API hard limit)
     window_hours  : if set, only consider trades in the last N hours
 
+    Note on units
+    -------------
+    The data-api ``size`` field is the number of outcome *shares*, and ``price``
+    is the per-share price in USDC, so the **dollar** value of a fill is
+    ``size * price``.  Three weightings are therefore reported, and they answer
+    different questions:
+
+      * BINARY  (yes_wallets / total)      — one wallet = one vote
+      * SHARES  (yes_shares / total_shares) — one share  = one vote
+      * DOLLARS (yes_dollar / total_dollar) — one dollar = one vote
+
+    Share- and dollar-weighting diverge most on longshots: a cheap YES share
+    buys many shares per dollar, so share-weighting structurally overstates the
+    cheap side.  For "where did the money go" use the dollar figures.
+
     Returns
     -------
     dict with keys:
       yes_wallets   : int — unique wallets net-long YES
       no_wallets    : int — unique wallets net-long NO
-      yes_vol       : float — total dollar volume on YES side (BUY YES)
-      no_vol        : float — total dollar volume on NO side (BUY NO)
-      yes_pct       : float — yes_wallets / total_wallets
       total_wallets : int
-      top_yes       : list[str] — top 5 YES wallets by size
-      top_no        : list[str] — top 5 NO wallets by size
+      yes_shares    : float — BUY YES share volume
+      no_shares     : float — BUY NO share volume
+      yes_dollar    : float — BUY YES dollar volume (size*price)
+      no_dollar     : float — BUY NO dollar volume (size*price)
+      yes_pct       : float — yes_wallets / total_wallets (binary, %)
+      top_yes       : list[str] — top 5 YES wallets by net shares
+      top_no        : list[str] — top 5 NO wallets by net shares
     """
     trades = fetch_market_trades(condition_id, max_trades=max_trades, sleep=0)
     if trades.empty:
         return {"yes_wallets": 0, "no_wallets": 0, "total_wallets": 0,
-                "yes_vol": 0.0, "no_vol": 0.0, "yes_pct": float("nan"),
-                "top_yes": [], "top_no": []}
+                "yes_shares": 0.0, "no_shares": 0.0,
+                "yes_dollar": 0.0, "no_dollar": 0.0,
+                "yes_pct": float("nan"), "top_yes": [], "top_no": []}
 
     if window_hours is not None:
         cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=window_hours)
         trades = trades[trades["timestamp"] >= cutoff]
 
-    # Normalise outcome to uppercase
+    # Normalise outcome to uppercase; dollar value per fill = shares * price
     trades = trades.copy()
     trades["outcome"] = trades["outcome"].str.upper()
+    trades["dollar"]  = trades["size"] * trades["price"]
 
     # Net position per wallet: +size for BUY YES / SELL NO, -size for SELL YES / BUY NO
     def signed_size(row):
@@ -360,9 +379,12 @@ def market_wallet_sentiment(
     yes_wallets_series = net[net > 0]
     no_wallets_series  = net[net < 0]
 
-    # Dollar volume: BUY YES and BUY NO
-    yes_vol = trades[(trades["side"] == "BUY") & (trades["outcome"] == "YES")]["size"].sum()
-    no_vol  = trades[(trades["side"] == "BUY") & (trades["outcome"] == "NO")]["size"].sum()
+    buy_yes = trades[(trades["side"] == "BUY") & (trades["outcome"] == "YES")]
+    buy_no  = trades[(trades["side"] == "BUY") & (trades["outcome"] == "NO")]
+    yes_shares = buy_yes["size"].sum()
+    no_shares  = buy_no["size"].sum()
+    yes_dollar = buy_yes["dollar"].sum()
+    no_dollar  = buy_no["dollar"].sum()
 
     top_yes = yes_wallets_series.nlargest(5).index.tolist()
     top_no  = no_wallets_series.nsmallest(5).index.tolist()  # most negative = biggest NO
@@ -372,8 +394,10 @@ def market_wallet_sentiment(
         "yes_wallets":   len(yes_wallets_series),
         "no_wallets":    len(no_wallets_series),
         "total_wallets": total,
-        "yes_vol":       round(yes_vol, 2),
-        "no_vol":        round(no_vol, 2),
+        "yes_shares":    round(yes_shares, 2),
+        "no_shares":     round(no_shares, 2),
+        "yes_dollar":    round(yes_dollar, 2),
+        "no_dollar":     round(no_dollar, 2),
         "yes_pct":       round(len(yes_wallets_series) / total * 100, 1) if total else float("nan"),
         "top_yes":       top_yes,
         "top_no":        top_no,

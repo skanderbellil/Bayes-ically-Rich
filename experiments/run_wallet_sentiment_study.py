@@ -86,21 +86,24 @@ def main() -> None:
             continue
         s = market_wallet_sentiment(cid)
         total = s["total_wallets"]
-        dol_total = s["yes_vol"] + s["no_vol"]
-        if total < args.min_wallets or dol_total <= 0:
+        sh_total  = s["yes_shares"] + s["no_shares"]
+        dol_total = s["yes_dollar"] + s["no_dollar"]
+        if total < args.min_wallets or dol_total <= 0 or sh_total <= 0:
             continue
         p_count  = s["yes_wallets"] / total
-        p_dollar = s["yes_vol"] / dol_total
+        p_shares = s["yes_shares"] / sh_total
+        p_dollar = s["yes_dollar"] / dol_total
         rows.append({
             "question":    str(m.question)[:55],
             "outcome":     float(m.outcome),
             "yes_wallets": s["yes_wallets"],
             "no_wallets":  s["no_wallets"],
             "p_count":     round(p_count, 4),
+            "p_shares":    round(p_shares, 4),
             "p_dollar":    round(p_dollar, 4),
             "dispersion":  round(p_dollar - p_count, 4),
-            "yes_vol":     s["yes_vol"],
-            "no_vol":      s["no_vol"],
+            "yes_dollar":  s["yes_dollar"],
+            "no_dollar":   s["no_dollar"],
         })
         if i % 20 == 0:
             logger.info("  processed %d/%d (%d usable)", i, len(markets), len(rows))
@@ -116,6 +119,7 @@ def main() -> None:
     base_rate = y.mean()
 
     m_count  = _metrics(df["p_count"].values,  y)
+    m_shares = _metrics(df["p_shares"].values, y)
     m_dollar = _metrics(df["p_dollar"].values, y)
 
     print(f"{'═'*72}")
@@ -124,6 +128,8 @@ def main() -> None:
     print(tabulate([
         ["BINARY  (1 wallet = 1 vote)", f"{m_count['accuracy']:.1%}",
          f"{m_count['brier']:.4f}", f"{m_count['logloss']:.4f}", m_count["n_decided"]],
+        ["SHARES  (1 share = 1 vote)",  f"{m_shares['accuracy']:.1%}",
+         f"{m_shares['brier']:.4f}", f"{m_shares['logloss']:.4f}", m_shares["n_decided"]],
         ["DOLLAR  (1 $ = 1 vote)",      f"{m_dollar['accuracy']:.1%}",
          f"{m_dollar['brier']:.4f}", f"{m_dollar['logloss']:.4f}", m_dollar["n_decided"]],
     ], headers=["signal", "dir.accuracy", "Brier↓", "logloss↓", "n_decided"],
