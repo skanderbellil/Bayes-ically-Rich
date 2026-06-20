@@ -26,3 +26,5 @@ results/
 !data/paper_trade/yes_weighting.csv
 !data/paper_trade/yes_weighting_summary.csv
 !data/paper_trade/yes_weighting.png
+!data/paper_trade/dynamic_yes.csv
+!data/paper_trade/dynamic_yes.png
