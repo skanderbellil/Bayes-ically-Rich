@@ -31,3 +31,5 @@ results/
 !data/paper_trade/horizon_grid.csv
 !data/paper_trade/horizon_grid.png
 !data/paper_trade/entry_horizon_sweep.png
+!data/paper_trade/midprice_yes_positions.csv
+!data/paper_trade/midprice_yes_benchmark.csv
