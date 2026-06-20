@@ -30,3 +30,4 @@ results/
 !data/paper_trade/dynamic_yes.png
 !data/paper_trade/horizon_grid.csv
 !data/paper_trade/horizon_grid.png
+!data/paper_trade/entry_horizon_sweep.png
