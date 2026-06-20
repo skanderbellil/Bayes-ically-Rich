@@ -20,3 +20,6 @@ results/
 !data/paper_trade/price_deepdive.csv
 !data/paper_trade/price_deepdive_flow.csv
 !data/paper_trade/price_convergence.png
+!data/paper_trade/midprice_backtest.csv
+!data/paper_trade/midprice_backtest_summary.csv
+!data/paper_trade/midprice_backtest.png
