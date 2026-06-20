@@ -24,6 +24,7 @@ import argparse
 import logging
 
 import _bootstrap  # noqa: F401
+import numpy as np
 import pandas as pd
 from tabulate import tabulate
 
@@ -116,10 +117,16 @@ def main() -> None:
             tablefmt="rounded_grid"))
         won = (closed["status"] == "won").sum()
         lost = (closed["status"] == "lost").sum()
-        pnls = closed["pnl"].replace("", float("nan")).astype(float).dropna()
         live_win = won / (won + lost) if (won + lost) else float("nan")
-        print(f"\n  LIVE: {won}W / {lost}L  (win {live_win*100:.0f}%)   "
-              f"cumulative PnL (additive): {pnls.sum():+.4f}")
+        # both sizing techniques, sequenced by resolution date
+        seq = closed.copy()
+        seq["pnl_f"] = seq["pnl"].replace("", float("nan")).astype(float)
+        seq = seq.dropna(subset=["pnl_f"]).sort_values("exit_date")
+        additive = seq["pnl_f"].sum()                       # fixed fraction, additive
+        bankroll = float(np.prod(1.0 + seq["pnl_f"].values)) if len(seq) else 1.0  # compounding
+        print(f"\n  LIVE: {won}W / {lost}L  (win {live_win*100:.0f}%)")
+        print(f"    additive PnL (fixed {args.fraction:.0%}/trade) : {additive:+.4f}")
+        print(f"    compounding bankroll (×, {args.fraction:.0%} risked/trade) : ×{bankroll:.4f}")
         if bench.get("n"):
             print(f"  vs BENCHMARK win {float(bench['win_rate'])*100:.0f}%  "
                   f"mean {float(bench['mean_ret'])*100:+.1f}%/trade")
