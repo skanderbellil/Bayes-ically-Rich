@@ -23,3 +23,6 @@ results/
 !data/paper_trade/midprice_backtest.csv
 !data/paper_trade/midprice_backtest_summary.csv
 !data/paper_trade/midprice_backtest.png
+!data/paper_trade/yes_weighting.csv
+!data/paper_trade/yes_weighting_summary.csv
+!data/paper_trade/yes_weighting.png
