@@ -256,6 +256,41 @@ def fetch_token_history(
     return s
 
 
+def fetch_token_history_raw(
+    token_id: str,
+    fidelity_minutes: int = 60,
+    use_cache: bool = True,
+) -> pd.Series:
+    """Full-life price series at the requested fidelity, indexed by UTC timestamp.
+
+    Unlike ``fetch_token_history`` this keeps the native (e.g. hourly) timestamps
+    rather than collapsing to one mark per calendar day — needed for event-time
+    (hours-before-resolution) analysis. The CLOB ``prices-history`` endpoint with
+    ``interval=max`` returns the token's entire lifetime, so there is **no**
+    3,500-fill cap here (that cap is on the trades endpoint, not prices).
+    """
+    cache = RAW_DIR / f"tokenhr_{token_id}.csv"
+    if use_cache and cache.exists():
+        s = pd.read_csv(cache, index_col=0, parse_dates=True).iloc[:, 0]
+        s.name = token_id
+        return s
+
+    data = _get(CLOB_URL, {"market": token_id, "interval": "max", "fidelity": fidelity_minutes})
+    history = (data or {}).get("history", []) if isinstance(data, dict) else []
+    if not history:
+        s = pd.Series(dtype=float, name=token_id)
+    else:
+        df = pd.DataFrame(history)
+        df["ts"] = pd.to_datetime(df["t"], unit="s", utc=True)
+        s = df.set_index("ts")["p"].astype(float).sort_index()
+        s.name = token_id
+
+    if use_cache:
+        ensure_dirs()
+        s.to_frame(name="p").to_csv(cache)
+    return s
+
+
 # ---------------------------------------------------------------------------
 # Trade history (data-api) — all fills for a market
 # ---------------------------------------------------------------------------
