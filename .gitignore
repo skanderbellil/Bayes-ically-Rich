@@ -14,5 +14,6 @@ results/
 !data/paper_trade/smart_flow_positions.csv
 !data/paper_trade/insider_scorecard.csv
 !data/paper_trade/insider_scorecard
+!data/paper_trade/wallet_sentiment_study.csv
 .DS_Store
 .claude/
