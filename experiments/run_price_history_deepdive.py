@@ -43,16 +43,18 @@ import pandas as pd
 from posterioralpha.polymarket.fetch import (
     fetch_market_trades,
     fetch_markets,
-    fetch_token_history_raw,
+    fetch_token_history,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-5s  %(message)s",
                     datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
-# Horizons before resolution, in hours
-HORIZONS_H = [168, 72, 48, 24, 12, 6, 1]
-HLABEL = {168: "7d", 72: "3d", 48: "48h", 24: "24h", 12: "12h", 6: "6h", 1: "1h"}
+# Horizons before resolution, in DAYS. (interval=max only serves DAILY bars over
+# a long market's full life — hourly is empty for long markets — and convergence
+# happens over days anyway, so day-granularity is both necessary and sufficient.)
+HORIZONS_D = [7, 5, 3, 2, 1]
+HLABEL = {7: "7d", 5: "5d", 3: "3d", 2: "2d", 1: "1d"}
 
 
 def price_at(series: pd.Series, when: pd.Timestamp) -> float | None:
@@ -66,11 +68,13 @@ def price_at(series: pd.Series, when: pd.Timestamp) -> float | None:
 def flow_sentiment_asof(trades: pd.DataFrame, when: pd.Timestamp) -> float | None:
     """Dollar-weighted YES share of BUY flow using only fills at/<= `when`.
 
-    Returns yes_dollar / (yes_dollar + no_dollar), or None if no qualifying flow.
+    `when` is a tz-naive date; trade timestamps are coerced to tz-naive for
+    comparison. Returns yes_dollar / (yes_dollar + no_dollar), or None.
     """
     if trades.empty:
         return None
-    sub = trades[trades["timestamp"] <= when]
+    ts = trades["timestamp"].dt.tz_localize(None) if trades["timestamp"].dt.tz else trades["timestamp"]
+    sub = trades[ts <= when]
     if sub.empty:
         return None
     sub = sub.copy()
@@ -110,35 +114,35 @@ def main() -> None:
     flow_recs = []     # per (market, horizon): flow vs price (full-coverage only)
 
     for i, m in enumerate(markets.itertuples(index=False), 1):
-        prices = fetch_token_history_raw(m.yes_token, fidelity_minutes=60)
-        if len(prices) < 5:
+        prices = fetch_token_history(m.yes_token, fidelity_minutes=1440)
+        if len(prices) < 3:
             continue
         t_res = prices.index.max()
         y = float(m.outcome)
 
-        # Part A: price at each horizon
-        for h in HORIZONS_H:
-            p = price_at(prices, t_res - pd.Timedelta(hours=h))
+        # Part A: price at each horizon (days before resolution)
+        for d in HORIZONS_D:
+            p = price_at(prices, t_res - pd.Timedelta(days=d))
             if p is None:
                 continue
-            recs.append({"question": str(m.question)[:50], "horizon_h": h,
+            recs.append({"question": str(m.question)[:50], "horizon_d": d,
                          "price": p, "outcome": y})
 
-        # Part B: flow lead-lag (only if we can cover the early window)
+        # Part B: flow lead-lag (only if the tape reaches back before the horizon)
         if not args.no_flow:
             trades = fetch_market_trades(m.condition_id, max_trades=3500, sleep=0)
             if not trades.empty:
-                oldest = trades["timestamp"].min()
-                for h in HORIZONS_H:
-                    when = t_res - pd.Timedelta(hours=h)
-                    # only trust flow if the tape reaches back before this horizon
-                    if oldest > when:
+                ts = trades["timestamp"].dt.tz_localize(None) if trades["timestamp"].dt.tz else trades["timestamp"]
+                oldest = ts.min()
+                for d in HORIZONS_D:
+                    when = t_res - pd.Timedelta(days=d)
+                    if oldest > when:           # tape doesn't cover this far back
                         continue
                     p_price = price_at(prices, when)
                     p_flow  = flow_sentiment_asof(trades, when)
                     if p_price is None or p_flow is None:
                         continue
-                    flow_recs.append({"question": str(m.question)[:50], "horizon_h": h,
+                    flow_recs.append({"question": str(m.question)[:50], "horizon_d": d,
                                       "p_price": p_price, "p_flow": p_flow, "outcome": y})
             time.sleep(args.sleep)
 
@@ -160,8 +164,8 @@ def main() -> None:
     print(f"  {'horizon':>8} | {'n':>4} | {'dir.acc':>8} | {'Brier':>7} | {'avg price (YES vs NO)':>26}")
     print(f"  {'-'*8}-+-{'-'*4}-+-{'-'*8}-+-{'-'*7}-+-{'-'*26}")
     curve = []
-    for h in HORIZONS_H:
-        sub = df[df["horizon_h"] == h]
+    for h in HORIZONS_D:
+        sub = df[df["horizon_d"] == h]
         if sub.empty:
             continue
         p = np.clip(sub["price"].values, 1e-6, 1 - 1e-6)
@@ -177,8 +181,8 @@ def main() -> None:
               f"YES {avg_yes:>5.2f}  /  NO {avg_no:>5.2f}")
 
     # ── Longshot calibration: do cheap longshots resolve as priced? ───────
-    print(f"\n  Longshot calibration (price at 7d/3d horizon, all obs ≤ 168h):")
-    cal = df[df["horizon_h"].isin([168, 72])].copy()
+    print(f"\n  Longshot calibration (price at 7d/5d horizon):")
+    cal = df[df["horizon_d"].isin([7, 5])].copy()
     bins = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.01]
     cal["bucket"] = pd.cut(cal["price"], bins, right=False)
     cb = cal.groupby("bucket", observed=True).agg(n=("outcome", "size"),
@@ -202,8 +206,8 @@ def main() -> None:
         print(f"{'═'*74}")
         print(f"  {'horizon':>8} | {'n':>4} | {'price acc':>10} | {'flow acc':>9} | {'price Brier':>11} | {'flow Brier':>10}")
         print(f"  {'-'*8}-+-{'-'*4}-+-{'-'*10}-+-{'-'*9}-+-{'-'*11}-+-{'-'*10}")
-        for h in HORIZONS_H:
-            sub = fdf[fdf["horizon_h"] == h]
+        for h in HORIZONS_D:
+            sub = fdf[fdf["horizon_d"] == h]
             if len(sub) < 5:
                 continue
             yv = sub["outcome"].values
@@ -240,8 +244,8 @@ def main() -> None:
 
         if not fdf.empty:
             fcurve = []
-            for h in HORIZONS_H:
-                sub = fdf[fdf["horizon_h"] == h]
+            for h in HORIZONS_D:
+                sub = fdf[fdf["horizon_d"] == h]
                 if len(sub) < 5:
                     continue
                 yv = sub["outcome"].values
