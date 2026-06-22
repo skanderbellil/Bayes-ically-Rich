@@ -252,6 +252,15 @@ tr:last-child td{border-bottom:none;}
 @media(max-width:380px){
   .hide-xs{display:none;}
 }
+/* ── SCHEDULE CARD ── */
+.sched-row{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid rgba(42,45,62,.6);}
+.sched-row:last-child{border-bottom:none;}
+.sched-dot{width:8px;height:8px;border-radius:50%;margin-right:10px;flex-shrink:0;}
+.sched-name{flex:1;font-size:13px;}
+.sched-time{font-size:12px;color:var(--muted);margin-right:12px;white-space:nowrap;}
+.sched-cd{font-size:12px;font-weight:600;min-width:64px;text-align:right;font-variant-numeric:tabular-nums;}
+.sched-cd.soon{color:var(--yellow);}
+.sched-cd.now{color:var(--green);}
 </style>
 </head>
 <body>
@@ -273,6 +282,10 @@ tr:last-child td{border-bottom:none;}
     <div class="updated">Last updated: <strong id="ts">—</strong></div>
   </div>
   <div id="port-kpis" class="port-kpis"></div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-title" style="margin-bottom:6px">⏱ Next Updates <span style="font-size:11px;font-weight:400;color:var(--muted)">(Paris time)</span></div>
+    <div id="schedule-rows"></div>
+  </div>
   <div id="strategy-grid" class="strategy-grid"></div>
   <div class="meta">
     10 % of bankroll per bet · PnL shown as % of that allocation<br>
@@ -734,12 +747,101 @@ function copyCmd() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCut(); });
 
+// ── SCHEDULE COUNTDOWN ───────────────────────────────────────────────────────
+// Cron definitions: every N hours starting at startH UTC, at :minute past the hour
+const CRONS = [
+  {label:'Macro',          color:'#a78bfa', every:24, startH:9,  minute:0},
+  {label:'Smart Flow',     color:'#22c55e', every:4,  startH:0,  minute:30},
+  {label:'Mid-priced YES', color:'#f59e0b', every:6,  startH:0,  minute:15},
+];
+const PARIS_TZ = 'Europe/Paris';
+
+function nextCronRun(every, startH, minute) {
+  const now = new Date();
+  const nowMs = now.getTime();
+  const slots = [];
+  for (let h = startH; h < 24; h += every) slots.push(h);
+  for (const h of slots) {
+    const t = new Date(Date.UTC(
+      now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, minute, 0));
+    if (t.getTime() > nowMs + 2000) return t;
+  }
+  // wrap to next day
+  return new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, slots[0], minute, 0));
+}
+
+function fmtParisTime(d) {
+  return d.toLocaleTimeString('fr-FR', {timeZone: PARIS_TZ, hour:'2-digit', minute:'2-digit'});
+}
+
+function fmtParisDay(d) {
+  const opts = {timeZone: PARIS_TZ, year:'numeric', month:'2-digit', day:'2-digit'};
+  const now  = new Date();
+  const dStr = d.toLocaleDateString('fr-FR', opts);
+  if (dStr === now.toLocaleDateString('fr-FR', opts)) return 'Today';
+  const tmr = new Date(now.getTime() + 86400000);
+  if (dStr === tmr.toLocaleDateString('fr-FR', opts)) return 'Tomorrow';
+  return dStr;
+}
+
+function fmtCountdown(ms) {
+  if (ms <= 0) return {text: 'running', cls: 'now'};
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const text = h > 0
+    ? `${h}h ${String(m).padStart(2,'0')}m`
+    : m > 0
+      ? `${m}m ${String(s).padStart(2,'0')}s`
+      : `${s}s`;
+  const cls = ms < 300000 ? 'soon' : ''; // yellow if < 5 min
+  return {text, cls};
+}
+
+let _nextRuns = [];
+
+function buildSchedule() {
+  _nextRuns = CRONS.map(c => nextCronRun(c.every, c.startH, c.minute));
+  document.getElementById('schedule-rows').innerHTML = CRONS.map((c, i) => {
+    const day  = fmtParisDay(_nextRuns[i]);
+    const time = fmtParisTime(_nextRuns[i]);
+    return `<div class="sched-row">
+      <div class="sched-dot" style="background:${c.color}"></div>
+      <div class="sched-name">${c.label}</div>
+      <div class="sched-time">${day} ${time}</div>
+      <div class="sched-cd" id="scd-${i}">—</div>
+    </div>`;
+  }).join('');
+}
+
+function tickSchedule() {
+  const now = Date.now();
+  let needRebuild = false;
+  CRONS.forEach((c, i) => {
+    if (_nextRuns[i] && _nextRuns[i].getTime() <= now) {
+      _nextRuns[i] = nextCronRun(c.every, c.startH, c.minute);
+      needRebuild = true;
+    }
+  });
+  if (needRebuild) { buildSchedule(); return; }
+  CRONS.forEach((_, i) => {
+    const el = document.getElementById('scd-' + i);
+    if (!el) return;
+    const {text, cls} = fmtCountdown(_nextRuns[i].getTime() - now);
+    el.textContent = text;
+    el.className   = 'sched-cd' + (cls ? ' ' + cls : '');
+  });
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 document.getElementById('ts').textContent = DATA.generated;
 buildOverview();
 buildOpen();
 buildEquity();
 buildHistory();
+buildSchedule();
+setInterval(tickSchedule, 1000);
 </script>
 </body>
 </html>
