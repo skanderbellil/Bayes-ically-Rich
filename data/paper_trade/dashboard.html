@@ -2,110 +2,252 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Polymarket Paper-Trade Dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Paper-Trade Dashboard</title>
 <style>
-  :root {
-    --bg: #0f1117; --card: #1a1d27; --border: #2a2d3e;
-    --green: #22c55e; --red: #ef4444; --yellow: #f59e0b;
-    --blue: #3b82f6; --text: #e2e8f0; --muted: #94a3b8;
-    --flip: #a78bfa;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; padding: 24px; }
-  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-  .updated { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
-  .strategies { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; margin-bottom: 32px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
-  .badge-green { background: rgba(34,197,94,.18); color: var(--green); }
-  .badge-red   { background: rgba(239,68,68,.18);  color: var(--red); }
-  .badge-grey  { background: rgba(148,163,184,.12); color: var(--muted); }
-  .kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .kpi { background: rgba(255,255,255,.04); border-radius: 8px; padding: 10px 12px; }
-  .kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .4px; }
-  .kpi-value { font-size: 18px; font-weight: 700; }
-  .pos { color: var(--green); } .neg { color: var(--red); } .neu { color: var(--text); }
-  details { margin-top: 10px; }
-  summary { cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; padding: 4px 0; }
-  summary:hover { color: var(--text); }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-  th { text-align: left; padding: 5px 8px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  td { padding: 5px 8px; border-bottom: 1px solid rgba(42,45,62,.6); vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  .q { max-width: 200px; }
-  .pill { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
-  .pill-won     { background: rgba(34,197,94,.18);  color: var(--green); }
-  .pill-lost    { background: rgba(239,68,68,.18);  color: var(--red); }
-  .pill-flipped { background: rgba(167,139,250,.18); color: var(--flip); }
-  .pill-open    { background: rgba(59,130,246,.12);  color: var(--blue); }
-  .meta { font-size: 11px; color: var(--muted); margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
-  /* W/L/F bar */
-  .wlf-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .wlf-bar { flex: 1; height: 5px; border-radius: 3px; overflow: hidden; display: flex; gap: 1px; }
-  .wlf-seg { height: 100%; border-radius: 2px; }
-  .wlf-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
-  /* Cut button */
-  .cut-btn { background: rgba(239,68,68,.1); color: var(--red); border: 1px solid rgba(239,68,68,.25);
-             border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 600; cursor: pointer;
-             line-height: 1.7; white-space: nowrap; transition: background .15s; }
-  .cut-btn:hover { background: rgba(239,68,68,.25); }
-  /* Modal */
-  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
-                    z-index: 100; align-items: center; justify-content: center; padding: 20px; }
-  .modal-backdrop.open { display: flex; }
-  .modal { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 14px; padding: 24px;
-           max-width: 520px; width: 100%; }
-  .modal h3 { font-size: 15px; margin-bottom: 6px; }
-  .modal-q { font-size: 12px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
-  .modal-section { margin-bottom: 14px; }
-  .modal-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
-               color: var(--muted); margin-bottom: 5px; }
-  .code-box { background: #0f1117; border: 1px solid #2a2d3e; border-radius: 6px; padding: 10px 12px;
-              font-family: 'Menlo','Consolas',monospace; font-size: 11px; color: #e2e8f0;
-              word-break: break-all; line-height: 1.6; white-space: pre-wrap; }
-  .modal-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
-  .btn { padding: 8px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;
-         cursor: pointer; border: none; transition: background .15s; }
-  .btn-copy   { background: rgba(59,130,246,.18); color: var(--blue); border: 1px solid rgba(59,130,246,.35); }
-  .btn-copy:hover { background: rgba(59,130,246,.32); }
-  .btn-gh { background: rgba(34,197,94,.12); color: var(--green); border: 1px solid rgba(34,197,94,.28);
-            text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
-  .btn-gh:hover { background: rgba(34,197,94,.25); }
-  .btn-cancel { background: rgba(255,255,255,.05); color: var(--muted); border: 1px solid #2a2d3e; }
-  .btn-cancel:hover { background: rgba(255,255,255,.1); }
+:root {
+  --bg:#0f1117; --card:#1a1d27; --border:#2a2d3e;
+  --green:#22c55e; --red:#ef4444; --yellow:#f59e0b;
+  --blue:#3b82f6; --text:#e2e8f0; --muted:#94a3b8; --flip:#a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;padding-bottom:72px;}
+
+/* ── PAGES ── */
+.page{display:none;padding:16px 16px 28px;}
+.page.active{display:block;}
+.page-hdr{margin-bottom:14px;}
+.page-hdr h1{font-size:20px;font-weight:700;}
+.page-hdr h2{font-size:17px;font-weight:700;}
+.updated{font-size:11px;color:var(--muted);margin-top:2px;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--card);border-top:1px solid var(--border);
+  display:flex;z-index:50;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.nav-btn{
+  flex:1;background:none;border:none;padding:10px 0 8px;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  cursor:pointer;color:var(--muted);transition:color .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.nav-btn.active{color:var(--blue);}
+.nav-icon{font-size:18px;line-height:1;}
+.nav-lbl{font-size:10px;font-weight:500;}
+
+/* ── DESKTOP TABS (sticky header, wide screens only) ── */
+.dtabs-wrap{
+  display:none;background:var(--card);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:40;
+}
+.dtabs{display:flex;max-width:1200px;margin:0 auto;padding:0 20px;}
+.dtab{
+  background:none;border:none;padding:14px 16px;font-size:13px;font-weight:500;
+  color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;
+  margin-bottom:-1px;transition:color .15s;white-space:nowrap;
+}
+.dtab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+/* ── CARDS ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
+.card-title{font-size:14px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+/* ── KPIs ── */
+.port-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;}
+.port-kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.kpi{background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;}
+.kpi-lbl{font-size:10px;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.4px;}
+.kpi-val{font-size:18px;font-weight:700;}
+.port-kpi .kpi-lbl{font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px;}
+.port-kpi .kpi-val{font-size:22px;font-weight:700;}
+
+/* ── BADGES & PILLS ── */
+.badge{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500;}
+.badge-green{background:rgba(34,197,94,.18);color:var(--green);}
+.badge-red{background:rgba(239,68,68,.18);color:var(--red);}
+.badge-grey{background:rgba(148,163,184,.12);color:var(--muted);}
+.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;}
+.pill-won{background:rgba(34,197,94,.18);color:var(--green);}
+.pill-lost{background:rgba(239,68,68,.18);color:var(--red);}
+.pill-flipped{background:rgba(167,139,250,.18);color:var(--flip);}
+.pill-open{background:rgba(59,130,246,.12);color:var(--blue);}
+
+/* ── COLOR HELPERS ── */
+.pos{color:var(--green);}.neg{color:var(--red);}.neu{color:var(--text);}
+
+/* ── W/L/F BAR ── */
+.wlf-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.wlf-bar{flex:1;height:5px;border-radius:3px;overflow:hidden;display:flex;gap:1px;}
+.wlf-seg{height:100%;border-radius:2px;}
+.wlf-lbl{font-size:11px;color:var(--muted);white-space:nowrap;}
+
+/* ── TABLES ── */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:8px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;padding:5px 8px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:5px 8px;border-bottom:1px solid rgba(42,45,62,.6);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+.q{max-width:180px;word-break:break-word;}
+
+/* ── STRATEGY FILTER PILLS ── */
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.seg-btn{
+  background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:5px 11px;font-size:12px;font-weight:500;color:var(--muted);
+  cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;
+}
+.seg-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+
+/* ── CUT BUTTON ── */
+.cut-btn{
+  background:rgba(239,68,68,.1);color:var(--red);
+  border:1px solid rgba(239,68,68,.25);border-radius:4px;
+  padding:3px 8px;font-size:10px;font-weight:600;
+  cursor:pointer;white-space:nowrap;transition:background .15s;
+}
+.cut-btn:hover{background:rgba(239,68,68,.25);}
+
+/* ── MODAL (slides up from bottom on mobile) ── */
+.modal-backdrop{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+  z-index:100;align-items:flex-end;justify-content:center;
+}
+.modal-backdrop.open{display:flex;}
+.modal{
+  background:#1a1d27;border:1px solid #2a2d3e;
+  border-radius:16px 16px 0 0;padding:24px;
+  width:100%;max-height:90vh;overflow-y:auto;
+}
+.modal h3{font-size:15px;margin-bottom:6px;}
+.modal-q{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5;}
+.modal-section{margin-bottom:14px;}
+.modal-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px;}
+.code-box{
+  background:#0f1117;border:1px solid #2a2d3e;border-radius:6px;
+  padding:10px 12px;font-family:'Menlo','Consolas',monospace;
+  font-size:11px;color:#e2e8f0;word-break:break-all;line-height:1.6;white-space:pre-wrap;
+}
+.modal-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+.btn{
+  padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;
+  cursor:pointer;border:none;transition:background .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn-copy{background:rgba(59,130,246,.18);color:var(--blue);border:1px solid rgba(59,130,246,.35);}
+.btn-copy:hover{background:rgba(59,130,246,.32);}
+.btn-gh{
+  background:rgba(34,197,94,.12);color:var(--green);
+  border:1px solid rgba(34,197,94,.28);text-decoration:none;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.btn-gh:hover{background:rgba(34,197,94,.25);}
+.btn-cancel{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid #2a2d3e;}
+.btn-cancel:hover{background:rgba(255,255,255,.1);}
+
+/* ── EQUITY CHART ── */
+.eq-sub{font-size:12px;color:var(--muted);margin-bottom:10px;}
+
+/* ── META ── */
+.meta{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.7;padding:14px 16px;border-top:1px solid var(--border);}
+
+/* ── DESKTOP OVERRIDES ── */
+@media(min-width:640px){
+  body{padding-bottom:0;}
+  .bottom-nav{display:none;}
+  .dtabs-wrap{display:block;}
+  .page{max-width:1200px;margin:0 auto;padding:24px;}
+  .port-kpis{grid-template-columns:repeat(4,1fr);}
+  .modal-backdrop{align-items:center;padding:20px;}
+  .modal{border-radius:14px;max-width:520px;max-height:none;}
+  .strategy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;}
+  .strategy-grid .card{margin-bottom:0;}
+  .kpi-val{font-size:20px;}
+}
+@media(max-width:380px){
+  .hide-xs{display:none;}
+}
 </style>
 </head>
 <body>
-<h1>📊 Polymarket Paper-Trade Dashboard</h1>
-<div class="updated">Last updated: <strong id="ts">—</strong> &nbsp;·&nbsp; auto-refreshes each cron run</div>
 
-<div class="strategies" id="strategies"></div>
-
-<div class="meta">
-  Positions sized at 10% of bankroll per bet. PnL shown as % of that allocation.<br>
-  <strong>Mid-priced YES</strong>: buy YES tokens in [0.10,0.50] ~5d before resolution, hold to settlement.<br>
-  <strong>Smart Flow</strong>: follow ≥3 smart-wallet consensus buys, consensus-exit on reversal signal.<br>
-  <strong>Macro</strong>: hold the dominant leg of macro resolution markets until year-end.
+<!-- Desktop sticky tab bar -->
+<div class="dtabs-wrap">
+  <div class="dtabs">
+    <button class="dtab active" onclick="showPage('overview')" id="dtab-overview">📊 Overview</button>
+    <button class="dtab" onclick="showPage('open')" id="dtab-open">📋 Open</button>
+    <button class="dtab" onclick="showPage('equity')" id="dtab-equity">📈 Equity</button>
+    <button class="dtab" onclick="showPage('history')" id="dtab-history">🏁 History</button>
+  </div>
 </div>
 
-<!-- Close-position modal -->
+<!-- ── OVERVIEW ── -->
+<div id="page-overview" class="page active">
+  <div class="page-hdr">
+    <h1>Polymarket Paper-Trade</h1>
+    <div class="updated">Last updated: <strong id="ts">—</strong></div>
+  </div>
+  <div id="port-kpis" class="port-kpis"></div>
+  <div id="strategy-grid" class="strategy-grid"></div>
+  <div class="meta">
+    10 % of bankroll per bet · PnL shown as % of that allocation<br>
+    <strong>Mid-priced YES</strong>: buy YES tokens in [0.10, 0.50] ~5 d before resolution, hold to settlement.<br>
+    <strong>Smart Flow</strong>: follow ≥ 3 smart-wallet consensus buys, exit on reversal signal.<br>
+    <strong>Macro</strong>: hold dominant leg of macro resolution markets until year-end.
+  </div>
+</div>
+
+<!-- ── OPEN POSITIONS ── -->
+<div id="page-open" class="page">
+  <div class="page-hdr"><h2>Open Positions</h2></div>
+  <div id="open-filter" class="seg"></div>
+  <div id="open-list"></div>
+</div>
+
+<!-- ── EQUITY CURVES ── -->
+<div id="page-equity" class="page">
+  <div class="page-hdr"><h2>Equity Curves</h2></div>
+  <div id="equity-charts"></div>
+</div>
+
+<!-- ── HISTORY ── -->
+<div id="page-history" class="page">
+  <div class="page-hdr"><h2>History</h2></div>
+  <div id="history-list"></div>
+</div>
+
+<!-- Bottom nav (mobile) -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="showPage('overview')" id="nav-overview">
+    <span class="nav-icon">📊</span><span class="nav-lbl">Overview</span>
+  </button>
+  <button class="nav-btn" onclick="showPage('open')" id="nav-open">
+    <span class="nav-icon">📋</span><span class="nav-lbl">Open</span>
+  </button>
+  <button class="nav-btn" onclick="showPage('equity')" id="nav-equity">
+    <span class="nav-icon">📈</span><span class="nav-lbl">Equity</span>
+  </button>
+  <button class="nav-btn" onclick="showPage('history')" id="nav-history">
+    <span class="nav-icon">🏁</span><span class="nav-lbl">History</span>
+  </button>
+</nav>
+
+<!-- Cut-position modal -->
 <div id="cut-modal" class="modal-backdrop" onclick="hideCut()">
   <div class="modal" onclick="event.stopPropagation()">
     <h3>✂ Close position</h3>
     <div class="modal-q" id="modal-q"></div>
-
     <div class="modal-section">
       <div class="modal-lbl">Run locally</div>
       <div class="code-box" id="modal-cmd"></div>
     </div>
-
     <div class="modal-section">
-      <div class="modal-lbl">Or use GitHub Actions — paste these values when prompted</div>
+      <div class="modal-lbl">GitHub Actions — paste these when prompted</div>
       <div class="code-box" id="modal-inputs"></div>
     </div>
-
     <div class="modal-actions">
       <button class="btn btn-copy" id="copy-btn" onclick="copyCmd()">📋 Copy command</button>
       <a class="btn btn-gh" id="modal-gh" href="" target="_blank" rel="noopener">⚡ Open Actions</a>
@@ -115,58 +257,377 @@
 </div>
 
 <script>
-const DATA        = {"generated": "2026-06-22 11:36 UTC", "strategies": [{"label": "Mid-priced YES", "strategy_id": "midprice_yes", "open": [{"question": "Grass Court Championships: Aryna Sabalenka vs Jessica Pegula", "entry": 0.24, "current": 0.655, "mtm": 0.1729, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Crude Oil (CL) hit (LOW) $70 by end of June?", "entry": 0.128, "current": 0.2305, "mtm": 0.0801, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will WTI Crude Oil (WTI) hit (LOW) $70 in June?", "entry": 0.23, "current": 0.335, "mtm": 0.0457, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Israel x Hezbollah permanent peace deal by June 30, 2026?", "entry": 0.113, "current": 0.1375, "mtm": 0.0217, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Russia capture Kostyantynivka by June 30?", "entry": 0.188, "current": 0.2135, "mtm": 0.0136, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will United States win on 2026-06-25?", "entry": 0.47, "current": 0.505, "mtm": 0.0074, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Halle Open: Alexander Zverev vs Taylor Fritz", "entry": 0.39, "current": 0.405, "mtm": 0.0038, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Nottingham Open: Marie Bouzkova vs Emma Navarro", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Bitcoin dip to $57,500 in June?", "entry": 0.116, "current": 0.1045, "mtm": -0.0099, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Bitcoin reach $67,500 in June?", "entry": 0.36, "current": 0.315, "mtm": -0.0125, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Claude Fable 5 be restored for US customers by July 1?", "entry": 0.5, "current": 0.435, "mtm": -0.013, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Bitcoin reach $70,000 in June?", "entry": 0.11, "current": 0.075, "mtm": -0.0318, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will OpenAI’s market cap be between $1.25T and $1.5T at market close on IPO day?", "entry": 0.15, "current": 0.102, "mtm": -0.032, "status": "open", "pnl": null, "exit_date": ""}], "resolved": [{"question": "Will J.D. Vance attend the next US x Iran diplomatic meeting?", "entry": 0.433, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.1309, "exit_date": "2026-06-21"}], "unrealized": 0.2448, "realized": 0.1309, "nW": 1, "nL": 0, "nF": 0}, {"label": "Smart Flow", "strategy_id": "smart_flow", "open": [{"question": "Will Belgium win on 2026-06-21?", "entry": 0.31, "current": 0.935, "mtm": 0.2016, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Germany win on 2026-06-20?", "entry": 0.35, "current": 0.705, "mtm": 0.1014, "status": "open", "pnl": null, "exit_date": ""}, {"question": "United States vs. Australia: Both Teams to Score", "entry": 0.49, "current": 0.9, "mtm": 0.0837, "status": "open", "pnl": null, "exit_date": ""}, {"question": "United States vs. Australia: O/U 2.5", "entry": 0.5, "current": 0.785, "mtm": 0.057, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: FURIA vs Team Falcons (BO5) - IEM Cologne Major Playoffs", "entry": 0.6, "current": 0.885, "mtm": 0.0475, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Norway (-1.5)", "entry": 0.41, "current": 0.555, "mtm": 0.0354, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Norway win on 2026-06-16?", "entry": 0.21, "current": 0.275, "mtm": 0.031, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 8.5 Total Corners", "entry": 0.37, "current": 0.48, "mtm": 0.0297, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 9.5 Total Corners", "entry": 0.5, "current": 0.645, "mtm": 0.029, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Norway (-2.5)", "entry": 0.65, "current": 0.795, "mtm": 0.0223, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New York Liberty vs. Los Angeles Sparks", "entry": 0.08, "current": 0.095, "mtm": 0.0188, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: Both Teams to Score", "entry": 0.59, "current": 0.695, "mtm": 0.0178, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Argentina win the 2026 FIFA World Cup?", "entry": 0.119, "current": 0.1295, "mtm": 0.0088, "status": "open", "pnl": null, "exit_date": ""}, {"question": " Iran agrees to end enrichment of uranium by December 31?", "entry": 0.65, "current": 0.685, "mtm": 0.0054, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will JD Vance attend the US-Iran Signing Ceremony?", "entry": 0.11, "current": 0.115, "mtm": 0.0045, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will the U.S. invade Iran before 2027?", "entry": 0.13, "current": 0.135, "mtm": 0.0038, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Norway win on 2026-06-22?", "entry": 0.43, "current": 0.445, "mtm": 0.0035, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 3.5", "entry": 0.094, "current": 0.097, "mtm": 0.0032, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Belgium vs. IR Iran: O/U 0.5", "entry": 0.85, "current": 0.8715, "mtm": 0.0025, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Egypt win on 2026-06-21?", "entry": 0.25, "current": 0.255, "mtm": 0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Belgium vs. IR Iran end in a draw?", "entry": 0.86, "current": 0.875, "mtm": 0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Trump agree to unfreeze Iranian assets by June 30?", "entry": 0.86, "current": 0.875, "mtm": 0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Switzerland vs. Bosnia and Herzegovina: Both Teams to Score", "entry": 0.56, "current": 0.565, "mtm": 0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: Vitality vs Team Falcons (BO3) - IEM Cologne Major Playoffs", "entry": 0.65, "current": 0.655, "mtm": 0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Argentina win on 2026-06-22?", "entry": 0.67, "current": 0.675, "mtm": 0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Norway leading at halftime?", "entry": 0.64, "current": 0.64, "mtm": 0.0, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Jordan win on 2026-06-17?", "entry": 0.9, "current": 0.895, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Germany (-1.5)", "entry": 0.9, "current": 0.895, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Grass Court Championships: Aryna Sabalenka vs Jessica Pegula", "entry": 0.81, "current": 0.805, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will the Democratic Party control the House after the 2026 Midterm elections?", "entry": 0.81, "current": 0.805, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will the Republican Party control the House after the 2026 Midterm elections?", "entry": 0.81, "current": 0.805, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Spain (-3.5)", "entry": 0.77, "current": 0.765, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Egypt win on 2026-06-21?", "entry": 0.75, "current": 0.745, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: Both Teams to Score", "entry": 0.74, "current": 0.735, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Norway win on 2026-06-16?", "entry": 0.73, "current": 0.725, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 3.5", "entry": 0.73, "current": 0.725, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Germany vs. Côte d'Ivoire end in a draw?", "entry": 0.71, "current": 0.705, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 4.5", "entry": 0.69, "current": 0.685, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs", "entry": 0.68, "current": 0.675, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Portugal win the 2026 FIFA World Cup?", "entry": 0.067, "current": 0.0665, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Switzerland win on 2026-06-18?", "entry": 0.66, "current": 0.655, "mtm": -0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 2.5", "entry": 0.61, "current": 0.605, "mtm": -0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Netherlands vs. Sweden: O/U 2.5", "entry": 0.59, "current": 0.585, "mtm": -0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 2.5", "entry": 0.57, "current": 0.565, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Netherlands win on 2026-06-20?", "entry": 0.57, "current": 0.565, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will New Zealand win on 2026-06-21?", "entry": 0.55, "current": 0.545, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Mexico win on 2026-06-18?", "entry": 0.54, "current": 0.535, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Türkiye win on 2026-06-19?", "entry": 0.53, "current": 0.525, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Canada (-1.5)", "entry": 0.52, "current": 0.515, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Argentina vs. Austria: O/U 2.5", "entry": 0.51, "current": 0.505, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs", "entry": 0.5, "current": 0.495, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Ecuador win on 2026-06-20?", "entry": 0.5, "current": 0.495, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Czechia win on 2026-06-18?", "entry": 0.48, "current": 0.475, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Switzerland vs. Bosnia and Herzegovina: O/U 2.5", "entry": 0.47, "current": 0.465, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Austria vs. Jordan: O/U 2.5", "entry": 0.47, "current": 0.465, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Mexico win on 2026-06-18?", "entry": 0.47, "current": 0.465, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Belgium (-1.5)", "entry": 0.45, "current": 0.445, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Starmer out by June 30, 2026?", "entry": 0.89, "current": 0.88, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will England win on 2026-06-17?", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Netherlands win on 2026-06-20?", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 2.5", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 2.5", "entry": 0.43, "current": 0.425, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 5.5", "entry": 0.43, "current": 0.425, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Netherlands vs. Sweden: Both Teams to Score", "entry": 0.41, "current": 0.405, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Morocco win on 2026-06-19?", "entry": 0.41, "current": 0.405, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 2.5", "entry": 0.4, "current": 0.395, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Switzerland (-1.5)", "entry": 0.39, "current": 0.385, "mtm": -0.0013, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Algeria win on 2026-06-22?", "entry": 0.38, "current": 0.375, "mtm": -0.0013, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs", "entry": 0.33, "current": 0.325, "mtm": -0.0015, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 4.5", "entry": 0.32, "current": 0.315, "mtm": -0.0016, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 8.5 Total Corners", "entry": 0.63, "current": 0.62, "mtm": -0.0016, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Germany win on 2026-06-20?", "entry": 0.3, "current": 0.295, "mtm": -0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will New Zealand vs. Egypt end in a draw?", "entry": 0.3, "current": 0.295, "mtm": -0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 7.5 Total Corners", "entry": 0.54, "current": 0.53, "mtm": -0.0019, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Portugal win on 2026-06-17?", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: Both Teams to Score", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: Germany O/U 0.5", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Switzerland vs. Bosnia and Herzegovina: O/U 3.5", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 6.5", "entry": 0.21, "current": 0.205, "mtm": -0.0024, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 2.5", "entry": 0.59, "current": 0.575, "mtm": -0.0025, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 8.5 Total Corners", "entry": 0.39, "current": 0.38, "mtm": -0.0026, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: Norway O/U 2.5", "entry": 0.75, "current": 0.73, "mtm": -0.0027, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs", "entry": 0.52, "current": 0.505, "mtm": -0.0029, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will New Zealand win on 2026-06-21?", "entry": 0.47, "current": 0.455, "mtm": -0.0032, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Grass Court Championships: Linda Noskova vs Alexandra Eala", "entry": 0.15, "current": 0.145, "mtm": -0.0033, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 1.5", "entry": 0.15, "current": 0.145, "mtm": -0.0033, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Curaçao win on 2026-06-20?", "entry": 0.075, "current": 0.0725, "mtm": -0.0033, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Argentina win on 2026-06-22?", "entry": 0.34, "current": 0.325, "mtm": -0.0044, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Germany (-1.5)", "entry": 0.11, "current": 0.105, "mtm": -0.0045, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Grass Court Championships: Jessica Pegula vs Linda Noskova", "entry": 0.66, "current": 0.63, "mtm": -0.0045, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: 1st Half O/U 1.5", "entry": 0.31, "current": 0.295, "mtm": -0.0048, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Egypt (-1.5)", "entry": 0.1, "current": 0.095, "mtm": -0.005, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Spain (-2.5)", "entry": 0.068, "current": 0.064, "mtm": -0.0059, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Iraq vs. Norway end in a draw?", "entry": 0.86, "current": 0.805, "mtm": -0.0064, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 8.5 Total Corners", "entry": 0.37, "current": 0.345, "mtm": -0.0068, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: Egypt O/U 2.5", "entry": 0.14, "current": 0.13, "mtm": -0.0071, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Switzerland win on 2026-06-18?", "entry": 0.38, "current": 0.345, "mtm": -0.0092, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 9.5 Total Corners", "entry": 0.4, "current": 0.355, "mtm": -0.0113, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Trump agree to withdraw troops from the Iranian region by June 30?", "entry": 0.7, "current": 0.595, "mtm": -0.015, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Belgium vs. IR Iran: O/U 0.5", "entry": 0.19, "current": 0.1285, "mtm": -0.0324, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Belgium win on 2026-06-21?", "entry": 0.1, "current": 0.065, "mtm": -0.035, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Abbas Araghchi attend the US-Iran Signing Ceremony?", "entry": 0.19, "current": 0.11, "mtm": -0.0421, "status": "open", "pnl": null, "exit_date": ""}, {"question": " Iran agrees to end enrichment of uranium by December 31?", "entry": 0.66, "current": 0.315, "mtm": -0.0523, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Shehbaz Sharif attend the US-Iran Signing Ceremony?", "entry": 0.28, "current": 0.124, "mtm": -0.0557, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Israel x Iran permanent peace deal by June 30, 2026?", "entry": 0.086, "current": 0.0235, "mtm": -0.0727, "status": "open", "pnl": null, "exit_date": ""}, {"question": " Iran agrees to end enrichment of uranium by July 31?", "entry": 0.55, "current": 0.075, "mtm": -0.0864, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will \"Obsession\" 6th Weekend Box Office be less than 14m?", "entry": 0.15, "current": 0.02, "mtm": -0.0867, "status": "open", "pnl": null, "exit_date": ""}], "resolved": [{"question": " Iran agrees to end enrichment of uranium by June 30?", "entry": 0.38, "current": 0.0395, "mtm": null, "status": "flipped", "pnl": -0.0896, "exit_date": "2026-06-21"}, {"question": "Strait of Hormuz traffic returns to normal by end of June?", "entry": 0.18, "current": 0.075, "mtm": null, "status": "flipped", "pnl": -0.0583, "exit_date": "2026-06-19"}, {"question": "Will the text of the US-Iran agreement be released by June 17?", "entry": 0.49, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.1041, "exit_date": "2026-06-18"}, {"question": "Will Trump agree to Iranian enrichment of uranium by June 30?", "entry": 0.276, "current": 0.0275, "mtm": null, "status": "closed", "pnl": -0.09, "exit_date": "2026-06-22"}, {"question": "Israel x Iran permanent peace deal by June 30, 2026?", "entry": 0.853, "current": 0.9485, "mtm": null, "status": "flipped", "pnl": 0.0112, "exit_date": "2026-06-19"}, {"question": "Will the next diplomatic US-Iran meeting be in Qatar?", "entry": 0.844, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.0185, "exit_date": "2026-06-20"}, {"question": "Will the text of the US-Iran agreement be released by June 16? ", "entry": 0.12, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-18"}, {"question": "Will the text of the US-Iran agreement be released by June 17?", "entry": 0.55, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-18"}, {"question": "Will the text of the US-Iran agreement be released by June 16? ", "entry": 0.9, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.0111, "exit_date": "2026-06-18"}, {"question": "Will the next diplomatic US-Iran meeting be in Switzerland?", "entry": 0.132, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-21"}, {"question": "US x Iran diplomatic meeting by June 21, 2026?", "entry": 0.88, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-21"}, {"question": "Will United States win on 2026-06-19?", "entry": 0.4, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-19"}, {"question": "US x Iran diplomatic meeting by June 21, 2026?", "entry": 0.83, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.0205, "exit_date": "2026-06-21"}], "unrealized": 0.084, "realized": -0.5725, "nW": 4, "nL": 5, "nF": 3}, {"label": "Macro (Fed cuts)", "strategy_id": "macro", "open": [{"question": "Will no Fed rate cuts happen in 2026?", "entry": 0.696, "current": 0.801, "mtm": 0.0151, "status": "open", "pnl": null, "exit_date": ""}], "resolved": [], "unrealized": 0.0151, "realized": 0.0, "nW": 0, "nL": 0, "nF": 0}]};
+const DATA        = {"generated": "2026-06-22 11:37 UTC", "strategies": [{"label": "Mid-priced YES", "strategy_id": "midprice_yes", "open": [{"question": "Grass Court Championships: Aryna Sabalenka vs Jessica Pegula", "entry": 0.24, "current": 0.655, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.1729}, {"question": "Will Crude Oil (CL) hit (LOW) $70 by end of June?", "entry": 0.128, "current": 0.2305, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.0801}, {"question": "Will WTI Crude Oil (WTI) hit (LOW) $70 in June?", "entry": 0.23, "current": 0.335, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": 0.0457}, {"question": "Israel x Hezbollah permanent peace deal by June 30, 2026?", "entry": 0.113, "current": 0.1375, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.0217}, {"question": "Will Russia capture Kostyantynivka by June 30?", "entry": 0.188, "current": 0.2135, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.0136}, {"question": "Will United States win on 2026-06-25?", "entry": 0.47, "current": 0.505, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.0074}, {"question": "Halle Open: Alexander Zverev vs Taylor Fritz", "entry": 0.39, "current": 0.405, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.0038}, {"question": "Nottingham Open: Marie Bouzkova vs Emma Navarro", "entry": 0.44, "current": 0.435, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0011}, {"question": "Will Bitcoin dip to $57,500 in June?", "entry": 0.116, "current": 0.1045, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0099}, {"question": "Will Bitcoin reach $67,500 in June?", "entry": 0.36, "current": 0.315, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0125}, {"question": "Will Claude Fable 5 be restored for US customers by July 1?", "entry": 0.5, "current": 0.435, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.013}, {"question": "Will Bitcoin reach $70,000 in June?", "entry": 0.11, "current": 0.075, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0318}, {"question": "Will OpenAI’s market cap be between $1.25T and $1.5T at market close on IPO day?", "entry": 0.15, "current": 0.102, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.032}], "resolved": [{"question": "Will J.D. Vance attend the next US x Iran diplomatic meeting?", "entry": 0.433, "current": 1.0, "status": "won", "pnl": 0.1309, "exit_date": "2026-06-21", "entry_date": "2026-06-20"}], "unrealized": 0.2448, "realized": 0.1309, "nW": 1, "nL": 0, "nF": 0}, {"label": "Smart Flow", "strategy_id": "smart_flow", "open": [{"question": "Will Belgium win on 2026-06-21?", "entry": 0.31, "current": 0.935, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": 0.2016}, {"question": "Will Germany win on 2026-06-20?", "entry": 0.35, "current": 0.705, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.1014}, {"question": "United States vs. Australia: Both Teams to Score", "entry": 0.49, "current": 0.9, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": 0.0837}, {"question": "United States vs. Australia: O/U 2.5", "entry": 0.5, "current": 0.785, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": 0.057}, {"question": "Counter-Strike: FURIA vs Team Falcons (BO5) - IEM Cologne Major Playoffs", "entry": 0.6, "current": 0.885, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": 0.0475}, {"question": "Spread: Norway (-1.5)", "entry": 0.41, "current": 0.555, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0354}, {"question": "Will Norway win on 2026-06-16?", "entry": 0.21, "current": 0.275, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.031}, {"question": "Iraq vs. Norway: O/U 8.5 Total Corners", "entry": 0.37, "current": 0.48, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0297}, {"question": "Iraq vs. Norway: O/U 9.5 Total Corners", "entry": 0.5, "current": 0.645, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.029}, {"question": "Spread: Norway (-2.5)", "entry": 0.65, "current": 0.795, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0223}, {"question": "New York Liberty vs. Los Angeles Sparks", "entry": 0.08, "current": 0.095, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": 0.0188}, {"question": "Iraq vs. Norway: Both Teams to Score", "entry": 0.59, "current": 0.695, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0178}, {"question": "Will the U.S. invade Iran before 2027?", "entry": 0.13, "current": 0.135, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0038}, {"question": "Spain vs. Saudi Arabia: O/U 3.5", "entry": 0.094, "current": 0.097, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": 0.0032}, {"question": "Belgium vs. IR Iran: O/U 0.5", "entry": 0.85, "current": 0.8715, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": 0.0025}, {"question": " Iran agrees to end enrichment of uranium by December 31?", "entry": 0.65, "current": 0.665, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": 0.0023}, {"question": "Will Egypt win on 2026-06-21?", "entry": 0.25, "current": 0.255, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": 0.002}, {"question": "Will Trump agree to unfreeze Iranian assets by June 30?", "entry": 0.86, "current": 0.875, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0017}, {"question": "Will Belgium vs. IR Iran end in a draw?", "entry": 0.86, "current": 0.875, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": 0.0017}, {"question": "Will Norway win on 2026-06-22?", "entry": 0.43, "current": 0.435, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": 0.0012}, {"question": "Switzerland vs. Bosnia and Herzegovina: Both Teams to Score", "entry": 0.56, "current": 0.565, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": 0.0009}, {"question": "Counter-Strike: Vitality vs Team Falcons (BO3) - IEM Cologne Major Playoffs", "entry": 0.65, "current": 0.655, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": 0.0008}, {"question": "Norway leading at halftime?", "entry": 0.64, "current": 0.64, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0}, {"question": "Will Argentina win the 2026 FIFA World Cup?", "entry": 0.119, "current": 0.1185, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0004}, {"question": "Will Jordan win on 2026-06-17?", "entry": 0.9, "current": 0.895, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0006}, {"question": "Spread: Germany (-1.5)", "entry": 0.9, "current": 0.895, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0006}, {"question": "Will the Democratic Party control the House after the 2026 Midterm elections?", "entry": 0.81, "current": 0.805, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0006}, {"question": "Will the Republican Party control the House after the 2026 Midterm elections?", "entry": 0.81, "current": 0.805, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0006}, {"question": "Grass Court Championships: Aryna Sabalenka vs Jessica Pegula", "entry": 0.81, "current": 0.805, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0006}, {"question": "Spread: Spain (-3.5)", "entry": 0.77, "current": 0.765, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0006}, {"question": "Will Egypt win on 2026-06-21?", "entry": 0.75, "current": 0.745, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0007}, {"question": "New Zealand vs. Egypt: Both Teams to Score", "entry": 0.74, "current": 0.735, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0007}, {"question": "Germany vs. Côte d'Ivoire: O/U 3.5", "entry": 0.73, "current": 0.725, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0007}, {"question": "Will Norway win on 2026-06-16?", "entry": 0.73, "current": 0.725, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0007}, {"question": "Will Germany vs. Côte d'Ivoire end in a draw?", "entry": 0.71, "current": 0.705, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0007}, {"question": "Spain vs. Saudi Arabia: O/U 4.5", "entry": 0.69, "current": 0.685, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0007}, {"question": "Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs", "entry": 0.68, "current": 0.675, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0007}, {"question": "Will Argentina win on 2026-06-22?", "entry": 0.67, "current": 0.665, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0007}, {"question": "Will Portugal win the 2026 FIFA World Cup?", "entry": 0.067, "current": 0.0665, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0007}, {"question": "Will Switzerland win on 2026-06-18?", "entry": 0.66, "current": 0.655, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0008}, {"question": "Iraq vs. Norway: O/U 2.5", "entry": 0.61, "current": 0.605, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0008}, {"question": "Netherlands vs. Sweden: O/U 2.5", "entry": 0.59, "current": 0.585, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0008}, {"question": "Will Netherlands win on 2026-06-20?", "entry": 0.57, "current": 0.565, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0009}, {"question": "Germany vs. Côte d'Ivoire: O/U 2.5", "entry": 0.57, "current": 0.565, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0009}, {"question": "Will New Zealand win on 2026-06-21?", "entry": 0.55, "current": 0.545, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0009}, {"question": "Will Mexico win on 2026-06-18?", "entry": 0.54, "current": 0.535, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0009}, {"question": "Will Türkiye win on 2026-06-19?", "entry": 0.53, "current": 0.525, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0009}, {"question": "Spread: Canada (-1.5)", "entry": 0.52, "current": 0.515, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.001}, {"question": "Argentina vs. Austria: O/U 2.5", "entry": 0.51, "current": 0.505, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.001}, {"question": "Will Ecuador win on 2026-06-20?", "entry": 0.5, "current": 0.495, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.001}, {"question": "Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs", "entry": 0.5, "current": 0.495, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.001}, {"question": "Will Czechia win on 2026-06-18?", "entry": 0.48, "current": 0.475, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.001}, {"question": "Austria vs. Jordan: O/U 2.5", "entry": 0.47, "current": 0.465, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0011}, {"question": "Will Mexico win on 2026-06-18?", "entry": 0.47, "current": 0.465, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0011}, {"question": "Switzerland vs. Bosnia and Herzegovina: O/U 2.5", "entry": 0.47, "current": 0.465, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0011}, {"question": "Spread: Belgium (-1.5)", "entry": 0.45, "current": 0.445, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0011}, {"question": "Starmer out by June 30, 2026?", "entry": 0.89, "current": 0.88, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0011}, {"question": "Will England win on 2026-06-17?", "entry": 0.44, "current": 0.435, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-17", "mtm": -0.0011}, {"question": "Will Netherlands win on 2026-06-20?", "entry": 0.44, "current": 0.435, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0011}, {"question": "Germany vs. Côte d'Ivoire: O/U 2.5", "entry": 0.44, "current": 0.435, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0011}, {"question": "New Zealand vs. Egypt: O/U 2.5", "entry": 0.43, "current": 0.425, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0012}, {"question": "Spain vs. Saudi Arabia: O/U 5.5", "entry": 0.43, "current": 0.425, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0012}, {"question": "Netherlands vs. Sweden: Both Teams to Score", "entry": 0.41, "current": 0.405, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0012}, {"question": "Will Morocco win on 2026-06-19?", "entry": 0.41, "current": 0.405, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0012}, {"question": "Iraq vs. Norway: O/U 2.5", "entry": 0.4, "current": 0.395, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0012}, {"question": "Spread: Switzerland (-1.5)", "entry": 0.39, "current": 0.385, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0013}, {"question": "Will Algeria win on 2026-06-22?", "entry": 0.38, "current": 0.375, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0013}, {"question": "Will Argentina win on 2026-06-22?", "entry": 0.34, "current": 0.335, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0015}, {"question": "Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs", "entry": 0.33, "current": 0.325, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0015}, {"question": "Spain vs. Saudi Arabia: O/U 4.5", "entry": 0.32, "current": 0.315, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0016}, {"question": "New Zealand vs. Egypt: O/U 8.5 Total Corners", "entry": 0.63, "current": 0.62, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0016}, {"question": "Will New Zealand vs. Egypt end in a draw?", "entry": 0.3, "current": 0.295, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0017}, {"question": "Will Germany win on 2026-06-20?", "entry": 0.3, "current": 0.295, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0017}, {"question": "New Zealand vs. Egypt: O/U 7.5 Total Corners", "entry": 0.54, "current": 0.53, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0019}, {"question": "Will Portugal win on 2026-06-17?", "entry": 0.25, "current": 0.245, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-17", "mtm": -0.002}, {"question": "Switzerland vs. Bosnia and Herzegovina: O/U 3.5", "entry": 0.25, "current": 0.245, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.002}, {"question": "Germany vs. Côte d'Ivoire: Both Teams to Score", "entry": 0.25, "current": 0.245, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.002}, {"question": "Germany vs. Côte d'Ivoire: Germany O/U 0.5", "entry": 0.25, "current": 0.245, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.002}, {"question": "Spain vs. Saudi Arabia: O/U 6.5", "entry": 0.21, "current": 0.205, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0024}, {"question": "New Zealand vs. Egypt: O/U 2.5", "entry": 0.59, "current": 0.575, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0025}, {"question": "New Zealand vs. Egypt: O/U 8.5 Total Corners", "entry": 0.39, "current": 0.38, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0026}, {"question": "Iraq vs. Norway: Norway O/U 2.5", "entry": 0.75, "current": 0.73, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0027}, {"question": "Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs", "entry": 0.52, "current": 0.505, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0029}, {"question": "Will New Zealand win on 2026-06-21?", "entry": 0.47, "current": 0.455, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0032}, {"question": "Grass Court Championships: Linda Noskova vs Alexandra Eala", "entry": 0.15, "current": 0.145, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0033}, {"question": "Will Curaçao win on 2026-06-20?", "entry": 0.075, "current": 0.0725, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0033}, {"question": "Germany vs. Côte d'Ivoire: O/U 1.5", "entry": 0.15, "current": 0.145, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0033}, {"question": "Spread: Germany (-1.5)", "entry": 0.11, "current": 0.105, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0045}, {"question": "Grass Court Championships: Jessica Pegula vs Linda Noskova", "entry": 0.66, "current": 0.63, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0045}, {"question": "New Zealand vs. Egypt: 1st Half O/U 1.5", "entry": 0.31, "current": 0.295, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0048}, {"question": "Spread: Egypt (-1.5)", "entry": 0.1, "current": 0.095, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.005}, {"question": "Spread: Spain (-2.5)", "entry": 0.068, "current": 0.064, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0059}, {"question": "Will Iraq vs. Norway end in a draw?", "entry": 0.86, "current": 0.805, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0064}, {"question": "Germany vs. Côte d'Ivoire: O/U 8.5 Total Corners", "entry": 0.37, "current": 0.345, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-20", "mtm": -0.0068}, {"question": "New Zealand vs. Egypt: Egypt O/U 2.5", "entry": 0.14, "current": 0.13, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0071}, {"question": "Will JD Vance attend the US-Iran Signing Ceremony?", "entry": 0.11, "current": 0.1, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0091}, {"question": "Will Switzerland win on 2026-06-18?", "entry": 0.38, "current": 0.345, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0092}, {"question": "Iraq vs. Norway: O/U 9.5 Total Corners", "entry": 0.4, "current": 0.355, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0113}, {"question": "Will Trump agree to withdraw troops from the Iranian region by June 30?", "entry": 0.7, "current": 0.595, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.015}, {"question": "Belgium vs. IR Iran: O/U 0.5", "entry": 0.19, "current": 0.1285, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.0324}, {"question": "Will Abbas Araghchi attend the US-Iran Signing Ceremony?", "entry": 0.19, "current": 0.125, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0342}, {"question": "Will Belgium win on 2026-06-21?", "entry": 0.1, "current": 0.065, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-21", "mtm": -0.035}, {"question": " Iran agrees to end enrichment of uranium by December 31?", "entry": 0.66, "current": 0.335, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0492}, {"question": "Will Shehbaz Sharif attend the US-Iran Signing Ceremony?", "entry": 0.28, "current": 0.124, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-18", "mtm": -0.0557}, {"question": "Israel x Iran permanent peace deal by June 30, 2026?", "entry": 0.086, "current": 0.024, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0721}, {"question": "Will \"Obsession\" 6th Weekend Box Office be less than 14m?", "entry": 0.15, "current": 0.037, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-22", "mtm": -0.0753}, {"question": " Iran agrees to end enrichment of uranium by July 31?", "entry": 0.55, "current": 0.075, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-19", "mtm": -0.0864}, {"question": "Will Trump agree to Iranian enrichment of uranium by June 30?", "entry": 0.276, "current": 0.028, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": -0.0899}], "resolved": [{"question": " Iran agrees to end enrichment of uranium by June 30?", "entry": 0.38, "current": 0.0395, "status": "flipped", "pnl": -0.0896, "exit_date": "2026-06-21", "entry_date": "2026-06-16"}, {"question": "Strait of Hormuz traffic returns to normal by end of June?", "entry": 0.18, "current": 0.075, "status": "flipped", "pnl": -0.0583, "exit_date": "2026-06-19", "entry_date": "2026-06-16"}, {"question": "Will the text of the US-Iran agreement be released by June 17?", "entry": 0.49, "current": 1.0, "status": "won", "pnl": 0.1041, "exit_date": "2026-06-18", "entry_date": "2026-06-16"}, {"question": "Israel x Iran permanent peace deal by June 30, 2026?", "entry": 0.853, "current": 0.9485, "status": "flipped", "pnl": 0.0112, "exit_date": "2026-06-19", "entry_date": "2026-06-16"}, {"question": "Will the next diplomatic US-Iran meeting be in Qatar?", "entry": 0.844, "current": 1.0, "status": "won", "pnl": 0.0185, "exit_date": "2026-06-20", "entry_date": "2026-06-16"}, {"question": "Will the text of the US-Iran agreement be released by June 16? ", "entry": 0.12, "current": 0.0, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-18", "entry_date": "2026-06-17"}, {"question": "Will the text of the US-Iran agreement be released by June 17?", "entry": 0.55, "current": 0.0, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-18", "entry_date": "2026-06-17"}, {"question": "Will the text of the US-Iran agreement be released by June 16? ", "entry": 0.9, "current": 1.0, "status": "won", "pnl": 0.0111, "exit_date": "2026-06-18", "entry_date": "2026-06-17"}, {"question": "Will the next diplomatic US-Iran meeting be in Switzerland?", "entry": 0.132, "current": 0.0, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-21", "entry_date": "2026-06-18"}, {"question": "US x Iran diplomatic meeting by June 21, 2026?", "entry": 0.88, "current": 0.0, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-21", "entry_date": "2026-06-19"}, {"question": "Will United States win on 2026-06-19?", "entry": 0.4, "current": 0.0, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-19", "entry_date": "2026-06-19"}, {"question": "US x Iran diplomatic meeting by June 21, 2026?", "entry": 0.83, "current": 1.0, "status": "won", "pnl": 0.0205, "exit_date": "2026-06-21", "entry_date": "2026-06-20"}], "unrealized": -0.0099, "realized": -0.4825, "nW": 4, "nL": 5, "nF": 3}, {"label": "Macro (Fed cuts)", "strategy_id": "macro", "open": [{"question": "Will no Fed rate cuts happen in 2026?", "entry": 0.696, "current": 0.813, "status": "open", "pnl": null, "exit_date": "", "entry_date": "2026-06-16", "mtm": 0.0168}], "resolved": [], "unrealized": 0.0168, "realized": 0.0, "nW": 0, "nL": 0, "nF": 0}]};
 const ACTIONS_URL = "https://github.com/skanderbellil/Bayes-ically-Rich/actions/workflows/close_position.yml";
+const S_COLORS    = ['#3b82f6', '#22c55e', '#f59e0b', '#a78bfa'];
 
-// ── formatting ───────────────────────────────────────────────────────────────
-// All PnL / MTM values are displayed as percentages (e.g. 0.17 → +17.3%)
+// ── NAVIGATION ───────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn, .dtab').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const nb = document.getElementById('nav-' + id);   if (nb) nb.classList.add('active');
+  const dt = document.getElementById('dtab-' + id);  if (dt) dt.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ── FORMATTERS ───────────────────────────────────────────────────────────────
 function fmtPct(v) {
   if (v === null || v === undefined) return '—';
   return (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
 }
-function cls(v) { return v > 0.001 ? 'pos' : v < -0.001 ? 'neg' : 'neu'; }
-function statusPill(s) { return `<span class="pill pill-${s}">${s}</span>`; }
+function cls(v)        { return v > 0.001 ? 'pos' : v < -0.001 ? 'neg' : 'neu'; }
+function pill(s)       { return `<span class="pill pill-${s}">${s}</span>`; }
+const esc = s => String(s)
+  .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+  .replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-// ── mini price-track SVG (0 → 1 number line) ─────────────────────────────────
-// Grey tick = entry price, coloured dot = current price, filled band shows movement
+// ── SPARKLINE ────────────────────────────────────────────────────────────────
 function miniTrack(entry, current) {
   if (entry == null || current == null) return '<span style="color:var(--border)">—</span>';
-  const W = 88, H = 14, mid = 7;
+  const W = 80, H = 14, mid = 7;
   const clamp = v => Math.min(Math.max(v, 0), 1);
-  const ex  = Math.round(clamp(entry)   * W);
-  const cx  = Math.round(clamp(current) * W);
-  const up  = current >= entry;
-  const col = up ? '#22c55e' : '#ef4444';
-  const lx  = Math.min(ex, cx), rx = Math.max(ex, cx);
+  const ex = Math.round(clamp(entry)   * W);
+  const cx = Math.round(clamp(current) * W);
+  const col = current >= entry ? '#22c55e' : '#ef4444';
+  const lx = Math.min(ex, cx), rx = Math.max(ex, cx);
   return [
     `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">`,
     `<rect x="0" y="${mid-1}" width="${W}" height="2" fill="#2a2d3e" rx="1"/>`,
     `<rect x="${lx}" y="${mid-3}" width="${Math.max(rx-lx,1)}" height="6" fill="${col}" opacity="0.3" rx="2"/>`,
     `<line x1="${ex}" y1="2" x2="${ex}" y2="${H-2}" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>`,
     `<circle cx="${cx}" cy="${mid}" r="3.5" fill="${col}"/>`,
-    `</svg>`,
+    '</svg>',
   ].join('');
 }
 
-// ── W/L/F horizontal bar ─────────────────────────────────────────────────────
+// ── W/L/F BAR ────────────────────────────────────────────────────────────────
 function wlfRow(nW, nL, nF) {
-  const total = nW + nL + nF;
-  if (!total) return '';
-  const pW = (nW / total * 100).toFixed(1);
-  const pL = (nL / total * 100).toFixed(1);
-  const pF = (nF / total * 100).toFixed(1);
+  const tot = nW + nL + nF;
+  if (!tot) return '';
   const segs = [
-    nW ? `<div class="wlf-seg" style="width:${pW}%;background:var(--green)"></div>` : '',
-    nL ? `<div class="wlf-seg" style="width:${pL}%;background:var(--red)"></div>`   : '',
-    nF ? `<div class="wlf-seg" style="width:${pF}%;background:var(--flip)"></div>`  : '',
+    nW ? `<div class="wlf-seg" style="width:${(nW/tot*100).toFixed(1)}%;background:var(--green)"></div>` : '',
+    nL ? `<div class="wlf-seg" style="width:${(nL/tot*100).toFixed(1)}%;background:var(--red)"></div>`   : '',
+    nF ? `<div class="wlf-seg" style="width:${(nF/tot*100).toFixed(1)}%;background:var(--flip)"></div>`  : '',
   ].join('');
   return `<div class="wlf-row">
     <div class="wlf-bar">${segs}</div>
-    <span class="wlf-label">${nW}W ${nL}L${nF ? ' ' + nF + 'F' : ''}</span>
+    <span class="wlf-lbl">${nW}W&nbsp;${nL}L${nF ? '&nbsp;' + nF + 'F' : ''}</span>
   </div>`;
 }
 
-// ── modal ─────────────────────────────────────────────────────────────────────
+// ── EQUITY CURVE DATA ─────────────────────────────────────────────────────────
+function strategyEquity(s) {
+  const today = DATA.generated.split(' ')[0];
+
+  // Find earliest entry date to anchor the curve at 0
+  const allDates = [...s.open, ...s.resolved].map(r => r.entry_date).filter(Boolean).sort();
+  const pts = allDates.length ? [{date: allDates[0], cum: 0}] : [];
+
+  // Walk resolved positions in exit-date order
+  const closed = s.resolved
+    .filter(r => r.exit_date && r.pnl != null)
+    .sort((a, b) => a.exit_date.localeCompare(b.exit_date));
+
+  let cum = 0;
+  for (const r of closed) {
+    cum += r.pnl;
+    if (pts.length && pts[pts.length - 1].date === r.exit_date) {
+      pts[pts.length - 1].cum = +cum.toFixed(4);
+    } else {
+      pts.push({date: r.exit_date, cum: +cum.toFixed(4)});
+    }
+  }
+
+  // Today's trailing point = realized + unrealized
+  const todayCum = +(cum + s.unrealized).toFixed(4);
+  if (pts.length && pts[pts.length - 1].date === today) {
+    pts[pts.length - 1].cum = todayCum;
+  } else {
+    pts.push({date: today, cum: todayCum});
+  }
+
+  return pts;
+}
+
+function portfolioEquity() {
+  const today = DATA.generated.split(' ')[0];
+
+  const allStartDates = DATA.strategies
+    .flatMap(s => [...s.open, ...s.resolved].map(r => r.entry_date).filter(Boolean))
+    .sort();
+  const pts = allStartDates.length ? [{date: allStartDates[0], cum: 0}] : [];
+
+  const allClosed = DATA.strategies
+    .flatMap(s => s.resolved.filter(r => r.exit_date && r.pnl != null))
+    .sort((a, b) => a.exit_date.localeCompare(b.exit_date));
+
+  let cum = 0;
+  for (const r of allClosed) {
+    cum += r.pnl;
+    if (pts.length && pts[pts.length - 1].date === r.exit_date) {
+      pts[pts.length - 1].cum = +cum.toFixed(4);
+    } else {
+      pts.push({date: r.exit_date, cum: +cum.toFixed(4)});
+    }
+  }
+
+  const totalUnrealized = DATA.strategies.reduce((s, d) => s + d.unrealized, 0);
+  const todayCum = +(cum + totalUnrealized).toFixed(4);
+  if (pts.length && pts[pts.length - 1].date === today) {
+    pts[pts.length - 1].cum = todayCum;
+  } else {
+    pts.push({date: today, cum: todayCum});
+  }
+
+  return pts;
+}
+
+// ── EQUITY SVG ────────────────────────────────────────────────────────────────
+function equitySVG(pts, color) {
+  const W = 320, H = 155;
+  const pad = {t: 18, r: 14, b: 28, l: 46};
+  const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+
+  if (!pts || pts.length < 2) {
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+      <text x="${W/2}" y="${H/2}" fill="#94a3b8" font-size="11"
+            text-anchor="middle" dominant-baseline="middle">No resolved trades yet</text>
+    </svg>`;
+  }
+
+  const cums  = pts.map(p => p.cum);
+  const minC  = Math.min(Math.min(...cums), 0);
+  const maxC  = Math.max(Math.max(...cums), 0);
+  const range = maxC - minC || 0.001;
+  const n     = pts.length;
+
+  const xOf = i => pad.l + (i / (n - 1)) * cW;
+  const yOf = c => pad.t + cH - ((c - minC) / range) * cH;
+  const y0  = yOf(0);
+
+  // Polyline + area
+  const pstr  = pts.map((p, i) => `${xOf(i).toFixed(1)},${yOf(p.cum).toFixed(1)}`).join(' ');
+  const areaD = `M${xOf(0).toFixed(1)},${y0.toFixed(1)} ` +
+    pts.map((p, i) => `L${xOf(i).toFixed(1)},${yOf(p.cum).toFixed(1)}`).join(' ') +
+    ` L${xOf(n-1).toFixed(1)},${y0.toFixed(1)} Z`;
+
+  const lastCum  = cums[n - 1];
+  const dotColor = lastCum >= 0 ? '#22c55e' : '#ef4444';
+
+  // Y axis ticks: zero (solid), max, min
+  const ticks = [{v: 0, y: y0, lbl: '0%'}];
+  if (maxC > 0.005) ticks.push({v: maxC, y: pad.t,      lbl: (maxC * 100).toFixed(0) + '%'});
+  if (minC < -0.005) ticks.push({v: minC, y: pad.t + cH, lbl: (minC * 100).toFixed(0) + '%'});
+
+  const gridLines = ticks.map(t =>
+    `<line x1="${pad.l}" y1="${t.y.toFixed(1)}" x2="${(pad.l+cW).toFixed(1)}" y2="${t.y.toFixed(1)}"
+           stroke="#2a2d3e" stroke-width="1"${t.v === 0 ? '' : ' stroke-dasharray="3,2"'}/>`
+  ).join('');
+  const yLabels = ticks.map(t =>
+    `<text x="${pad.l - 5}" y="${(t.y + 3.5).toFixed(1)}"
+           fill="#94a3b8" font-size="9" text-anchor="end">${t.lbl}</text>`
+  ).join('');
+
+  // X axis labels: first, mid (if enough points), last
+  const xLbl = (i, anchor) =>
+    `<text x="${xOf(i).toFixed(1)}" y="${(H - 6).toFixed(1)}"
+           fill="#94a3b8" font-size="9" text-anchor="${anchor}">${pts[i].date.slice(5)}</text>`;
+  let xLabels = xLbl(0, 'middle') + xLbl(n - 1, 'middle');
+  if (n > 4) {
+    const mi = Math.round((n - 1) / 2);
+    xLabels += xLbl(mi, 'middle');
+  }
+
+  // Segment step-fill (positive green / negative red bands)
+  const bands = [];
+  for (let i = 0; i < n - 1; i++) {
+    const x1 = xOf(i), x2 = xOf(i + 1);
+    const c1 = pts[i].cum, c2 = pts[i + 1].cum;
+    const yTop1 = yOf(Math.max(c1, 0)), yTop2 = yOf(Math.max(c2, 0));
+    const yBot1 = yOf(Math.min(c1, 0)), yBot2 = yOf(Math.min(c2, 0));
+    if (Math.max(c1, c2) > 0)
+      bands.push(`<polygon points="${x1.toFixed(1)},${y0.toFixed(1)} ${x1.toFixed(1)},${yTop1.toFixed(1)} ${x2.toFixed(1)},${yTop2.toFixed(1)} ${x2.toFixed(1)},${y0.toFixed(1)}" fill="#22c55e" opacity="0.10"/>`);
+    if (Math.min(c1, c2) < 0)
+      bands.push(`<polygon points="${x1.toFixed(1)},${y0.toFixed(1)} ${x1.toFixed(1)},${yBot1.toFixed(1)} ${x2.toFixed(1)},${yBot2.toFixed(1)} ${x2.toFixed(1)},${y0.toFixed(1)}" fill="#ef4444" opacity="0.10"/>`);
+  }
+
+  // Dot labels for every resolved point (skip first anchor)
+  const dotLabels = [];
+  pts.slice(1, -1).forEach((p, ii) => {
+    const i = ii + 1;
+    const x = xOf(i), y = yOf(p.cum);
+    const dc = p.cum >= 0 ? '#22c55e' : '#ef4444';
+    dotLabels.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${dc}" opacity="0.8"/>`);
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+    ${gridLines}
+    ${yLabels}
+    ${bands.join('')}
+    <polyline points="${pstr}" fill="none" stroke="${color}" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round"/>
+    ${dotLabels.join('')}
+    <circle cx="${xOf(n-1).toFixed(1)}" cy="${yOf(lastCum).toFixed(1)}"
+            r="4.5" fill="${dotColor}" stroke="var(--bg)" stroke-width="2"/>
+    ${xLabels}
+  </svg>`;
+}
+
+// ── PAGE: OVERVIEW ────────────────────────────────────────────────────────────
+function buildOverview() {
+  const totalU   = DATA.strategies.reduce((s, d) => s + d.unrealized, 0);
+  const totalR   = DATA.strategies.reduce((s, d) => s + d.realized,   0);
+  const totalMTM = totalU + totalR;
+  const totalO   = DATA.strategies.reduce((s, d) => s + d.open.length, 0);
+
+  document.getElementById('port-kpis').innerHTML = `
+    <div class="port-kpi">
+      <div class="kpi-lbl">Portfolio MTM</div>
+      <div class="kpi-val ${cls(totalMTM)}">${fmtPct(totalMTM)}</div>
+    </div>
+    <div class="port-kpi">
+      <div class="kpi-lbl">Unrealized</div>
+      <div class="kpi-val ${cls(totalU)}">${fmtPct(totalU)}</div>
+    </div>
+    <div class="port-kpi">
+      <div class="kpi-lbl">Realized</div>
+      <div class="kpi-val ${cls(totalR)}">${fmtPct(totalR)}</div>
+    </div>
+    <div class="port-kpi">
+      <div class="kpi-lbl">Open Positions</div>
+      <div class="kpi-val neu">${totalO}</div>
+    </div>`;
+
+  document.getElementById('strategy-grid').innerHTML = DATA.strategies.map(d => {
+    const tot  = d.unrealized + d.realized;
+    const bdge = tot > 0.001 ? '<span class="badge badge-green">▲ profitable</span>'
+               : tot < -0.001 ? '<span class="badge badge-red">▼ drawdown</span>'
+               : '<span class="badge badge-grey">flat</span>';
+    const nR = d.nW + d.nL + d.nF;
+    return `<div class="card">
+      <div class="card-title">${d.label} ${bdge}</div>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-lbl">Total MTM</div><div class="kpi-val ${cls(tot)}">${fmtPct(tot)}</div></div>
+        <div class="kpi"><div class="kpi-lbl">Unrealized</div><div class="kpi-val ${cls(d.unrealized)}">${fmtPct(d.unrealized)}</div></div>
+        <div class="kpi"><div class="kpi-lbl">Realized</div><div class="kpi-val ${cls(d.realized)}">${fmtPct(d.realized)}</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:${nR?'6px':'0'}">
+        ${d.open.length} open · ${d.resolved.length} resolved${nR ? ' (' + d.nW + 'W/' + d.nL + 'L' + (d.nF ? '/' + d.nF + 'F' : '') + ')' : ''}
+      </div>
+      ${nR ? wlfRow(d.nW, d.nL, d.nF) : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── PAGE: OPEN POSITIONS ──────────────────────────────────────────────────────
+function buildOpen() {
+  // Filter pill buttons
+  document.getElementById('open-filter').innerHTML = DATA.strategies.map((d, i) =>
+    `<button class="seg-btn${i===0?' active':''}" onclick="filterOpen(${i})" id="ofilt-${i}">
+      ${d.label} <span style="opacity:.65">${d.open.length}</span>
+    </button>`
+  ).join('');
+
+  // Strategy sections
+  document.getElementById('open-list').innerHTML = DATA.strategies.map((d, i) => {
+    const show = i === 0 ? 'block' : 'none';
+    if (!d.open.length) {
+      return `<div id="open-sec-${i}" style="display:${show}">
+        <div class="card"><div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No open positions</div></div>
+      </div>`;
+    }
+    const rows = d.open.map(r => `<tr>
+      <td class="q">${r.question}</td>
+      <td style="padding-right:2px">${miniTrack(r.entry, r.current)}</td>
+      <td class="hide-xs">${r.entry   != null ? r.entry.toFixed(3)   : '—'}</td>
+      <td>${r.current != null ? r.current.toFixed(3) : '—'}</td>
+      <td class="${cls(r.mtm)}">${fmtPct(r.mtm)}</td>
+      <td><button class="cut-btn" data-sid="${d.strategy_id}" data-q="${esc(r.question)}" onclick="openCut(this)">✂</button></td>
+    </tr>`).join('');
+
+    return `<div id="open-sec-${i}" style="display:${show}">
+      <div class="card">
+        <div class="card-title">${d.label}
+          <span style="font-size:12px;font-weight:400;color:var(--muted)">${d.open.length} positions</span>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Question</th><th>Track</th>
+              <th class="hide-xs">Entry</th><th>Now</th><th>MTM</th><th></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterOpen(idx) {
+  DATA.strategies.forEach((_, i) => {
+    const sec = document.getElementById('open-sec-' + i);
+    const btn = document.getElementById('ofilt-' + i);
+    if (sec) sec.style.display = i === idx ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', i === idx);
+  });
+}
+
+// ── PAGE: EQUITY CURVES ───────────────────────────────────────────────────────
+function buildEquity() {
+  const portPts  = portfolioEquity();
+  const portLast = portPts.length ? portPts[portPts.length - 1].cum : 0;
+
+  let html = `<div class="card">
+    <div class="card-title">📊 All Strategies Combined</div>
+    <div class="eq-sub ${cls(portLast)}">${fmtPct(portLast)} combined MTM</div>
+    ${equitySVG(portPts, '#3b82f6')}
+  </div>`;
+
+  DATA.strategies.forEach((d, i) => {
+    const pts  = strategyEquity(d);
+    const last = pts.length ? pts[pts.length - 1].cum : 0;
+    const col  = S_COLORS[(i + 1) % S_COLORS.length];
+    const nR   = d.nW + d.nL + d.nF;
+    html += `<div class="card">
+      <div class="card-title">${d.label}</div>
+      <div class="eq-sub ${cls(last)}">${fmtPct(last)} · ${d.open.length} open${nR ? ' · ' + d.nW + 'W/' + d.nL + 'L' + (d.nF ? '/' + d.nF + 'F' : '') : ''}</div>
+      ${equitySVG(pts, col)}
+    </div>`;
+  });
+
+  document.getElementById('equity-charts').innerHTML = html;
+}
+
+// ── PAGE: HISTORY ─────────────────────────────────────────────────────────────
+function buildHistory() {
+  const sections = DATA.strategies.map(d => {
+    if (!d.resolved.length) return '';
+    const rows = [...d.resolved]
+      .sort((a, b) => (b.exit_date || '').localeCompare(a.exit_date || ''))
+      .map(r => `<tr>
+        <td class="q">${r.question}</td>
+        <td>${pill(r.status)}</td>
+        <td class="${cls(r.pnl)}">${fmtPct(r.pnl)}</td>
+        <td style="color:var(--muted);white-space:nowrap">${r.exit_date}</td>
+      </tr>`).join('');
+    return `<div class="card">
+      <div class="card-title">${d.label}</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Question</th><th>Status</th><th>PnL</th><th>Date</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('history-list').innerHTML = sections.trim() ||
+    '<div class="card"><div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No resolved positions yet</div></div>';
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
 let _currentCmd = '';
 
 function openCut(btn) {
@@ -181,96 +642,22 @@ function openCut(btn) {
   document.getElementById('copy-btn').textContent     = '📋 Copy command';
   document.getElementById('cut-modal').classList.add('open');
 }
-
 function hideCut() { document.getElementById('cut-modal').classList.remove('open'); }
-
 function copyCmd() {
   navigator.clipboard.writeText(_currentCmd).then(() => {
-    const btn = document.getElementById('copy-btn');
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => { btn.textContent = '📋 Copy command'; }, 1800);
+    const b = document.getElementById('copy-btn');
+    b.textContent = '✓ Copied!';
+    setTimeout(() => { b.textContent = '📋 Copy command'; }, 1800);
   });
 }
-
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCut(); });
 
-// ── card builder ──────────────────────────────────────────────────────────────
-function buildCard(d) {
-  const total  = d.unrealized + d.realized;
-  const totCls = cls(total);
-  const badge  = total > 0 ? '<span class="badge badge-green">▲ profitable</span>'
-               : total < 0 ? '<span class="badge badge-red">▼ drawdown</span>'
-               :              '<span class="badge badge-grey">flat</span>';
-  const nR = d.nW + d.nL + d.nF;
-  const res_summary = nR
-    ? `${d.nW}W / ${d.nL}L${d.nF ? ' / ' + d.nF + ' flip' : ''}`
-    : 'none yet';
-
-  // HTML-escape for use in data attributes
-  const esc = s => s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  const openRows = d.open.map(r => `
-    <tr>
-      <td class="q">${r.question}</td>
-      <td style="width:96px;padding-right:4px">${miniTrack(r.entry, r.current)}</td>
-      <td>${r.entry   != null ? r.entry.toFixed(3)   : '—'}</td>
-      <td>${r.current != null ? r.current.toFixed(3) : '—'}</td>
-      <td class="${cls(r.mtm)}">${fmtPct(r.mtm)}</td>
-      <td><button class="cut-btn" data-sid="${d.strategy_id}" data-q="${esc(r.question)}" onclick="openCut(this)">✂ cut</button></td>
-    </tr>`).join('');
-
-  const resolvedRows = d.resolved.map(r => `
-    <tr>
-      <td class="q">${r.question}</td>
-      <td>${statusPill(r.status)}</td>
-      <td class="${cls(r.pnl)}">${fmtPct(r.pnl)}</td>
-      <td style="color:var(--muted)">${r.exit_date}</td>
-    </tr>`).join('');
-
-  return `
-  <div class="card">
-    <div class="card-title">${d.label} ${badge}</div>
-    <div class="kpis">
-      <div class="kpi">
-        <div class="kpi-label">Total MTM</div>
-        <div class="kpi-value ${totCls}">${fmtPct(total)}</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Unrealized</div>
-        <div class="kpi-value ${cls(d.unrealized)}">${fmtPct(d.unrealized)}</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Realized</div>
-        <div class="kpi-value ${cls(d.realized)}">${fmtPct(d.realized)}</div>
-      </div>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:${nR ? 5 : 8}px">
-      ${d.open.length} open &nbsp;·&nbsp; ${d.resolved.length} resolved (${res_summary})
-    </div>
-    ${nR ? wlfRow(d.nW, d.nL, d.nF) : ''}
-
-    ${d.open.length ? `
-    <details open>
-      <summary>Open positions (${d.open.length})</summary>
-      <table>
-        <thead><tr><th>Question</th><th>Track (0→1)</th><th>Entry</th><th>Now</th><th>MTM %</th><th></th></tr></thead>
-        <tbody>${openRows}</tbody>
-      </table>
-    </details>` : ''}
-
-    ${d.resolved.length ? `
-    <details>
-      <summary>Resolved (${d.resolved.length})</summary>
-      <table>
-        <thead><tr><th>Question</th><th>Status</th><th>PnL %</th><th>Date</th></tr></thead>
-        <tbody>${resolvedRows}</tbody>
-      </table>
-    </details>` : ''}
-  </div>`;
-}
-
-document.getElementById('ts').textContent       = DATA.generated;
-document.getElementById('strategies').innerHTML = DATA.strategies.map(buildCard).join('');
+// ── INIT ──────────────────────────────────────────────────────────────────────
+document.getElementById('ts').textContent = DATA.generated;
+buildOverview();
+buildOpen();
+buildEquity();
+buildHistory();
 </script>
 </body>
 </html>
