@@ -22,6 +22,7 @@ Usage
 """
 import argparse
 import logging
+from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import numpy as np
@@ -51,6 +52,9 @@ def main() -> None:
     ap.add_argument("--days-min", type=int, default=DAYS_MIN, help="min days to resolution at entry")
     ap.add_argument("--days-max", type=int, default=DAYS_MAX, help="max days to resolution at entry")
     ap.add_argument("--min-volume", type=float, default=10_000.0, help="market volume screen")
+    ap.add_argument("--ledger-file", type=str,
+                    default="data/paper_trade/midprice_yes_positions.csv",
+                    help="path to the ledger CSV state file")
     ap.add_argument("--rebuild-backtest", action="store_true", help="recompute the baked-in benchmark from the API")
     ap.add_argument("--dry-run", action="store_true", help="scan and print, no write")
     args = ap.parse_args()
@@ -84,7 +88,8 @@ def main() -> None:
 
     ledger = update_ledger(bet_fraction=args.fraction, days_min=args.days_min,
                            days_max=args.days_max, lo=args.lo, hi=args.hi,
-                           min_volume=args.min_volume)
+                           min_volume=args.min_volume,
+                           state_file=Path(args.ledger_file))
     open_pos = ledger[ledger["status"] == "open"]
     closed = ledger[ledger["status"].isin(["won", "lost"])]
 
@@ -131,7 +136,7 @@ def main() -> None:
             print(f"  vs BENCHMARK win {float(bench['win_rate'])*100:.0f}%  "
                   f"mean {float(bench['mean_ret'])*100:+.1f}%/trade")
 
-    print(f"\n  Ledger → data/paper_trade/midprice_yes_positions.csv  ({len(ledger)} rows)")
+    print(f"\n  Ledger → {args.ledger_file}  ({len(ledger)} rows)")
     print("✓  Update complete.")
 
 
