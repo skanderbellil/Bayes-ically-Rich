@@ -1,28 +1,30 @@
 #!/usr/bin/env python3
 """
-Polymarket — dip-averaging strategy backtest
-=============================================
+Polymarket — dip strategies: average-down vs persistent-dip exit
+================================================================
 
-The trajectory analysis showed ~53% of winners dip below entry before
-resolving YES.  Can we exploit this?
+From the trajectory analysis: ~53% of winners dip below entry, but a day-1
+dip barely changes P(WIN) while a dip that PERSISTS to day 2-3 collapses
+win rate to ~20-27%.  Two strategies follow:
 
-Two questions answered here:
+  dip_add   : enter half ($0.50) at day 0; if price drops ≥ DIP_THRESH in
+              days 1–3, add the other half at that lower price.  Remaining
+              cash earns 0 (no re-deployment if dip never triggers).
+              Per $1 bankroll: winner+dip → more tokens at better price;
+              no-dip → only half deployed (reduces both wins and losses).
 
-  Q1. Conditional probability: given a market in band has dipped X% by day D,
-      is P(WIN) higher or lower than the unconditional win rate?
-      → If dips are equally common in winners & losers, adding on dip is neutral.
-      → If dips are more common in winners → average-down is alpha.
-      → If dips are more common in losers  → dips are actually a SELL signal.
+  pers_exit : enter full $1 at day 0; if price is still below EXIT_FLOOR
+              of entry at day CHECK_DAY (default day 2), exit at bid
+              (price − haircut). Cuts persistent dippers, which are
+              3:1 losers per Q1.
 
-  Q2. Backtest of "add on dip" sizing vs flat hold:
-      Base: $1 at entry (5d out), hold to resolution.
-      Dip+:  $0.50 at entry + $0.50 more if price falls ≥ DIP_THRESH below
-             entry at any point in days 1–3 (buy the dip).
+Comparison baseline: flat hold ($1 at entry, hold to resolution).
 
 Usage
 -----
   python experiments/run_dip_strategy.py
-  python experiments/run_dip_strategy.py --n-markets 800 --dip 0.10 0.15 0.20 0.25 0.30
+  python experiments/run_dip_strategy.py --n-markets 800 --check-day 2
+  python experiments/run_dip_strategy.py --n-markets 800 --check-day 3
 """
 import argparse
 import logging
@@ -32,6 +34,7 @@ import _bootstrap  # noqa: F401
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 
@@ -40,6 +43,9 @@ from posterioralpha.polymarket.fetch import fetch_markets, fetch_token_history
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-5s  %(message)s",
                     datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
+
+DIP_THRESHOLDS  = [0.10, 0.15, 0.20, 0.25, 0.30]
+EXIT_FLOORS     = [1.00, 0.90, 0.80, 0.70]   # fraction of entry; exit if price < floor*entry
 
 
 def build_paths(markets, H, lo, hi, sleep):
@@ -71,35 +77,54 @@ def build_paths(markets, H, lo, hi, sleep):
     return paths
 
 
+def sim_flat(path, outcome, entry_price, haircut):
+    """$1 at entry, hold to resolution."""
+    entry = min(entry_price + haircut, 0.99)
+    return outcome / entry - 1.0
+
+
 def sim_dip_add(path, outcome, entry_price, haircut, dip_thresh, add_day_max=3):
     """
-    Simulate flat-hold vs dip-add for one market.
+    $0.50 at entry; add $0.50 if price drops ≥ dip_thresh within days 1..add_day_max.
+    Cash not deployed earns 0.  PnL on the full $1 bankroll.
 
-    flat: spend $1 at entry, hold to resolution.
-    dip:  spend $0.50 at entry; if price falls ≥ dip_thresh below entry
-          on any day 1..add_day_max, spend another $0.50 at that price.
+    No add:  tokens=0.50/entry held to res.  Other $0.50 in cash.
+             PnL = tokens × outcome + 0.50_cash - 1.0
+                 = 0.50/entry × outcome + 0.50 - 1.0
+                 = 0.50 × (outcome/entry - 1)
 
-    Returns (flat_pnl, dip_pnl, did_add).
+    With add at add_px:
+             total_tokens = 0.50/entry + 0.50/add_px  (all $1 deployed)
+             PnL = total_tokens × outcome - 1.0
     """
     entry = min(entry_price + haircut, 0.99)
-    flat_pnl = outcome / entry - 1.0
-
-    # dip strategy
-    cost = 0.50 * entry
-    units = 0.50 / entry
-    did_add = False
     for d in range(1, min(add_day_max + 1, len(path))):
-        px = path[d]
-        if px <= entry_price * (1.0 - dip_thresh):
-            add_px = min(px + haircut, 0.99)
-            cost  += 0.50 * add_px
-            units += 0.50 / add_px
-            did_add = True
-            break
-    # if no dip triggered, still spent $0.50 (half position, hold to res)
-    dip_pnl = units * outcome - cost   # net $PnL on $1 bankroll allocated
+        if path[d] <= entry_price * (1.0 - dip_thresh):
+            add_px = min(path[d] + haircut, 0.99)
+            total_tokens = 0.50 / entry + 0.50 / add_px
+            return total_tokens * outcome - 1.0, True
+    # no dip triggered — half in cash
+    return 0.50 * (outcome / entry - 1.0), False
 
-    return flat_pnl, dip_pnl, did_add
+
+def sim_pers_exit(path, outcome, entry_price, haircut, exit_floor, check_day):
+    """
+    $1 at entry.  On check_day, if price < exit_floor × entry_price → exit at bid.
+    Otherwise hold to resolution.
+    """
+    entry = min(entry_price + haircut, 0.99)
+    if len(path) > check_day:
+        px = path[check_day]
+        if px < exit_floor * entry_price:
+            bid = max(px - haircut, 0.0)
+            return bid / entry - 1.0, True
+    return outcome / entry - 1.0, False
+
+
+def sharpe(rets):
+    r = np.array(rets)
+    s = r.std(ddof=1)
+    return float(r.mean() / s) if s > 0 else float("nan")
 
 
 def main() -> None:
@@ -110,9 +135,9 @@ def main() -> None:
     ap.add_argument("--horizon", type=int, default=5)
     ap.add_argument("--band", type=float, nargs=2, default=[0.10, 0.50])
     ap.add_argument("--haircut", type=float, default=0.02)
-    ap.add_argument("--dip", type=float, nargs="+", default=[0.10, 0.15, 0.20, 0.25, 0.30])
-    ap.add_argument("--add-day-max", type=int, default=3,
-                    help="only add on dip within first N days after entry")
+    ap.add_argument("--add-day-max", type=int, default=3)
+    ap.add_argument("--check-day", type=int, default=2,
+                    help="day on which persistent-dip exit is evaluated")
     ap.add_argument("--sleep", type=float, default=0.1)
     ap.add_argument("--out", type=str, default="data/paper_trade/dip_strategy.csv")
     ap.add_argument("--plot", type=str, default="data/paper_trade/dip_strategy.png")
@@ -123,11 +148,10 @@ def main() -> None:
 
     print("""
 ╔══════════════════════════════════════════════════════════╗
-║  DIP-AVERAGING STRATEGY BACKTEST                          ║
-║  does buying the dip improve returns?                     ║
+║  DIP STRATEGIES: average-down vs persistent-dip exit     ║
 ╚══════════════════════════════════════════════════════════╝""")
-    print(f"  horizon {H}d · band [{lo:.2f},{hi:.2f}) · dip thresholds: "
-          f"{[f'{d:.0%}' for d in args.dip]} · add window days 1–{args.add_day_max}\n")
+    print(f"  horizon {H}d · band [{lo:.2f},{hi:.2f}) · add window days 1–{args.add_day_max} "
+          f"· exit check day {args.check_day}\n")
 
     markets = fetch_markets(n_markets=args.n_markets, min_volume=args.min_volume, closed=True)
     markets = markets[markets["outcome"].isin([0.0, 1.0])].reset_index(drop=True)
@@ -141,125 +165,134 @@ def main() -> None:
     n_all = len(paths)
     n_win = sum(1 for p in paths if p["outcome"] == 1.0)
     base_wr = n_win / n_all
-    print(f"  {n_all} markets in band  →  {n_win} winners ({base_wr:.0%} base win rate)\n")
+    flat_rets = np.array([sim_flat(p["path"], p["outcome"], p["entry_price"], args.haircut)
+                          for p in paths])
+    flat_sh = sharpe(flat_rets)
 
-    # ── Q1: conditional P(WIN) given dip by each day ─────────────────────────
-    print("  ── Q1: Does a dip predict win or loss? ──")
-    print(f"  {'dip≥':>6} | {'day 1':>8} | {'day 2':>8} | {'day 3':>8} | {'day 4':>8} | {'day 5':>8}")
-    print(f"  {'-'*6}-+-{'-'*8}-+-{'-'*8}-+-{'-'*8}-+-{'-'*8}-+-{'-'*8}")
+    print(f"  {n_all} markets  |  {n_win} winners ({base_wr:.0%})  |  "
+          f"flat Sharpe {flat_sh:.2f}  mean {flat_rets.mean():+.1%}  PnL {flat_rets.sum():+.2f}\n")
 
-    cond_rows = []
-    for thresh in args.dip:
-        row = {"thresh": thresh}
+    # ── Q1: conditional P(WIN) by dip depth and day ───────────────────────────
+    print("  ── Q1: P(WIN) conditional on dip (vs base {:.0%}) ──".format(base_wr))
+    print(f"  {'dip≥':>5} | {'day 1':>10} | {'day 2':>10} | {'day 3':>10}")
+    print(f"  {'-'*5}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}")
+    for thresh in DIP_THRESHOLDS:
         parts = []
-        for day in range(1, H + 1):
-            dipped = [p for p in paths if len(p["norm"]) > day and p["norm"][day] <= 1.0 - thresh]
-            n_d = len(dipped)
-            if n_d == 0:
+        for day in range(1, min(4, H + 1)):
+            dipped = [p for p in paths if len(p["norm"]) > day
+                      and p["norm"][day] <= 1.0 - thresh]
+            if not dipped:
                 parts.append("  —  ")
-                row[f"day{day}"] = float("nan")
             else:
-                wr_d = sum(1 for p in dipped if p["outcome"] == 1.0) / n_d
-                row[f"day{day}"] = round(wr_d, 3)
+                wr_d = sum(1 for p in dipped if p["outcome"] == 1.0) / len(dipped)
                 delta = wr_d - base_wr
-                parts.append(f"{wr_d:.0%}({delta:+.0%})")
-        row["base_wr"] = round(base_wr, 3)
-        cond_rows.append(row)
-        print(f"  {thresh:.0%}    | " + " | ".join(f"{p:>8}" for p in parts))
+                parts.append(f"{wr_d:.0%} ({delta:+.0%}) n={len(dipped)}")
+        print(f"  {thresh:.0%}   | " + " | ".join(f"{p:>10}" for p in parts))
 
-    pd.DataFrame(cond_rows).to_csv(args.out, index=False)
+    # ── Q2: dip-add vs flat ───────────────────────────────────────────────────
+    print(f"\n  ── Q2: Dip-add ($0.50 entry + $0.50 on dip, days 1–{args.add_day_max}) ──")
+    print(f"  {'dip≥':>5} | {'mean ret':>9} | {'vs flat':>8} | {'Sharpe':>7} | "
+          f"{'vs flat':>7} | {'PnL':>8} | {'%added':>7}")
+    print(f"  {'-'*5}-+-{'-'*9}-+-{'-'*8}-+-{'-'*7}-+-{'-'*7}-+-{'-'*8}-+-{'-'*7}")
 
-    # ── Q2: flat vs dip-add backtest ─────────────────────────────────────────
-    print(f"\n  ── Q2: Flat hold vs dip-add returns (add if dipped within days 1–{args.add_day_max}) ──")
-    print(f"  {'thresh':>7} | {'flat mean':>10} | {'dip mean':>10} | {'flat Sh':>8} | "
-          f"{'dip Sh':>8} | {'flat PnL':>9} | {'dip PnL':>9} | {'%added':>7}")
-    print(f"  {'-'*7}-+-{'-'*10}-+-{'-'*10}-+-{'-'*8}-+-{'-'*8}-+-{'-'*9}-+-{'-'*9}-+-{'-'*7}")
-
-    summary_rows = []
-    for thresh in args.dip:
-        flat_rets, dip_rets, added = [], [], []
+    dip_rows = []
+    for thresh in DIP_THRESHOLDS:
+        rets, added = [], []
         for p in paths:
-            fr, dr, did = sim_dip_add(p["path"], p["outcome"], p["entry_price"],
-                                       args.haircut, thresh, args.add_day_max)
-            flat_rets.append(fr); dip_rets.append(dr); added.append(int(did))
-        flat_rets = np.array(flat_rets)
-        dip_rets  = np.array(dip_rets)
-        f_sh = flat_rets.mean() / flat_rets.std(ddof=1) if flat_rets.std(ddof=1) > 0 else float("nan")
-        d_sh = dip_rets.mean()  / dip_rets.std(ddof=1)  if dip_rets.std(ddof=1)  > 0 else float("nan")
-        pct_added = sum(added) / len(added)
-        print(f"  {thresh:.0%}     | {flat_rets.mean():>+9.1%} | {dip_rets.mean():>+9.1%} | "
-              f"{f_sh:>8.2f} | {d_sh:>8.2f} | {flat_rets.sum():>+9.2f} | "
-              f"{dip_rets.sum():>+9.2f} | {pct_added:>6.0%}")
-        summary_rows.append({
-            "thresh": thresh, "n": n_all, "base_wr": round(base_wr, 3),
-            "flat_mean": round(float(flat_rets.mean()), 4),
-            "dip_mean": round(float(dip_rets.mean()), 4),
-            "flat_sharpe": round(float(f_sh), 3), "dip_sharpe": round(float(d_sh), 3),
-            "flat_pnl": round(float(flat_rets.sum()), 2),
-            "dip_pnl": round(float(dip_rets.sum()), 2),
-            "pct_added": round(pct_added, 3),
-        })
+            r, did = sim_dip_add(p["path"], p["outcome"], p["entry_price"],
+                                 args.haircut, thresh, args.add_day_max)
+            rets.append(r); added.append(int(did))
+        rets = np.array(rets)
+        sh = sharpe(rets)
+        pct = sum(added) / len(added)
+        print(f"  {thresh:.0%}   | {rets.mean():>+8.1%} | {rets.mean()-flat_rets.mean():>+7.1%} | "
+              f"{sh:>7.2f} | {sh-flat_sh:>+6.2f} | {rets.sum():>+8.2f} | {pct:>6.0%}")
+        dip_rows.append({"strategy": f"dip_add_{thresh:.0%}", "thresh": thresh,
+                         "mean_ret": round(float(rets.mean()), 4),
+                         "sharpe": round(sh, 3), "tot_pnl": round(float(rets.sum()), 2),
+                         "pct_added": round(pct, 3)})
+
+    # ── Q3: persistent-dip exit vs flat ──────────────────────────────────────
+    print(f"\n  ── Q3: Persistent-dip exit (exit at day {args.check_day} if price < floor × entry) ──")
+    print(f"  {'floor':>6} | {'mean ret':>9} | {'vs flat':>8} | {'Sharpe':>7} | "
+          f"{'vs flat':>7} | {'PnL':>8} | {'%exited':>8}")
+    print(f"  {'-'*6}-+-{'-'*9}-+-{'-'*8}-+-{'-'*7}-+-{'-'*7}-+-{'-'*8}-+-{'-'*8}")
+
+    exit_rows = []
+    for floor in EXIT_FLOORS:
+        rets, exited = [], []
+        for p in paths:
+            r, did = sim_pers_exit(p["path"], p["outcome"], p["entry_price"],
+                                   args.haircut, floor, args.check_day)
+            rets.append(r); exited.append(int(did))
+        rets = np.array(rets)
+        sh = sharpe(rets)
+        pct = sum(exited) / len(exited)
+        print(f"  {floor:.0%}   | {rets.mean():>+8.1%} | {rets.mean()-flat_rets.mean():>+7.1%} | "
+              f"{sh:>7.2f} | {sh-flat_sh:>+6.2f} | {rets.sum():>+8.2f} | {pct:>7.0%}")
+        exit_rows.append({"strategy": f"pers_exit_d{args.check_day}_{floor:.0%}",
+                          "floor": floor, "check_day": args.check_day,
+                          "mean_ret": round(float(rets.mean()), 4),
+                          "sharpe": round(sh, 3), "tot_pnl": round(float(rets.sum()), 2),
+                          "pct_exited": round(pct, 3)})
+
+    # Save
+    all_rows = (
+        [{"strategy": "flat_hold", "mean_ret": round(float(flat_rets.mean()), 4),
+          "sharpe": round(flat_sh, 3), "tot_pnl": round(float(flat_rets.sum()), 2)}]
+        + dip_rows + exit_rows
+    )
+    pd.DataFrame(all_rows).to_csv(args.out, index=False)
 
     # ── Plot ──────────────────────────────────────────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    fig.suptitle(f"Dip-averaging — long YES @ {H}d, band [{lo:.2f},{hi:.2f})",
+    fig.suptitle(f"Dip strategies — long YES @ {H}d, band [{lo:.2f},{hi:.2f})",
                  fontsize=12, fontweight="bold")
 
-    # Panel 1: conditional win rate by dip depth at day 1
+    # Panel 1: all price paths
     ax = axes[0]
-    for i, p in enumerate(paths):
-        norm = p["norm"]
-        color = "#22c55e" if p["outcome"] == 1.0 else "#ef4444"
-        alpha = 0.3 if len(paths) > 50 else 0.5
-        ax.plot(range(len(norm)), norm, color=color, lw=0.8, alpha=alpha)
-    ax.axhline(1.0, color="grey", lw=1.2, ls="--")
+    for p in paths:
+        c = "#22c55e" if p["outcome"] == 1.0 else "#ef4444"
+        ax.plot(range(len(p["norm"])), p["norm"], color=c, lw=0.8, alpha=0.35)
+    ax.axhline(1.0, color="grey", lw=1.2, ls="--", label="entry")
     ax.set_title("All price paths (green=win, red=loss)")
     ax.set_xlabel("Days since entry"); ax.set_ylabel("Price / entry")
     from matplotlib.lines import Line2D
-    ax.legend(handles=[Line2D([0],[0],color="#22c55e",lw=1.5,label=f"Win (n={n_win})"),
-                        Line2D([0],[0],color="#ef4444",lw=1.5,label=f"Loss (n={n_all-n_win})")],
+    ax.legend(handles=[Line2D([0],[0],color="#22c55e",lw=1.5,label=f"Win n={n_win}"),
+                        Line2D([0],[0],color="#ef4444",lw=1.5,label=f"Loss n={n_all-n_win})")],
               fontsize=9)
     ax.grid(alpha=0.3)
 
-    # Panel 2: conditional P(WIN) given dip at day 1 vs day 3
+    # Panel 2: dip-add Sharpe vs flat
     ax = axes[1]
-    threshs = [t * 100 for t in args.dip]
-    d1_wr, d3_wr = [], []
-    for thresh in args.dip:
-        d1_dip = [p for p in paths if len(p["norm"]) > 1 and p["norm"][1] <= 1.0 - thresh]
-        d3_dip = [p for p in paths if len(p["norm"]) > 3 and
-                  min(p["norm"][1:4]) <= 1.0 - thresh]
-        d1_wr.append(sum(1 for p in d1_dip if p["outcome"]==1.0)/len(d1_dip) if d1_dip else float("nan"))
-        d3_wr.append(sum(1 for p in d3_dip if p["outcome"]==1.0)/len(d3_dip) if d3_dip else float("nan"))
-    ax.axhline(base_wr, color="grey", lw=1.5, ls="--", label=f"Base win rate {base_wr:.0%}")
-    ax.plot(threshs, d1_wr, "o-", color="#3b82f6", lw=2, label="Dip by day 1")
-    ax.plot(threshs, d3_wr, "s-", color="#f59e0b", lw=2, label="Dip by day 3")
-    ax.set_title("P(WIN) conditional on dip depth")
-    ax.set_xlabel("Dip threshold (%)"); ax.set_ylabel("Win rate")
+    x = [t * 100 for t in DIP_THRESHOLDS]
+    dip_sharpes = [r["sharpe"] for r in dip_rows]
+    ax.plot(x, dip_sharpes, "o-", color="#06b6d4", lw=2, label="Dip-add")
+    ax.axhline(flat_sh, color="#94a3b8", lw=1.8, ls="--", label=f"Flat hold ({flat_sh:.2f})")
+    ax.set_title(f"Dip-add Sharpe by add threshold\n(add if dip ≥ thresh in days 1–{args.add_day_max})")
+    ax.set_xlabel("Add threshold (% below entry)"); ax.set_ylabel("Sharpe")
     ax.legend(fontsize=9); ax.grid(alpha=0.3)
-    ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
 
-    # Panel 3: flat vs dip Sharpe by threshold
+    # Panel 3: persistent-exit Sharpe vs flat
     ax = axes[2]
-    threshs = [r["thresh"] * 100 for r in summary_rows]
-    flat_sh = [r["flat_sharpe"] for r in summary_rows]
-    dip_sh  = [r["dip_sharpe"]  for r in summary_rows]
-    x = np.arange(len(threshs))
-    w = 0.35
-    ax.bar(x - w/2, flat_sh, w, color="#94a3b8", label="Flat hold")
-    ax.bar(x + w/2, dip_sh,  w, color="#06b6d4", label="Dip-add")
-    ax.axhline(0, color="grey", lw=0.8)
-    ax.set_xticks(x); ax.set_xticklabels([f"{t:.0f}%" for t in threshs])
-    ax.set_title(f"Sharpe: flat hold vs dip-add (days 1–{args.add_day_max})")
-    ax.set_xlabel("Dip threshold"); ax.set_ylabel("Sharpe ratio")
-    ax.legend(fontsize=9); ax.grid(alpha=0.3, axis="y")
+    x2 = [(1.0 - f) * 100 for f in EXIT_FLOORS]  # convert floor to dip depth
+    exit_sharpes = [r["sharpe"] for r in exit_rows]
+    exit_pcts    = [r["pct_exited"] for r in exit_rows]
+    ax.plot(x2, exit_sharpes, "s-", color="#f59e0b", lw=2, label=f"Pers-exit (day {args.check_day})")
+    ax.axhline(flat_sh, color="#94a3b8", lw=1.8, ls="--", label=f"Flat hold ({flat_sh:.2f})")
+    for xi, sh_i, pct in zip(x2, exit_sharpes, exit_pcts):
+        ax.annotate(f"{pct:.0%} exit", (xi, sh_i), textcoords="offset points",
+                    xytext=(4, 6), fontsize=8)
+    ax.set_title(f"Persistent-exit Sharpe by floor\n(exit on day {args.check_day} if price < floor × entry)")
+    ax.set_xlabel("Dip depth at exit (% below entry)"); ax.set_ylabel("Sharpe")
+    ax.legend(fontsize=9); ax.grid(alpha=0.3)
 
     fig.tight_layout()
     fig.savefig(args.plot, dpi=130, bbox_inches="tight")
 
     print(f"\n  Plot    → {args.plot}")
     print(f"  Summary → {args.out}")
-    print("✓  Dip-averaging backtest complete.")
+    print("✓  Dip strategy comparison complete.")
 
 
 if __name__ == "__main__":
