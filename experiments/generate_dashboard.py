@@ -355,9 +355,28 @@ tr:last-child td{border-bottom:none;}
 .sched-dot{width:8px;height:8px;border-radius:50%;margin-right:10px;flex-shrink:0;}
 .sched-name{flex:1;font-size:13px;}
 .sched-time{font-size:12px;color:var(--muted);margin-right:12px;white-space:nowrap;}
-.sched-cd{font-size:12px;font-weight:600;min-width:64px;text-align:right;font-variant-numeric:tabular-nums;}
+.sched-cd{font-size:12px;font-weight:600;min-width:58px;text-align:right;font-variant-numeric:tabular-nums;}
 .sched-cd.soon{color:var(--yellow);}
 .sched-cd.now{color:var(--green);}
+.sched-run{font-size:11px;color:var(--blue);text-decoration:none;margin-left:10px;
+           padding:3px 8px;border:1px solid rgba(59,130,246,.3);border-radius:6px;
+           white-space:nowrap;flex-shrink:0;transition:background .15s;
+           -webkit-tap-highlight-color:transparent;}
+.sched-run:hover{background:rgba(59,130,246,.15);}
+/* ── HEADER + RELOAD ── */
+.hdr-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.reload-btn{background:rgba(59,130,246,.12);color:var(--blue);
+            border:1px solid rgba(59,130,246,.3);border-radius:8px;
+            padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;
+            display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0;
+            -webkit-tap-highlight-color:transparent;transition:background .15s;}
+.reload-btn:hover{background:rgba(59,130,246,.22);}
+.reload-btn:active{background:rgba(59,130,246,.3);}
+.reload-btn .spin{display:inline-block;}
+.reload-btn.loading{pointer-events:none;opacity:.7;}
+.reload-btn.loading .spin{animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.sched-note{font-size:10px;color:var(--muted);margin-top:9px;line-height:1.55;}
 </style>
 </head>
 <body>
@@ -376,13 +395,24 @@ tr:last-child td{border-bottom:none;}
 <!-- ── OVERVIEW ── -->
 <div id="page-overview" class="page active">
   <div class="page-hdr">
-    <h1>Polymarket Paper-Trade</h1>
-    <div class="updated">Last updated: <strong id="ts">—</strong></div>
+    <div class="hdr-row">
+      <div>
+        <h1>Polymarket Paper-Trade</h1>
+        <div class="updated">Last updated: <strong id="ts">—</strong></div>
+      </div>
+      <button class="reload-btn" id="reload-btn" onclick="reloadData()" title="Re-fetch the latest deployed data (bypasses cache)">
+        <span class="spin">🔄</span> Reload
+      </button>
+    </div>
   </div>
   <div id="port-kpis" class="port-kpis"></div>
   <div class="card" style="margin-bottom:12px">
     <div class="card-title" style="margin-bottom:6px">⏱ Next Updates <span style="font-size:11px;font-weight:400;color:var(--muted)">(Paris time)</span></div>
     <div id="schedule-rows"></div>
+    <div class="sched-note">
+      Tap <strong>Run ↗</strong> to fetch fresh data now on GitHub Actions (press “Run workflow” there).
+      New data deploys ~2–5 min later — then tap <strong>🔄 Reload</strong> to pull it in.
+    </div>
   </div>
   <div id="strategy-grid" class="strategy-grid"></div>
   <div class="meta">
@@ -1036,11 +1066,13 @@ function buildBacktest() {
 // ── SCHEDULE COUNTDOWN ───────────────────────────────────────────────────────
 // Cron definitions: every N hours starting at startH UTC, at :minute past the hour
 const CRONS = [
-  {label:'Macro',          color:'#a78bfa', every:24, startH:9,  minute:0},
-  {label:'Smart Flow',     color:'#22c55e', every:4,  startH:0,  minute:30},
-  {label:'Mid-priced YES', color:'#f59e0b', every:6,  startH:0,  minute:15},
+  {label:'Macro',          color:'#a78bfa', every:24, startH:9,  minute:0,  wf:'paper_trade.yml'},
+  {label:'Smart Flow',     color:'#22c55e', every:4,  startH:0,  minute:30, wf:'smart_flow_paper.yml'},
+  {label:'Mid-priced YES', color:'#f59e0b', every:6,  startH:0,  minute:15, wf:'midprice_yes_paper.yml'},
 ];
 const PARIS_TZ = 'Europe/Paris';
+// Base URL for the Actions workflow pages (derive from the close-position ACTIONS_URL)
+const WF_BASE = ACTIONS_URL.replace(/[^/]+$/, '');
 
 function nextCronRun(every, startH, minute) {
   const now = new Date();
@@ -1097,6 +1129,8 @@ function buildSchedule() {
       <div class="sched-name">${c.label}</div>
       <div class="sched-time">${day} ${time}</div>
       <div class="sched-cd" id="scd-${i}">—</div>
+      <a class="sched-run" href="${WF_BASE}${c.wf}" target="_blank" rel="noopener"
+         title="Open GitHub Actions to run ${c.label} now">Run ↗</a>
     </div>`;
   }).join('');
 }
@@ -1118,6 +1152,18 @@ function tickSchedule() {
     el.textContent = text;
     el.className   = 'sched-cd' + (cls ? ' ' + cls : '');
   });
+}
+
+// ── MANUAL RELOAD ─────────────────────────────────────────────────────────────
+// The page is static (data baked in at build time), so "reload" re-fetches the
+// freshest deployed HTML. A cache-busting query param sidesteps the Pages CDN
+// (max-age=600) and the browser cache so a just-finished deploy shows immediately.
+function reloadData() {
+  const btn = document.getElementById('reload-btn');
+  if (btn) btn.classList.add('loading');
+  const u = new URL(window.location.href);
+  u.searchParams.set('t', Date.now().toString());
+  window.location.replace(u.toString());
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
