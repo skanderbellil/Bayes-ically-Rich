@@ -41,14 +41,17 @@
   .pill-flipped { background: rgba(167,139,250,.18); color: var(--flip); }
   .pill-open    { background: rgba(59,130,246,.12);  color: var(--blue); }
   .meta { font-size: 11px; color: var(--muted); margin-top: 20px; border-top: 1px solid var(--border); padding-top: 12px; }
+  /* W/L/F bar */
   .wlf-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .wlf-bar { flex: 1; height: 5px; border-radius: 3px; overflow: hidden; display: flex; gap: 1px; }
   .wlf-seg { height: 100%; border-radius: 2px; }
   .wlf-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  /* Cut button */
   .cut-btn { background: rgba(239,68,68,.1); color: var(--red); border: 1px solid rgba(239,68,68,.25);
              border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 600; cursor: pointer;
              line-height: 1.7; white-space: nowrap; transition: background .15s; }
   .cut-btn:hover { background: rgba(239,68,68,.25); }
+  /* Modal */
   .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7);
                     z-index: 100; align-items: center; justify-content: center; padding: 20px; }
   .modal-backdrop.open { display: flex; }
@@ -57,13 +60,15 @@
   .modal h3 { font-size: 15px; margin-bottom: 6px; }
   .modal-q { font-size: 12px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
   .modal-section { margin-bottom: 14px; }
-  .modal-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 5px; }
+  .modal-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+               color: var(--muted); margin-bottom: 5px; }
   .code-box { background: #0f1117; border: 1px solid #2a2d3e; border-radius: 6px; padding: 10px 12px;
               font-family: 'Menlo','Consolas',monospace; font-size: 11px; color: #e2e8f0;
               word-break: break-all; line-height: 1.6; white-space: pre-wrap; }
   .modal-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
-  .btn { padding: 8px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: background .15s; }
-  .btn-copy { background: rgba(59,130,246,.18); color: var(--blue); border: 1px solid rgba(59,130,246,.35); }
+  .btn { padding: 8px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;
+         cursor: pointer; border: none; transition: background .15s; }
+  .btn-copy   { background: rgba(59,130,246,.18); color: var(--blue); border: 1px solid rgba(59,130,246,.35); }
   .btn-copy:hover { background: rgba(59,130,246,.32); }
   .btn-gh { background: rgba(34,197,94,.12); color: var(--green); border: 1px solid rgba(34,197,94,.28);
             text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
@@ -75,25 +80,32 @@
 <body>
 <h1>📊 Polymarket Paper-Trade Dashboard</h1>
 <div class="updated">Last updated: <strong id="ts">—</strong> &nbsp;·&nbsp; auto-refreshes each cron run</div>
+
 <div class="strategies" id="strategies"></div>
+
 <div class="meta">
   Positions sized at 10% of bankroll per bet. PnL shown as % of that allocation.<br>
   <strong>Mid-priced YES</strong>: buy YES tokens in [0.10,0.50] ~5d before resolution, hold to settlement.<br>
   <strong>Smart Flow</strong>: follow ≥3 smart-wallet consensus buys, consensus-exit on reversal signal.<br>
   <strong>Macro</strong>: hold the dominant leg of macro resolution markets until year-end.
 </div>
+
+<!-- Close-position modal -->
 <div id="cut-modal" class="modal-backdrop" onclick="hideCut()">
   <div class="modal" onclick="event.stopPropagation()">
     <h3>✂ Close position</h3>
     <div class="modal-q" id="modal-q"></div>
+
     <div class="modal-section">
       <div class="modal-lbl">Run locally</div>
       <div class="code-box" id="modal-cmd"></div>
     </div>
+
     <div class="modal-section">
       <div class="modal-lbl">Or use GitHub Actions — paste these values when prompted</div>
       <div class="code-box" id="modal-inputs"></div>
     </div>
+
     <div class="modal-actions">
       <button class="btn btn-copy" id="copy-btn" onclick="copyCmd()">📋 Copy command</button>
       <a class="btn btn-gh" id="modal-gh" href="" target="_blank" rel="noopener">⚡ Open Actions</a>
@@ -101,93 +113,164 @@
     </div>
   </div>
 </div>
+
 <script>
-const DATA={"generated":"2026-06-22 11:02 UTC","strategies":[{"label":"Mid-priced YES","strategy_id":"midprice_yes","open":[{"question":"Grass Court Championships: Aryna Sabalenka vs Jessica Pegula","entry":0.24,"current":0.655,"mtm":0.1729,"status":"open","pnl":null,"exit_date":""},{"question":"Will Crude Oil (CL) hit (LOW) $70 by end of June?","entry":0.128,"current":0.2305,"mtm":0.0801,"status":"open","pnl":null,"exit_date":""},{"question":"Will WTI Crude Oil (WTI) hit (LOW) $70 in June?","entry":0.23,"current":0.335,"mtm":0.0457,"status":"open","pnl":null,"exit_date":""},{"question":"Israel x Hezbollah permanent peace deal by June 30, 2026?","entry":0.113,"current":0.1375,"mtm":0.0217,"status":"open","pnl":null,"exit_date":""},{"question":"Will Russia capture Kostyantynivka by June 30?","entry":0.188,"current":0.2135,"mtm":0.0136,"status":"open","pnl":null,"exit_date":""},{"question":"Will United States win on 2026-06-25?","entry":0.47,"current":0.505,"mtm":0.0074,"status":"open","pnl":null,"exit_date":""},{"question":"Halle Open: Alexander Zverev vs Taylor Fritz","entry":0.39,"current":0.405,"mtm":0.0038,"status":"open","pnl":null,"exit_date":""},{"question":"Nottingham Open: Marie Bouzkova vs Emma Navarro","entry":0.44,"current":0.435,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Will Bitcoin dip to $57,500 in June?","entry":0.116,"current":0.1045,"mtm":-0.0099,"status":"open","pnl":null,"exit_date":""},{"question":"Will Bitcoin reach $67,500 in June?","entry":0.36,"current":0.315,"mtm":-0.0125,"status":"open","pnl":null,"exit_date":""},{"question":"Will Claude Fable 5 be restored for US customers by July 1?","entry":0.5,"current":0.435,"mtm":-0.013,"status":"open","pnl":null,"exit_date":""},{"question":"Will Bitcoin reach $70,000 in June?","entry":0.11,"current":0.075,"mtm":-0.0318,"status":"open","pnl":null,"exit_date":""},{"question":"Will OpenAI's market cap be between $1.25T and $1.5T at market close on IPO day?","entry":0.15,"current":0.102,"mtm":-0.032,"status":"open","pnl":null,"exit_date":""}],"resolved":[{"question":"Will J.D. Vance attend the next US x Iran diplomatic meeting?","entry":0.433,"current":1.0,"mtm":null,"status":"won","pnl":0.1309,"exit_date":"2026-06-21"}],"unrealized":0.2448,"realized":0.1309,"nW":1,"nL":0,"nF":0},{"label":"Smart Flow","strategy_id":"smart_flow","open":[{"question":"Will Belgium win on 2026-06-21?","entry":0.31,"current":0.935,"mtm":0.2016,"status":"open","pnl":null,"exit_date":""},{"question":"Will Germany win on 2026-06-20?","entry":0.35,"current":0.705,"mtm":0.1014,"status":"open","pnl":null,"exit_date":""},{"question":"United States vs. Australia: Both Teams to Score","entry":0.49,"current":0.9,"mtm":0.0837,"status":"open","pnl":null,"exit_date":""},{"question":"United States vs. Australia: O/U 2.5","entry":0.5,"current":0.785,"mtm":0.057,"status":"open","pnl":null,"exit_date":""},{"question":"Counter-Strike: FURIA vs Team Falcons (BO5) - IEM Cologne Major Playoffs","entry":0.6,"current":0.885,"mtm":0.0475,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Norway (-1.5)","entry":0.41,"current":0.555,"mtm":0.0354,"status":"open","pnl":null,"exit_date":""},{"question":"Will Norway win on 2026-06-16?","entry":0.21,"current":0.275,"mtm":0.031,"status":"open","pnl":null,"exit_date":""},{"question":"Iraq vs. Norway: O/U 8.5 Total Corners","entry":0.37,"current":0.48,"mtm":0.0297,"status":"open","pnl":null,"exit_date":""},{"question":"Iraq vs. Norway: O/U 9.5 Total Corners","entry":0.5,"current":0.645,"mtm":0.029,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Norway (-2.5)","entry":0.65,"current":0.795,"mtm":0.0223,"status":"open","pnl":null,"exit_date":""},{"question":"New York Liberty vs. Los Angeles Sparks","entry":0.08,"current":0.095,"mtm":0.0188,"status":"open","pnl":null,"exit_date":""},{"question":"Iraq vs. Norway: Both Teams to Score","entry":0.59,"current":0.695,"mtm":0.0178,"status":"open","pnl":null,"exit_date":""},{"question":"Will the U.S. invade Iran before 2027?","entry":0.13,"current":0.135,"mtm":0.0038,"status":"open","pnl":null,"exit_date":""},{"question":"Spain vs. Saudi Arabia: O/U 3.5","entry":0.094,"current":0.097,"mtm":0.0032,"status":"open","pnl":null,"exit_date":""},{"question":"Belgium vs. IR Iran: O/U 0.5","entry":0.85,"current":0.8715,"mtm":0.0025,"status":"open","pnl":null,"exit_date":""},{"question":" Iran agrees to end enrichment of uranium by December 31?","entry":0.65,"current":0.665,"mtm":0.0023,"status":"open","pnl":null,"exit_date":""},{"question":"Will Egypt win on 2026-06-21?","entry":0.25,"current":0.255,"mtm":0.002,"status":"open","pnl":null,"exit_date":""},{"question":"Will Trump agree to unfreeze Iranian assets by June 30?","entry":0.86,"current":0.875,"mtm":0.0017,"status":"open","pnl":null,"exit_date":""},{"question":"Will Belgium vs. IR Iran end in a draw?","entry":0.86,"current":0.875,"mtm":0.0017,"status":"open","pnl":null,"exit_date":""},{"question":"Will Norway win on 2026-06-22?","entry":0.43,"current":0.435,"mtm":0.0012,"status":"open","pnl":null,"exit_date":""},{"question":"Switzerland vs. Bosnia and Herzegovina: Both Teams to Score","entry":0.56,"current":0.565,"mtm":0.0009,"status":"open","pnl":null,"exit_date":""},{"question":"Counter-Strike: Vitality vs Team Falcons (BO3) - IEM Cologne Major Playoffs","entry":0.65,"current":0.655,"mtm":0.0008,"status":"open","pnl":null,"exit_date":""},{"question":"Norway leading at halftime?","entry":0.64,"current":0.64,"mtm":0.0,"status":"open","pnl":null,"exit_date":""},{"question":"Will Argentina win the 2026 FIFA World Cup?","entry":0.119,"current":0.1185,"mtm":-0.0004,"status":"open","pnl":null,"exit_date":""},{"question":"Will Jordan win on 2026-06-17?","entry":0.9,"current":0.895,"mtm":-0.0006,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Germany (-1.5)","entry":0.9,"current":0.895,"mtm":-0.0006,"status":"open","pnl":null,"exit_date":""},{"question":"Will the Democratic Party control the House after the 2026 Midterm elections?","entry":0.81,"current":0.805,"mtm":-0.0006,"status":"open","pnl":null,"exit_date":""},{"question":"Will the Republican Party control the House after the 2026 Midterm elections?","entry":0.81,"current":0.805,"mtm":-0.0006,"status":"open","pnl":null,"exit_date":""},{"question":"Grass Court Championships: Aryna Sabalenka vs Jessica Pegula","entry":0.81,"current":0.805,"mtm":-0.0006,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Spain (-3.5)","entry":0.77,"current":0.765,"mtm":-0.0006,"status":"open","pnl":null,"exit_date":""},{"question":"Will Egypt win on 2026-06-21?","entry":0.75,"current":0.745,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: Both Teams to Score","entry":0.74,"current":0.735,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Germany vs. Côte d'Ivoire: O/U 3.5","entry":0.73,"current":0.725,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Will Norway win on 2026-06-16?","entry":0.73,"current":0.725,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Will Germany vs. Côte d'Ivoire end in a draw?","entry":0.71,"current":0.705,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Spain vs. Saudi Arabia: O/U 4.5","entry":0.69,"current":0.685,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs","entry":0.68,"current":0.675,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Will Argentina win on 2026-06-22?","entry":0.67,"current":0.665,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Will Portugal win the 2026 FIFA World Cup?","entry":0.067,"current":0.0665,"mtm":-0.0007,"status":"open","pnl":null,"exit_date":""},{"question":"Will Switzerland win on 2026-06-18?","entry":0.66,"current":0.655,"mtm":-0.0008,"status":"open","pnl":null,"exit_date":""},{"question":"Iraq vs. Norway: O/U 2.5","entry":0.61,"current":0.605,"mtm":-0.0008,"status":"open","pnl":null,"exit_date":""},{"question":"Netherlands vs. Sweden: O/U 2.5","entry":0.59,"current":0.585,"mtm":-0.0008,"status":"open","pnl":null,"exit_date":""},{"question":"Will Netherlands win on 2026-06-20?","entry":0.57,"current":0.565,"mtm":-0.0009,"status":"open","pnl":null,"exit_date":""},{"question":"Germany vs. Côte d'Ivoire: O/U 2.5","entry":0.57,"current":0.565,"mtm":-0.0009,"status":"open","pnl":null,"exit_date":""},{"question":"Will New Zealand win on 2026-06-21?","entry":0.55,"current":0.545,"mtm":-0.0009,"status":"open","pnl":null,"exit_date":""},{"question":"Will Mexico win on 2026-06-18?","entry":0.54,"current":0.535,"mtm":-0.0009,"status":"open","pnl":null,"exit_date":""},{"question":"Will Türkiye win on 2026-06-19?","entry":0.53,"current":0.525,"mtm":-0.0009,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Canada (-1.5)","entry":0.52,"current":0.515,"mtm":-0.001,"status":"open","pnl":null,"exit_date":""},{"question":"Argentina vs. Austria: O/U 2.5","entry":0.51,"current":0.505,"mtm":-0.001,"status":"open","pnl":null,"exit_date":""},{"question":"Will Ecuador win on 2026-06-20?","entry":0.5,"current":0.495,"mtm":-0.001,"status":"open","pnl":null,"exit_date":""},{"question":"Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs","entry":0.5,"current":0.495,"mtm":-0.001,"status":"open","pnl":null,"exit_date":""},{"question":"Will Czechia win on 2026-06-18?","entry":0.48,"current":0.475,"mtm":-0.001,"status":"open","pnl":null,"exit_date":""},{"question":"Austria vs. Jordan: O/U 2.5","entry":0.47,"current":0.465,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Will Mexico win on 2026-06-18?","entry":0.47,"current":0.465,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Switzerland vs. Bosnia and Herzegovina: O/U 2.5","entry":0.47,"current":0.465,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Belgium (-1.5)","entry":0.45,"current":0.445,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Starmer out by June 30, 2026?","entry":0.89,"current":0.88,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Will England win on 2026-06-17?","entry":0.44,"current":0.435,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Will Netherlands win on 2026-06-20?","entry":0.44,"current":0.435,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"Germany vs. Côte d'Ivoire: O/U 2.5","entry":0.44,"current":0.435,"mtm":-0.0011,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: O/U 2.5","entry":0.43,"current":0.425,"mtm":-0.0012,"status":"open","pnl":null,"exit_date":""},{"question":"Spain vs. Saudi Arabia: O/U 5.5","entry":0.43,"current":0.425,"mtm":-0.0012,"status":"open","pnl":null,"exit_date":""},{"question":"Netherlands vs. Sweden: Both Teams to Score","entry":0.41,"current":0.405,"mtm":-0.0012,"status":"open","pnl":null,"exit_date":""},{"question":"Will Morocco win on 2026-06-19?","entry":0.41,"current":0.405,"mtm":-0.0012,"status":"open","pnl":null,"exit_date":""},{"question":"Iraq vs. Norway: O/U 2.5","entry":0.4,"current":0.395,"mtm":-0.0012,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Switzerland (-1.5)","entry":0.39,"current":0.385,"mtm":-0.0013,"status":"open","pnl":null,"exit_date":""},{"question":"Will Algeria win on 2026-06-22?","entry":0.38,"current":0.375,"mtm":-0.0013,"status":"open","pnl":null,"exit_date":""},{"question":"Will Argentina win on 2026-06-22?","entry":0.34,"current":0.335,"mtm":-0.0015,"status":"open","pnl":null,"exit_date":""},{"question":"Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs","entry":0.33,"current":0.325,"mtm":-0.0015,"status":"open","pnl":null,"exit_date":""},{"question":"Spain vs. Saudi Arabia: O/U 4.5","entry":0.32,"current":0.315,"mtm":-0.0016,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: O/U 8.5 Total Corners","entry":0.63,"current":0.62,"mtm":-0.0016,"status":"open","pnl":null,"exit_date":""},{"question":"Will New Zealand vs. Egypt end in a draw?","entry":0.3,"current":0.295,"mtm":-0.0017,"status":"open","pnl":null,"exit_date":""},{"question":"Will Germany win on 2026-06-20?","entry":0.3,"current":0.295,"mtm":-0.0017,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: O/U 7.5 Total Corners","entry":0.54,"current":0.53,"mtm":-0.0019,"status":"open","pnl":null,"exit_date":""},{"question":"Will Portugal win on 2026-06-17?","entry":0.25,"current":0.245,"mtm":-0.002,"status":"open","pnl":null,"exit_date":""},{"question":"Switzerland vs. Bosnia and Herzegovina: O/U 3.5","entry":0.25,"current":0.245,"mtm":-0.002,"status":"open","pnl":null,"exit_date":""},{"question":"Germany vs. Côte d'Ivoire: Both Teams to Score","entry":0.25,"current":0.245,"mtm":-0.002,"status":"open","pnl":null,"exit_date":""},{"question":"Germany vs. Côte d'Ivoire: Germany O/U 0.5","entry":0.25,"current":0.245,"mtm":-0.002,"status":"open","pnl":null,"exit_date":""},{"question":"Spain vs. Saudi Arabia: O/U 6.5","entry":0.21,"current":0.205,"mtm":-0.0024,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: O/U 2.5","entry":0.59,"current":0.575,"mtm":-0.0025,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: O/U 8.5 Total Corners","entry":0.39,"current":0.38,"mtm":-0.0026,"status":"open","pnl":null,"exit_date":""},{"question":"Iraq vs. Norway: Norway O/U 2.5","entry":0.75,"current":0.73,"mtm":-0.0027,"status":"open","pnl":null,"exit_date":""},{"question":"Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs","entry":0.52,"current":0.505,"mtm":-0.0029,"status":"open","pnl":null,"exit_date":""},{"question":"Will New Zealand win on 2026-06-21?","entry":0.47,"current":0.455,"mtm":-0.0032,"status":"open","pnl":null,"exit_date":""},{"question":"Grass Court Championships: Linda Noskova vs Alexandra Eala","entry":0.15,"current":0.145,"mtm":-0.0033,"status":"open","pnl":null,"exit_date":""},{"question":"Will Curaçao win on 2026-06-20?","entry":0.075,"current":0.0725,"mtm":-0.0033,"status":"open","pnl":null,"exit_date":""},{"question":"Germany vs. Côte d'Ivoire: O/U 1.5","entry":0.15,"current":0.145,"mtm":-0.0033,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Germany (-1.5)","entry":0.11,"current":0.105,"mtm":-0.0045,"status":"open","pnl":null,"exit_date":""},{"question":"Grass Court Championships: Jessica Pegula vs Linda Noskova","entry":0.66,"current":0.63,"mtm":-0.0045,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: 1st Half O/U 1.5","entry":0.31,"current":0.295,"mtm":-0.0048,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Egypt (-1.5)","entry":0.1,"current":0.095,"mtm":-0.005,"status":"open","pnl":null,"exit_date":""},{"question":"Spread: Spain (-2.5)","entry":0.068,"current":0.064,"mtm":-0.0059,"status":"open","pnl":null,"exit_date":""},{"question":"Will Iraq vs. Norway end in a draw?","entry":0.86,"current":0.805,"mtm":-0.0064,"status":"open","pnl":null,"exit_date":""},{"question":"Germany vs. Côte d'Ivoire: O/U 8.5 Total Corners","entry":0.37,"current":0.345,"mtm":-0.0068,"status":"open","pnl":null,"exit_date":""},{"question":"New Zealand vs. Egypt: Egypt O/U 2.5","entry":0.14,"current":0.13,"mtm":-0.0071,"status":"open","pnl":null,"exit_date":""},{"question":"Will JD Vance attend the US-Iran Signing Ceremony?","entry":0.11,"current":0.1,"mtm":-0.0091,"status":"open","pnl":null,"exit_date":""},{"question":"Will Switzerland win on 2026-06-18?","entry":0.38,"current":0.345,"mtm":-0.0092,"status":"open","pnl":null,"exit_date":""},{"question":"Iraq vs. Norway: O/U 9.5 Total Corners","entry":0.4,"current":0.355,"mtm":-0.0113,"status":"open","pnl":null,"exit_date":""},{"question":"Will Trump agree to withdraw troops from the Iranian region by June 30?","entry":0.7,"current":0.595,"mtm":-0.015,"status":"open","pnl":null,"exit_date":""},{"question":"Belgium vs. IR Iran: O/U 0.5","entry":0.19,"current":0.1285,"mtm":-0.0324,"status":"open","pnl":null,"exit_date":""},{"question":"Will Abbas Araghchi attend the US-Iran Signing Ceremony?","entry":0.19,"current":0.125,"mtm":-0.0342,"status":"open","pnl":null,"exit_date":""},{"question":"Will Belgium win on 2026-06-21?","entry":0.1,"current":0.065,"mtm":-0.035,"status":"open","pnl":null,"exit_date":""},{"question":" Iran agrees to end enrichment of uranium by December 31?","entry":0.66,"current":0.335,"mtm":-0.0492,"status":"open","pnl":null,"exit_date":""},{"question":"Will Shehbaz Sharif attend the US-Iran Signing Ceremony?","entry":0.28,"current":0.124,"mtm":-0.0557,"status":"open","pnl":null,"exit_date":""},{"question":"Israel x Iran permanent peace deal by June 30, 2026?","entry":0.086,"current":0.024,"mtm":-0.0721,"status":"open","pnl":null,"exit_date":""},{"question":"Will \"Obsession\" 6th Weekend Box Office be less than 14m?","entry":0.15,"current":0.037,"mtm":-0.0753,"status":"open","pnl":null,"exit_date":""},{"question":" Iran agrees to end enrichment of uranium by July 31?","entry":0.55,"current":0.075,"mtm":-0.0864,"status":"open","pnl":null,"exit_date":""},{"question":"Will Trump agree to Iranian enrichment of uranium by June 30?","entry":0.276,"current":0.028,"mtm":-0.0899,"status":"open","pnl":null,"exit_date":""}],"resolved":[{"question":" Iran agrees to end enrichment of uranium by June 30?","entry":0.38,"current":0.0395,"mtm":null,"status":"flipped","pnl":-0.0896,"exit_date":"2026-06-21"},{"question":"Strait of Hormuz traffic returns to normal by end of June?","entry":0.18,"current":0.075,"mtm":null,"status":"flipped","pnl":-0.0583,"exit_date":"2026-06-19"},{"question":"Will the text of the US-Iran agreement be released by June 17?","entry":0.49,"current":1.0,"mtm":null,"status":"won","pnl":0.1041,"exit_date":"2026-06-18"},{"question":"Israel x Iran permanent peace deal by June 30, 2026?","entry":0.853,"current":0.9485,"mtm":null,"status":"flipped","pnl":0.0112,"exit_date":"2026-06-19"},{"question":"Will the next diplomatic US-Iran meeting be in Qatar?","entry":0.844,"current":1.0,"mtm":null,"status":"won","pnl":0.0185,"exit_date":"2026-06-20"},{"question":"Will the text of the US-Iran agreement be released by June 16? ","entry":0.12,"current":0.0,"mtm":null,"status":"lost","pnl":-0.1,"exit_date":"2026-06-18"},{"question":"Will the text of the US-Iran agreement be released by June 17?","entry":0.55,"current":0.0,"mtm":null,"status":"lost","pnl":-0.1,"exit_date":"2026-06-18"},{"question":"Will the text of the US-Iran agreement be released by June 16? ","entry":0.9,"current":1.0,"mtm":null,"status":"won","pnl":0.0111,"exit_date":"2026-06-18"},{"question":"Will the next diplomatic US-Iran meeting be in Switzerland?","entry":0.132,"current":0.0,"mtm":null,"status":"lost","pnl":-0.1,"exit_date":"2026-06-21"},{"question":"US x Iran diplomatic meeting by June 21, 2026?","entry":0.88,"current":0.0,"mtm":null,"status":"lost","pnl":-0.1,"exit_date":"2026-06-21"},{"question":"Will United States win on 2026-06-19?","entry":0.4,"current":0.0,"mtm":null,"status":"lost","pnl":-0.1,"exit_date":"2026-06-19"},{"question":"US x Iran diplomatic meeting by June 21, 2026?","entry":0.83,"current":1.0,"mtm":null,"status":"won","pnl":0.0205,"exit_date":"2026-06-21"}],"unrealized":-0.0099,"realized":-0.4825,"nW":4,"nL":5,"nF":3},{"label":"Macro (Fed cuts)","strategy_id":"macro","open":[{"question":"Will no Fed rate cuts happen in 2026?","entry":0.696,"current":0.813,"mtm":0.0168,"status":"open","pnl":null,"exit_date":""}],"resolved":[],"unrealized":0.0168,"realized":0.0,"nW":0,"nL":0,"nF":0}]};
-const ACTIONS_URL="https://github.com/skanderbellil/Bayes-ically-Rich/actions/workflows/close_position.yml";
-function fmtPct(v){if(v===null||v===undefined)return'—';return(v>=0?'+':'')+(v*100).toFixed(1)+'%';}
-function cls(v){return v>0.001?'pos':v<-0.001?'neg':'neu';}
-function statusPill(s){return`<span class="pill pill-${s}">${s}</span>`;}
-function miniTrack(entry,current){
-  if(entry==null||current==null)return'<span style="color:var(--border)">—</span>';
-  const W=88,H=14,mid=7;
-  const clamp=v=>Math.min(Math.max(v,0),1);
-  const ex=Math.round(clamp(entry)*W),cx=Math.round(clamp(current)*W);
-  const up=current>=entry,col=up?'#22c55e':'#ef4444';
-  const lx=Math.min(ex,cx),rx=Math.max(ex,cx);
-  return[`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">`,
+const DATA        = {"generated": "2026-06-22 11:36 UTC", "strategies": [{"label": "Mid-priced YES", "strategy_id": "midprice_yes", "open": [{"question": "Grass Court Championships: Aryna Sabalenka vs Jessica Pegula", "entry": 0.24, "current": 0.655, "mtm": 0.1729, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Crude Oil (CL) hit (LOW) $70 by end of June?", "entry": 0.128, "current": 0.2305, "mtm": 0.0801, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will WTI Crude Oil (WTI) hit (LOW) $70 in June?", "entry": 0.23, "current": 0.335, "mtm": 0.0457, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Israel x Hezbollah permanent peace deal by June 30, 2026?", "entry": 0.113, "current": 0.1375, "mtm": 0.0217, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Russia capture Kostyantynivka by June 30?", "entry": 0.188, "current": 0.2135, "mtm": 0.0136, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will United States win on 2026-06-25?", "entry": 0.47, "current": 0.505, "mtm": 0.0074, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Halle Open: Alexander Zverev vs Taylor Fritz", "entry": 0.39, "current": 0.405, "mtm": 0.0038, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Nottingham Open: Marie Bouzkova vs Emma Navarro", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Bitcoin dip to $57,500 in June?", "entry": 0.116, "current": 0.1045, "mtm": -0.0099, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Bitcoin reach $67,500 in June?", "entry": 0.36, "current": 0.315, "mtm": -0.0125, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Claude Fable 5 be restored for US customers by July 1?", "entry": 0.5, "current": 0.435, "mtm": -0.013, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Bitcoin reach $70,000 in June?", "entry": 0.11, "current": 0.075, "mtm": -0.0318, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will OpenAI’s market cap be between $1.25T and $1.5T at market close on IPO day?", "entry": 0.15, "current": 0.102, "mtm": -0.032, "status": "open", "pnl": null, "exit_date": ""}], "resolved": [{"question": "Will J.D. Vance attend the next US x Iran diplomatic meeting?", "entry": 0.433, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.1309, "exit_date": "2026-06-21"}], "unrealized": 0.2448, "realized": 0.1309, "nW": 1, "nL": 0, "nF": 0}, {"label": "Smart Flow", "strategy_id": "smart_flow", "open": [{"question": "Will Belgium win on 2026-06-21?", "entry": 0.31, "current": 0.935, "mtm": 0.2016, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Germany win on 2026-06-20?", "entry": 0.35, "current": 0.705, "mtm": 0.1014, "status": "open", "pnl": null, "exit_date": ""}, {"question": "United States vs. Australia: Both Teams to Score", "entry": 0.49, "current": 0.9, "mtm": 0.0837, "status": "open", "pnl": null, "exit_date": ""}, {"question": "United States vs. Australia: O/U 2.5", "entry": 0.5, "current": 0.785, "mtm": 0.057, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: FURIA vs Team Falcons (BO5) - IEM Cologne Major Playoffs", "entry": 0.6, "current": 0.885, "mtm": 0.0475, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Norway (-1.5)", "entry": 0.41, "current": 0.555, "mtm": 0.0354, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Norway win on 2026-06-16?", "entry": 0.21, "current": 0.275, "mtm": 0.031, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 8.5 Total Corners", "entry": 0.37, "current": 0.48, "mtm": 0.0297, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 9.5 Total Corners", "entry": 0.5, "current": 0.645, "mtm": 0.029, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Norway (-2.5)", "entry": 0.65, "current": 0.795, "mtm": 0.0223, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New York Liberty vs. Los Angeles Sparks", "entry": 0.08, "current": 0.095, "mtm": 0.0188, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: Both Teams to Score", "entry": 0.59, "current": 0.695, "mtm": 0.0178, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Argentina win the 2026 FIFA World Cup?", "entry": 0.119, "current": 0.1295, "mtm": 0.0088, "status": "open", "pnl": null, "exit_date": ""}, {"question": " Iran agrees to end enrichment of uranium by December 31?", "entry": 0.65, "current": 0.685, "mtm": 0.0054, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will JD Vance attend the US-Iran Signing Ceremony?", "entry": 0.11, "current": 0.115, "mtm": 0.0045, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will the U.S. invade Iran before 2027?", "entry": 0.13, "current": 0.135, "mtm": 0.0038, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Norway win on 2026-06-22?", "entry": 0.43, "current": 0.445, "mtm": 0.0035, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 3.5", "entry": 0.094, "current": 0.097, "mtm": 0.0032, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Belgium vs. IR Iran: O/U 0.5", "entry": 0.85, "current": 0.8715, "mtm": 0.0025, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Egypt win on 2026-06-21?", "entry": 0.25, "current": 0.255, "mtm": 0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Belgium vs. IR Iran end in a draw?", "entry": 0.86, "current": 0.875, "mtm": 0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Trump agree to unfreeze Iranian assets by June 30?", "entry": 0.86, "current": 0.875, "mtm": 0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Switzerland vs. Bosnia and Herzegovina: Both Teams to Score", "entry": 0.56, "current": 0.565, "mtm": 0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: Vitality vs Team Falcons (BO3) - IEM Cologne Major Playoffs", "entry": 0.65, "current": 0.655, "mtm": 0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Argentina win on 2026-06-22?", "entry": 0.67, "current": 0.675, "mtm": 0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Norway leading at halftime?", "entry": 0.64, "current": 0.64, "mtm": 0.0, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Jordan win on 2026-06-17?", "entry": 0.9, "current": 0.895, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Germany (-1.5)", "entry": 0.9, "current": 0.895, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Grass Court Championships: Aryna Sabalenka vs Jessica Pegula", "entry": 0.81, "current": 0.805, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will the Democratic Party control the House after the 2026 Midterm elections?", "entry": 0.81, "current": 0.805, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will the Republican Party control the House after the 2026 Midterm elections?", "entry": 0.81, "current": 0.805, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Spain (-3.5)", "entry": 0.77, "current": 0.765, "mtm": -0.0006, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Egypt win on 2026-06-21?", "entry": 0.75, "current": 0.745, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: Both Teams to Score", "entry": 0.74, "current": 0.735, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Norway win on 2026-06-16?", "entry": 0.73, "current": 0.725, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 3.5", "entry": 0.73, "current": 0.725, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Germany vs. Côte d'Ivoire end in a draw?", "entry": 0.71, "current": 0.705, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 4.5", "entry": 0.69, "current": 0.685, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs", "entry": 0.68, "current": 0.675, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Portugal win the 2026 FIFA World Cup?", "entry": 0.067, "current": 0.0665, "mtm": -0.0007, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Switzerland win on 2026-06-18?", "entry": 0.66, "current": 0.655, "mtm": -0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 2.5", "entry": 0.61, "current": 0.605, "mtm": -0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Netherlands vs. Sweden: O/U 2.5", "entry": 0.59, "current": 0.585, "mtm": -0.0008, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 2.5", "entry": 0.57, "current": 0.565, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Netherlands win on 2026-06-20?", "entry": 0.57, "current": 0.565, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will New Zealand win on 2026-06-21?", "entry": 0.55, "current": 0.545, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Mexico win on 2026-06-18?", "entry": 0.54, "current": 0.535, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Türkiye win on 2026-06-19?", "entry": 0.53, "current": 0.525, "mtm": -0.0009, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Canada (-1.5)", "entry": 0.52, "current": 0.515, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Argentina vs. Austria: O/U 2.5", "entry": 0.51, "current": 0.505, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs", "entry": 0.5, "current": 0.495, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Ecuador win on 2026-06-20?", "entry": 0.5, "current": 0.495, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Czechia win on 2026-06-18?", "entry": 0.48, "current": 0.475, "mtm": -0.001, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Switzerland vs. Bosnia and Herzegovina: O/U 2.5", "entry": 0.47, "current": 0.465, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Austria vs. Jordan: O/U 2.5", "entry": 0.47, "current": 0.465, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Mexico win on 2026-06-18?", "entry": 0.47, "current": 0.465, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Belgium (-1.5)", "entry": 0.45, "current": 0.445, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Starmer out by June 30, 2026?", "entry": 0.89, "current": 0.88, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will England win on 2026-06-17?", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Netherlands win on 2026-06-20?", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 2.5", "entry": 0.44, "current": 0.435, "mtm": -0.0011, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 2.5", "entry": 0.43, "current": 0.425, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 5.5", "entry": 0.43, "current": 0.425, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Netherlands vs. Sweden: Both Teams to Score", "entry": 0.41, "current": 0.405, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Morocco win on 2026-06-19?", "entry": 0.41, "current": 0.405, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 2.5", "entry": 0.4, "current": 0.395, "mtm": -0.0012, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Switzerland (-1.5)", "entry": 0.39, "current": 0.385, "mtm": -0.0013, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Algeria win on 2026-06-22?", "entry": 0.38, "current": 0.375, "mtm": -0.0013, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: FURIA vs 9z (BO3) - IEM Cologne Major Playoffs", "entry": 0.33, "current": 0.325, "mtm": -0.0015, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 4.5", "entry": 0.32, "current": 0.315, "mtm": -0.0016, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 8.5 Total Corners", "entry": 0.63, "current": 0.62, "mtm": -0.0016, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Germany win on 2026-06-20?", "entry": 0.3, "current": 0.295, "mtm": -0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will New Zealand vs. Egypt end in a draw?", "entry": 0.3, "current": 0.295, "mtm": -0.0017, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 7.5 Total Corners", "entry": 0.54, "current": 0.53, "mtm": -0.0019, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Portugal win on 2026-06-17?", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: Both Teams to Score", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: Germany O/U 0.5", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Switzerland vs. Bosnia and Herzegovina: O/U 3.5", "entry": 0.25, "current": 0.245, "mtm": -0.002, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spain vs. Saudi Arabia: O/U 6.5", "entry": 0.21, "current": 0.205, "mtm": -0.0024, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 2.5", "entry": 0.59, "current": 0.575, "mtm": -0.0025, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: O/U 8.5 Total Corners", "entry": 0.39, "current": 0.38, "mtm": -0.0026, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: Norway O/U 2.5", "entry": 0.75, "current": 0.73, "mtm": -0.0027, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Counter-Strike: Spirit vs G2 (BO3) - IEM Cologne Major Playoffs", "entry": 0.52, "current": 0.505, "mtm": -0.0029, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will New Zealand win on 2026-06-21?", "entry": 0.47, "current": 0.455, "mtm": -0.0032, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Grass Court Championships: Linda Noskova vs Alexandra Eala", "entry": 0.15, "current": 0.145, "mtm": -0.0033, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 1.5", "entry": 0.15, "current": 0.145, "mtm": -0.0033, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Curaçao win on 2026-06-20?", "entry": 0.075, "current": 0.0725, "mtm": -0.0033, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Argentina win on 2026-06-22?", "entry": 0.34, "current": 0.325, "mtm": -0.0044, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Germany (-1.5)", "entry": 0.11, "current": 0.105, "mtm": -0.0045, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Grass Court Championships: Jessica Pegula vs Linda Noskova", "entry": 0.66, "current": 0.63, "mtm": -0.0045, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: 1st Half O/U 1.5", "entry": 0.31, "current": 0.295, "mtm": -0.0048, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Egypt (-1.5)", "entry": 0.1, "current": 0.095, "mtm": -0.005, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Spread: Spain (-2.5)", "entry": 0.068, "current": 0.064, "mtm": -0.0059, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Iraq vs. Norway end in a draw?", "entry": 0.86, "current": 0.805, "mtm": -0.0064, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Germany vs. Côte d'Ivoire: O/U 8.5 Total Corners", "entry": 0.37, "current": 0.345, "mtm": -0.0068, "status": "open", "pnl": null, "exit_date": ""}, {"question": "New Zealand vs. Egypt: Egypt O/U 2.5", "entry": 0.14, "current": 0.13, "mtm": -0.0071, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Switzerland win on 2026-06-18?", "entry": 0.38, "current": 0.345, "mtm": -0.0092, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Iraq vs. Norway: O/U 9.5 Total Corners", "entry": 0.4, "current": 0.355, "mtm": -0.0113, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Trump agree to withdraw troops from the Iranian region by June 30?", "entry": 0.7, "current": 0.595, "mtm": -0.015, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Belgium vs. IR Iran: O/U 0.5", "entry": 0.19, "current": 0.1285, "mtm": -0.0324, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Belgium win on 2026-06-21?", "entry": 0.1, "current": 0.065, "mtm": -0.035, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Abbas Araghchi attend the US-Iran Signing Ceremony?", "entry": 0.19, "current": 0.11, "mtm": -0.0421, "status": "open", "pnl": null, "exit_date": ""}, {"question": " Iran agrees to end enrichment of uranium by December 31?", "entry": 0.66, "current": 0.315, "mtm": -0.0523, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will Shehbaz Sharif attend the US-Iran Signing Ceremony?", "entry": 0.28, "current": 0.124, "mtm": -0.0557, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Israel x Iran permanent peace deal by June 30, 2026?", "entry": 0.086, "current": 0.0235, "mtm": -0.0727, "status": "open", "pnl": null, "exit_date": ""}, {"question": " Iran agrees to end enrichment of uranium by July 31?", "entry": 0.55, "current": 0.075, "mtm": -0.0864, "status": "open", "pnl": null, "exit_date": ""}, {"question": "Will \"Obsession\" 6th Weekend Box Office be less than 14m?", "entry": 0.15, "current": 0.02, "mtm": -0.0867, "status": "open", "pnl": null, "exit_date": ""}], "resolved": [{"question": " Iran agrees to end enrichment of uranium by June 30?", "entry": 0.38, "current": 0.0395, "mtm": null, "status": "flipped", "pnl": -0.0896, "exit_date": "2026-06-21"}, {"question": "Strait of Hormuz traffic returns to normal by end of June?", "entry": 0.18, "current": 0.075, "mtm": null, "status": "flipped", "pnl": -0.0583, "exit_date": "2026-06-19"}, {"question": "Will the text of the US-Iran agreement be released by June 17?", "entry": 0.49, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.1041, "exit_date": "2026-06-18"}, {"question": "Will Trump agree to Iranian enrichment of uranium by June 30?", "entry": 0.276, "current": 0.0275, "mtm": null, "status": "closed", "pnl": -0.09, "exit_date": "2026-06-22"}, {"question": "Israel x Iran permanent peace deal by June 30, 2026?", "entry": 0.853, "current": 0.9485, "mtm": null, "status": "flipped", "pnl": 0.0112, "exit_date": "2026-06-19"}, {"question": "Will the next diplomatic US-Iran meeting be in Qatar?", "entry": 0.844, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.0185, "exit_date": "2026-06-20"}, {"question": "Will the text of the US-Iran agreement be released by June 16? ", "entry": 0.12, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-18"}, {"question": "Will the text of the US-Iran agreement be released by June 17?", "entry": 0.55, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-18"}, {"question": "Will the text of the US-Iran agreement be released by June 16? ", "entry": 0.9, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.0111, "exit_date": "2026-06-18"}, {"question": "Will the next diplomatic US-Iran meeting be in Switzerland?", "entry": 0.132, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-21"}, {"question": "US x Iran diplomatic meeting by June 21, 2026?", "entry": 0.88, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-21"}, {"question": "Will United States win on 2026-06-19?", "entry": 0.4, "current": 0.0, "mtm": null, "status": "lost", "pnl": -0.1, "exit_date": "2026-06-19"}, {"question": "US x Iran diplomatic meeting by June 21, 2026?", "entry": 0.83, "current": 1.0, "mtm": null, "status": "won", "pnl": 0.0205, "exit_date": "2026-06-21"}], "unrealized": 0.084, "realized": -0.5725, "nW": 4, "nL": 5, "nF": 3}, {"label": "Macro (Fed cuts)", "strategy_id": "macro", "open": [{"question": "Will no Fed rate cuts happen in 2026?", "entry": 0.696, "current": 0.801, "mtm": 0.0151, "status": "open", "pnl": null, "exit_date": ""}], "resolved": [], "unrealized": 0.0151, "realized": 0.0, "nW": 0, "nL": 0, "nF": 0}]};
+const ACTIONS_URL = "https://github.com/skanderbellil/Bayes-ically-Rich/actions/workflows/close_position.yml";
+
+// ── formatting ───────────────────────────────────────────────────────────────
+// All PnL / MTM values are displayed as percentages (e.g. 0.17 → +17.3%)
+function fmtPct(v) {
+  if (v === null || v === undefined) return '—';
+  return (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+}
+function cls(v) { return v > 0.001 ? 'pos' : v < -0.001 ? 'neg' : 'neu'; }
+function statusPill(s) { return `<span class="pill pill-${s}">${s}</span>`; }
+
+// ── mini price-track SVG (0 → 1 number line) ─────────────────────────────────
+// Grey tick = entry price, coloured dot = current price, filled band shows movement
+function miniTrack(entry, current) {
+  if (entry == null || current == null) return '<span style="color:var(--border)">—</span>';
+  const W = 88, H = 14, mid = 7;
+  const clamp = v => Math.min(Math.max(v, 0), 1);
+  const ex  = Math.round(clamp(entry)   * W);
+  const cx  = Math.round(clamp(current) * W);
+  const up  = current >= entry;
+  const col = up ? '#22c55e' : '#ef4444';
+  const lx  = Math.min(ex, cx), rx = Math.max(ex, cx);
+  return [
+    `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">`,
     `<rect x="0" y="${mid-1}" width="${W}" height="2" fill="#2a2d3e" rx="1"/>`,
     `<rect x="${lx}" y="${mid-3}" width="${Math.max(rx-lx,1)}" height="6" fill="${col}" opacity="0.3" rx="2"/>`,
     `<line x1="${ex}" y1="2" x2="${ex}" y2="${H-2}" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>`,
     `<circle cx="${cx}" cy="${mid}" r="3.5" fill="${col}"/>`,
-    '</svg>'].join('');
+    `</svg>`,
+  ].join('');
 }
-function wlfRow(nW,nL,nF){
-  const total=nW+nL+nF;if(!total)return'';
-  const pW=(nW/total*100).toFixed(1),pL=(nL/total*100).toFixed(1),pF=(nF/total*100).toFixed(1);
-  const segs=[nW?`<div class="wlf-seg" style="width:${pW}%;background:var(--green)"></div>`:'',
-    nL?`<div class="wlf-seg" style="width:${pL}%;background:var(--red)"></div>`:'',
-    nF?`<div class="wlf-seg" style="width:${pF}%;background:var(--flip)"></div>`:''].join('');
-  return`<div class="wlf-row"><div class="wlf-bar">${segs}</div><span class="wlf-label">${nW}W ${nL}L${nF?' '+nF+'F':''}</span></div>`;
+
+// ── W/L/F horizontal bar ─────────────────────────────────────────────────────
+function wlfRow(nW, nL, nF) {
+  const total = nW + nL + nF;
+  if (!total) return '';
+  const pW = (nW / total * 100).toFixed(1);
+  const pL = (nL / total * 100).toFixed(1);
+  const pF = (nF / total * 100).toFixed(1);
+  const segs = [
+    nW ? `<div class="wlf-seg" style="width:${pW}%;background:var(--green)"></div>` : '',
+    nL ? `<div class="wlf-seg" style="width:${pL}%;background:var(--red)"></div>`   : '',
+    nF ? `<div class="wlf-seg" style="width:${pF}%;background:var(--flip)"></div>`  : '',
+  ].join('');
+  return `<div class="wlf-row">
+    <div class="wlf-bar">${segs}</div>
+    <span class="wlf-label">${nW}W ${nL}L${nF ? ' ' + nF + 'F' : ''}</span>
+  </div>`;
 }
-let _currentCmd='';
-function openCut(btn){
-  const sid=btn.dataset.sid,q=btn.dataset.q;
-  const cmd=`python experiments/close_position.py --strategy ${sid} --question "${q.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`;
-  _currentCmd=cmd;
-  document.getElementById('modal-q').textContent=q;
-  document.getElementById('modal-cmd').textContent=cmd;
-  document.getElementById('modal-inputs').textContent=`Strategy : ${sid}\nQuestion : ${q}`;
-  document.getElementById('modal-gh').href=ACTIONS_URL;
-  document.getElementById('copy-btn').textContent='📋 Copy command';
+
+// ── modal ─────────────────────────────────────────────────────────────────────
+let _currentCmd = '';
+
+function openCut(btn) {
+  const sid = btn.dataset.sid;
+  const q   = btn.dataset.q;
+  const cmd = `python experiments/close_position.py --strategy ${sid} --question "${q.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`;
+  _currentCmd = cmd;
+  document.getElementById('modal-q').textContent      = q;
+  document.getElementById('modal-cmd').textContent    = cmd;
+  document.getElementById('modal-inputs').textContent = `Strategy : ${sid}\nQuestion : ${q}`;
+  document.getElementById('modal-gh').href            = ACTIONS_URL;
+  document.getElementById('copy-btn').textContent     = '📋 Copy command';
   document.getElementById('cut-modal').classList.add('open');
 }
-function hideCut(){document.getElementById('cut-modal').classList.remove('open');}
-function copyCmd(){
-  navigator.clipboard.writeText(_currentCmd).then(()=>{
-    const btn=document.getElementById('copy-btn');
-    btn.textContent='✓ Copied!';
-    setTimeout(()=>{btn.textContent='📋 Copy command';},1800);
+
+function hideCut() { document.getElementById('cut-modal').classList.remove('open'); }
+
+function copyCmd() {
+  navigator.clipboard.writeText(_currentCmd).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Copy command'; }, 1800);
   });
 }
-document.addEventListener('keydown',e=>{if(e.key==='Escape')hideCut();});
-function buildCard(d){
-  const total=d.unrealized+d.realized,totCls=cls(total);
-  const badge=total>0?'<span class="badge badge-green">▲ profitable</span>':total<0?'<span class="badge badge-red">▼ drawdown</span>':'<span class="badge badge-grey">flat</span>';
-  const nR=d.nW+d.nL+d.nF;
-  const res_summary=nR?`${d.nW}W / ${d.nL}L${d.nF?' / '+d.nF+' flip':''}`:'none yet';
-  const esc=s=>s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const openRows=d.open.map(r=>`
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCut(); });
+
+// ── card builder ──────────────────────────────────────────────────────────────
+function buildCard(d) {
+  const total  = d.unrealized + d.realized;
+  const totCls = cls(total);
+  const badge  = total > 0 ? '<span class="badge badge-green">▲ profitable</span>'
+               : total < 0 ? '<span class="badge badge-red">▼ drawdown</span>'
+               :              '<span class="badge badge-grey">flat</span>';
+  const nR = d.nW + d.nL + d.nF;
+  const res_summary = nR
+    ? `${d.nW}W / ${d.nL}L${d.nF ? ' / ' + d.nF + ' flip' : ''}`
+    : 'none yet';
+
+  // HTML-escape for use in data attributes
+  const esc = s => s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const openRows = d.open.map(r => `
     <tr>
       <td class="q">${r.question}</td>
-      <td style="width:96px;padding-right:4px">${miniTrack(r.entry,r.current)}</td>
-      <td>${r.entry!=null?r.entry.toFixed(3):'—'}</td>
-      <td>${r.current!=null?r.current.toFixed(3):'—'}</td>
+      <td style="width:96px;padding-right:4px">${miniTrack(r.entry, r.current)}</td>
+      <td>${r.entry   != null ? r.entry.toFixed(3)   : '—'}</td>
+      <td>${r.current != null ? r.current.toFixed(3) : '—'}</td>
       <td class="${cls(r.mtm)}">${fmtPct(r.mtm)}</td>
       <td><button class="cut-btn" data-sid="${d.strategy_id}" data-q="${esc(r.question)}" onclick="openCut(this)">✂ cut</button></td>
     </tr>`).join('');
-  const resolvedRows=d.resolved.map(r=>`
+
+  const resolvedRows = d.resolved.map(r => `
     <tr>
       <td class="q">${r.question}</td>
       <td>${statusPill(r.status)}</td>
       <td class="${cls(r.pnl)}">${fmtPct(r.pnl)}</td>
       <td style="color:var(--muted)">${r.exit_date}</td>
     </tr>`).join('');
-  return`
+
+  return `
   <div class="card">
     <div class="card-title">${d.label} ${badge}</div>
     <div class="kpis">
-      <div class="kpi"><div class="kpi-label">Total MTM</div><div class="kpi-value ${totCls}">${fmtPct(total)}</div></div>
-      <div class="kpi"><div class="kpi-label">Unrealized</div><div class="kpi-value ${cls(d.unrealized)}">${fmtPct(d.unrealized)}</div></div>
-      <div class="kpi"><div class="kpi-label">Realized</div><div class="kpi-value ${cls(d.realized)}">${fmtPct(d.realized)}</div></div>
+      <div class="kpi">
+        <div class="kpi-label">Total MTM</div>
+        <div class="kpi-value ${totCls}">${fmtPct(total)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Unrealized</div>
+        <div class="kpi-value ${cls(d.unrealized)}">${fmtPct(d.unrealized)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Realized</div>
+        <div class="kpi-value ${cls(d.realized)}">${fmtPct(d.realized)}</div>
+      </div>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:${nR?5:8}px">${d.open.length} open &nbsp;·&nbsp; ${d.resolved.length} resolved (${res_summary})</div>
-    ${nR?wlfRow(d.nW,d.nL,d.nF):''}
-    ${d.open.length?`<details open><summary>Open positions (${d.open.length})</summary><table><thead><tr><th>Question</th><th>Track (0→1)</th><th>Entry</th><th>Now</th><th>MTM %</th><th></th></tr></thead><tbody>${openRows}</tbody></table></details>`:''}
-    ${d.resolved.length?`<details><summary>Resolved (${d.resolved.length})</summary><table><thead><tr><th>Question</th><th>Status</th><th>PnL %</th><th>Date</th></tr></thead><tbody>${resolvedRows}</tbody></table></details>`:''}
+    <div style="font-size:12px;color:var(--muted);margin-bottom:${nR ? 5 : 8}px">
+      ${d.open.length} open &nbsp;·&nbsp; ${d.resolved.length} resolved (${res_summary})
+    </div>
+    ${nR ? wlfRow(d.nW, d.nL, d.nF) : ''}
+
+    ${d.open.length ? `
+    <details open>
+      <summary>Open positions (${d.open.length})</summary>
+      <table>
+        <thead><tr><th>Question</th><th>Track (0→1)</th><th>Entry</th><th>Now</th><th>MTM %</th><th></th></tr></thead>
+        <tbody>${openRows}</tbody>
+      </table>
+    </details>` : ''}
+
+    ${d.resolved.length ? `
+    <details>
+      <summary>Resolved (${d.resolved.length})</summary>
+      <table>
+        <thead><tr><th>Question</th><th>Status</th><th>PnL %</th><th>Date</th></tr></thead>
+        <tbody>${resolvedRows}</tbody>
+      </table>
+    </details>` : ''}
   </div>`;
 }
-document.getElementById('ts').textContent=DATA.generated;
-document.getElementById('strategies').innerHTML=DATA.strategies.map(buildCard).join('');
+
+document.getElementById('ts').textContent       = DATA.generated;
+document.getElementById('strategies').innerHTML = DATA.strategies.map(buildCard).join('');
 </script>
 </body>
 </html>
