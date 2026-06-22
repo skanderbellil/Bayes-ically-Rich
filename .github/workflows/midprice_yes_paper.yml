@@ -2,8 +2,8 @@ name: Mid-priced-YES convergence paper-trade tracker
 
 on:
   schedule:
-    # every 6 hours — catches markets as they enter the ~5-day-to-resolution window
-    - cron: "15 */6 * * *"
+    # every hour — public repo, free minutes, keeps MTM fresh
+    - cron: "15 * * * *"
   workflow_dispatch:       # run manually from the Actions tab any time
 
 jobs:
