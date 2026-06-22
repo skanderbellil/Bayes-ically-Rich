@@ -76,6 +76,85 @@ def load_strategy(path: Path, entry_col: str, q_col: str,
     }
 
 
+def load_dip_confirm(path: Path, label: str = "Dip-Confirm YES",
+                     strategy_id: str = "dip_confirm") -> dict:
+    """Load the dip-confirm ledger, which has an extra 'watching' status."""
+    base = {"label": label, "strategy_id": strategy_id,
+            "watching": [], "open": [], "resolved": [],
+            "unrealized": 0, "realized": 0, "nW": 0, "nL": 0, "nExpired": 0,
+            "primary": False}
+    if not path.exists():
+        return base
+    df = pd.read_csv(path)
+    for c in ["entry_ask", "watch_price", "min_price", "current_price", "pnl", "bet_fraction"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    if "bet_fraction" not in df.columns or df["bet_fraction"].isna().all():
+        df["bet_fraction"] = 0.10
+
+    def safe(val, fallback=""):
+        return str(val) if pd.notna(val) else fallback
+
+    watching_rows = []
+    for _, r in df[df["status"] == "watching"].iterrows():
+        wp  = r["watch_price"] if pd.notna(r.get("watch_price")) else None
+        mp  = r["min_price"]   if pd.notna(r.get("min_price"))   else None
+        cp  = r["current_price"] if pd.notna(r.get("current_price")) else None
+        dip = round((wp - mp) / wp, 4) if (wp and mp and wp > 0) else 0
+        watching_rows.append({
+            "question":    str(r["question"]),
+            "watch_date":  safe(r.get("watch_date")),
+            "watch_price": round(float(wp), 4) if wp else None,
+            "min_price":   round(float(mp), 4) if mp else None,
+            "current":     round(float(cp), 4) if cp else None,
+            "dip_pct":     dip,
+            "status":      "watching",
+        })
+
+    opened = df[df["status"] == "open"].copy()
+    if not opened.empty and "entry_ask" in opened.columns:
+        opened["mtm"] = (opened["current_price"] / opened["entry_ask"] - 1) * opened["bet_fraction"]
+    else:
+        opened["mtm"] = 0.0
+
+    open_rows = []
+    for _, r in opened.sort_values("mtm", ascending=False).iterrows():
+        open_rows.append({
+            "question":    str(r["question"]),
+            "entry_date":  safe(r.get("entry_date")),
+            "watch_price": round(float(r["watch_price"]), 4) if pd.notna(r.get("watch_price")) else None,
+            "entry":       round(float(r["entry_ask"]), 4)   if pd.notna(r.get("entry_ask"))   else None,
+            "current":     round(float(r["current_price"]), 4) if pd.notna(r.get("current_price")) else None,
+            "mtm":         round(float(r["mtm"]), 4) if pd.notna(r.get("mtm")) else None,
+            "status":      "open",
+        })
+
+    resolved = df[df["status"].isin(["won", "lost", "expired"])].copy()
+    resolved_rows = []
+    for _, r in resolved.iterrows():
+        resolved_rows.append({
+            "question":   str(r["question"]),
+            "entry_date": safe(r.get("entry_date")),
+            "exit_date":  safe(r.get("exit_date")),
+            "watch_price": round(float(r["watch_price"]), 4) if pd.notna(r.get("watch_price")) else None,
+            "entry":      round(float(r["entry_ask"]), 4) if pd.notna(r.get("entry_ask")) else None,
+            "status":     str(r["status"]),
+            "pnl":        round(float(r["pnl"]), 4) if pd.notna(r.get("pnl")) else None,
+        })
+
+    return {
+        **base,
+        "watching":    watching_rows,
+        "open":        open_rows,
+        "resolved":    resolved_rows,
+        "unrealized":  round(float(opened["mtm"].sum()), 4),
+        "realized":    round(float(resolved[resolved["status"].isin(["won","lost"])]["pnl"].dropna().sum()), 4),
+        "nW":          int((resolved["status"] == "won").sum()),
+        "nL":          int((resolved["status"] == "lost").sum()),
+        "nExpired":    int((resolved["status"] == "expired").sum()),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Load backtest results
 # ---------------------------------------------------------------------------
@@ -1060,6 +1139,63 @@ function buildBacktest() {
     </div>
   </div>`;
 
+  // ── Dip-Confirm YES ──────────────────────────────────────────────────────────
+  const dc = DATA.strategies.find(s => s.strategy_id === 'dip_confirm') || {};
+  const dcW   = (dc.watching || []).length;
+  const dcO   = (dc.open     || []).length;
+  const dcRes = (dc.resolved || []).filter(r => r.status !== 'expired');
+  const dcExp = dc.nExpired || 0;
+
+  const dcWatchRows = (dc.watching || []).map(r => {
+    const dipPct = r.dip_pct ? (r.dip_pct * 100).toFixed(1) : '0.0';
+    const dipped = r.dip_pct >= 0.10;
+    return `<tr>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.question}</td>
+      <td>${r.watch_date || ''}</td>
+      <td>${r.watch_price != null ? r.watch_price.toFixed(3) : '—'}</td>
+      <td>${r.min_price   != null ? r.min_price.toFixed(3)   : '—'}</td>
+      <td style="color:${dipped ? 'var(--green)' : 'var(--muted)'}">−${dipPct}%${dipped ? ' ✓' : ''}</td>
+      <td>${r.current != null ? r.current.toFixed(3) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  html += `<div class="card" style="margin-top:12px">
+    <div class="card-title">Dip-Confirm YES [10–50%]
+      <span style="font-size:11px;font-weight:400;color:var(--muted)">Live paper-trade · watch 5–9d out, enter after dip≥10%→recover</span>
+    </div>
+    <div class="bt-kpis">
+      <div class="bt-kpi"><div class="bt-kpi-lbl">Watching</div><div class="bt-kpi-val neu">${dcW}</div></div>
+      <div class="bt-kpi"><div class="bt-kpi-lbl">Open</div><div class="bt-kpi-val neu">${dcO}</div></div>
+      <div class="bt-kpi"><div class="bt-kpi-lbl">Resolved</div><div class="bt-kpi-val neu">${dcRes.length}</div></div>
+      <div class="bt-kpi"><div class="bt-kpi-lbl">Win rate</div>
+        <div class="bt-kpi-val">${dcRes.length ? (dc.nW / dcRes.length * 100).toFixed(0) + '%' : '—'}</div></div>
+      <div class="bt-kpi"><div class="bt-kpi-lbl">Realized PnL</div>
+        <div class="bt-kpi-val ${cls(dc.realized)}">${fmtPct(dc.realized)}</div></div>
+    </div>
+    ${dcW > 0 ? `<div style="margin-top:10px;overflow-x:auto">
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <thead><tr style="color:var(--muted);border-bottom:1px solid #374151">
+          <th style="text-align:left;padding:4px 6px">Market</th>
+          <th style="padding:4px 6px">Watched</th>
+          <th style="padding:4px 6px">Watch px</th>
+          <th style="padding:4px 6px">Min px</th>
+          <th style="padding:4px 6px">Max dip</th>
+          <th style="padding:4px 6px">Now</th>
+        </tr></thead>
+        <tbody>${dcWatchRows}</tbody>
+      </table>
+    </div>` : ''}
+    <div class="bt-note" style="margin-top:10px">
+      <strong>Backtest edge (2098-market full universe):</strong>
+      H=5d dip≥10%: <strong>74% win rate</strong> (n=27, 95% CI 55–87%) vs 40% base.
+      H=7d: 88% win rate (n=8). Edge disappears at H≥10d.<br><br>
+      <strong>How it works:</strong> Markets in [10–50%] YES at 5–9 days out are placed on watch.
+      If the YES price drops ≥10% then recovers to ≥95% of the watch price before <2 days remain,
+      the position is entered at the live ask. Markets that never dip expire unfilled.
+      ${dcExp > 0 ? `<br><span style="color:var(--muted)">${dcExp} markets expired without triggering.</span>` : ''}
+    </div>
+  </div>`;
+
   document.getElementById('bt-content').innerHTML = html;
 }
 
@@ -1068,7 +1204,7 @@ function buildBacktest() {
 const CRONS = [
   {label:'Macro',          color:'#a78bfa', every:24, startH:9,  minute:0,  wf:'paper_trade.yml'},
   {label:'Smart Flow',     color:'#22c55e', every:4,  startH:0,  minute:30, wf:'smart_flow_paper.yml'},
-  {label:'Mid-priced YES', color:'#f59e0b', every:6,  startH:0,  minute:15, wf:'midprice_yes_paper.yml'},
+  {label:'Mid-priced YES', color:'#f59e0b', every:1,  startH:0,  minute:15, wf:'midprice_yes_paper.yml'},
 ];
 const PARIS_TZ = 'Europe/Paris';
 // Base URL for the Actions workflow pages (derive from the close-position ACTIONS_URL)
@@ -1200,6 +1336,7 @@ def generate() -> None:
               "Smart Flow", "smart_flow", primary=True),
         strat(DATA / "macro_positions.csv", "entry_price", "leader_question",
               "Macro (Fed cuts)", "macro", primary=True),
+        load_dip_confirm(DATA / "dip_confirm_positions.csv"),
     ]
     payload = {
         "generated":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
@@ -1219,7 +1356,7 @@ def generate() -> None:
         sign  = "+" if total >= 0 else ""
         print(f"  {s['label']:22s}  MTM {sign}{total*100:.1f}%  "
               f"(open {len(s['open'])}, {s['nW']}W/{s['nL']}L"
-              + (f"/{s['nF']}flip" if s["nF"] else "") + ")")
+              + (f"/{s['nF']}flip" if s.get("nF") else "") + ")")
 
 
 if __name__ == "__main__":
