@@ -132,19 +132,19 @@ def scan_midprice_entries(
 # Ledger I/O
 # ---------------------------------------------------------------------------
 
-def load_ledger() -> pd.DataFrame:
-    if not STATE_FILE.exists():
+def load_ledger(state_file: Path = STATE_FILE) -> pd.DataFrame:
+    if not state_file.exists():
         return pd.DataFrame(columns=_COLS)
-    df = pd.read_csv(STATE_FILE, dtype=str)
+    df = pd.read_csv(state_file, dtype=str)
     for c in _COLS:
         if c not in df.columns:
             df[c] = ""
     return df[_COLS]
 
 
-def save_ledger(df: pd.DataFrame) -> None:
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    df[_COLS].to_csv(STATE_FILE, index=False)
+def save_ledger(df: pd.DataFrame, state_file: Path = STATE_FILE) -> None:
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    df[_COLS].to_csv(state_file, index=False)
 
 
 def _price(token: str) -> float | None:
@@ -163,9 +163,10 @@ def update_ledger(
     lo: float = BAND_LO,
     hi: float = BAND_HI,
     min_volume: float = 5_000.0,
+    state_file: Path = STATE_FILE,
 ) -> pd.DataFrame:
     """One cycle: append new band entries, refresh prices, mark resolutions."""
-    ledger = load_ledger()
+    ledger = load_ledger(state_file=state_file)
     today = date.today().isoformat()
     held = set(ledger["token"].tolist()) if not ledger.empty else set()
 
@@ -206,7 +207,7 @@ def update_ledger(
             logger.info("RESOLVED %s  %s  pnl=%.4f",
                         (row["question"] or "")[:42], ledger.at[i, "status"], pnl)
 
-    save_ledger(ledger)
+    save_ledger(ledger, state_file=state_file)
     return ledger
 
 

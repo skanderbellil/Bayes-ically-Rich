@@ -80,6 +80,33 @@ def load_strategy(path: Path, entry_col: str, q_col: str,
 # Load backtest results
 # ---------------------------------------------------------------------------
 
+def load_band_sweep() -> list:
+    """Load band sweep results for backtest comparison (5d horizon, hold to resolution)."""
+    path = DATA / "band_sweep.csv"
+    if not path.exists():
+        return []
+    df = pd.read_csv(path)
+    bands_of_interest = [
+        (0.10, 0.20), (0.10, 0.30), (0.10, 0.50),
+        (0.20, 0.40), (0.30, 0.50), (0.10, 0.90), (0.50, 0.90),
+    ]
+    rows = []
+    for lo, hi in bands_of_interest:
+        sub = df[(df["lo"] == lo) & (df["hi"] == hi) & (df["horizon_d"] == 5)]
+        if sub.empty or int(sub.iloc[0]["n"]) < 5:
+            continue
+        r = sub.iloc[0]
+        rows.append({
+            "band":     f"[{lo:.2f},{hi:.2f})",
+            "n":        int(r["n"]),
+            "win_rate": round(float(r["win_rate"]), 4),
+            "sharpe":   round(float(r["sharpe"]), 3),
+            "mean_ret": round(float(r["mean_ret"]), 4),
+            "live":     (lo == 0.10 and hi == 0.50),
+        })
+    return rows
+
+
 def load_midprice_backtest() -> dict:
     """Load mid-priced YES historical backtest (5d horizon, [0.10, 0.50) band)."""
     raw_path     = DATA / "midprice_backtest.csv"
@@ -360,7 +387,7 @@ tr:last-child td{border-bottom:none;}
   <div id="strategy-grid" class="strategy-grid"></div>
   <div class="meta">
     10 % of bankroll per bet · PnL shown as % of that allocation<br>
-    <strong>Mid-priced YES</strong>: buy YES tokens in [0.10, 0.50] ~5 d before resolution, hold to settlement.<br>
+    <strong>YES variants</strong> [10–20%] [10–30%] [10–50%] [20–40%]: buy YES in band ~5 d before resolution, hold to settlement. Portfolio equity (Overview/Equity) uses <strong>YES [10–50%]</strong> only to avoid double-counting overlapping trades.<br>
     <strong>Smart Flow</strong>: follow ≥ 3 smart-wallet consensus buys, exit on reversal signal.<br>
     <strong>Macro</strong>: hold dominant leg of macro resolution markets until year-end.
   </div>
@@ -434,7 +461,7 @@ tr:last-child td{border-bottom:none;}
 <script>
 const DATA        = %%DATA%%;
 const ACTIONS_URL = %%ACTIONS_URL%%;
-const S_COLORS    = ['#3b82f6', '#22c55e', '#f59e0b', '#a78bfa'];
+const S_COLORS    = ['#06b6d4','#3b82f6','#f59e0b','#818cf8','#22c55e','#a78bfa'];
 
 // ── NAVIGATION ───────────────────────────────────────────────────────────────
 function showPage(id) {
@@ -526,14 +553,15 @@ function strategyEquity(s) {
 }
 
 function portfolioEquity() {
-  const today = DATA.generated.split(' ')[0];
+  const today   = DATA.generated.split(' ')[0];
+  const primary = DATA.strategies.filter(s => s.primary);
 
-  const allStartDates = DATA.strategies
+  const allStartDates = primary
     .flatMap(s => [...s.open, ...s.resolved].map(r => r.entry_date).filter(Boolean))
     .sort();
   const pts = allStartDates.length ? [{date: allStartDates[0], cum: 0}] : [];
 
-  const allClosed = DATA.strategies
+  const allClosed = primary
     .flatMap(s => s.resolved.filter(r => r.exit_date && r.pnl != null))
     .sort((a, b) => a.exit_date.localeCompare(b.exit_date));
 
@@ -547,7 +575,7 @@ function portfolioEquity() {
     }
   }
 
-  const totalUnrealized = DATA.strategies.reduce((s, d) => s + d.unrealized, 0);
+  const totalUnrealized = primary.reduce((s, d) => s + d.unrealized, 0);
   const todayCum = +(cum + totalUnrealized).toFixed(4);
   if (pts.length && pts[pts.length - 1].date === today) {
     pts[pts.length - 1].cum = todayCum;
@@ -651,8 +679,9 @@ function equitySVG(pts, color) {
 
 // ── PAGE: OVERVIEW ────────────────────────────────────────────────────────────
 function buildOverview() {
-  const totalU   = DATA.strategies.reduce((s, d) => s + d.unrealized, 0);
-  const totalR   = DATA.strategies.reduce((s, d) => s + d.realized,   0);
+  const primary  = DATA.strategies.filter(s => s.primary);
+  const totalU   = primary.reduce((s, d) => s + d.unrealized, 0);
+  const totalR   = primary.reduce((s, d) => s + d.realized,   0);
   const totalMTM = totalU + totalR;
   const totalO   = DATA.strategies.reduce((s, d) => s + d.open.length, 0);
 
@@ -901,6 +930,39 @@ function buildBacktest() {
     html += `<div class="card"><div class="bt-note">Mid-priced YES backtest data not found. Run <code>python experiments/run_midprice_yes_backtest.py</code> to generate it.</div></div>`;
   }
 
+  // ── Band Comparison ───────────────────────────────────────────────────────────
+  const bsw = (DATA.backtests || {}).band_sweep || [];
+  if (bsw.length) {
+    const maxSh = Math.max(...bsw.map(b => b.sharpe));
+    const bsRows = bsw.map(b => {
+      const barPct = (Math.max(b.sharpe, 0) / maxSh * 100).toFixed(1);
+      const color  = b.live   ? 'var(--yellow)'
+                   : b.sharpe >= 0.35 ? 'var(--green)'
+                   : b.sharpe >= 0.20 ? 'var(--blue)' : '#4b5563';
+      return `<div class="horizon-row">
+        <span class="horizon-d" style="width:80px;font-size:10px;text-align:left;flex-shrink:0">${b.band}</span>
+        <div class="horizon-bar-wrap">
+          <div class="horizon-bar" style="width:${barPct}%;background:${color}"></div>
+        </div>
+        <span class="horizon-stats">
+          ${(b.win_rate*100).toFixed(0)}% win · Sh&nbsp;${b.sharpe.toFixed(2)} · n=${b.n}
+          ${b.live ? '<span class="horizon-live-tag">CURRENT</span>' : ''}
+        </span>
+      </div>`;
+    }).join('');
+    html += `<div class="card" style="margin-top:12px">
+      <div class="card-title">Price Band Comparison
+        <span style="font-size:11px;font-weight:400;color:var(--muted)">5d horizon · hold to resolution · 2-year backtest</span>
+      </div>
+      <div class="bt-note" style="margin-bottom:12px">
+        All 4 live band variants tracked simultaneously in paper-trade. Cheapest bets carry
+        the strongest edge — the lower the price band, the higher the implied edge when markets
+        resolve YES. Portfolio equity on the Equity tab uses <strong>YES [10–50%]</strong> only to avoid overlap.
+      </div>
+      ${bsRows}
+    </div>`;
+  }
+
   // ── Smart Flow ───────────────────────────────────────────────────────────────
   const sfRes = sf.resolved || [];
   const sfN   = sfRes.length;
@@ -1074,21 +1136,32 @@ setInterval(tickSchedule, 1000);
 
 
 def generate() -> None:
+    def strat(path, entry_col, q_col, label, sid, primary=True):
+        s = load_strategy(path, entry_col, q_col, label, sid)
+        s["primary"] = primary
+        return s
+
     strategies = [
-        load_strategy(
-            DATA / "midprice_yes_positions.csv", "entry_ask", "question",
-            "Mid-priced YES", "midprice_yes"),
-        load_strategy(
-            DATA / "smart_flow_positions.csv", "entry_ask", "question",
-            "Smart Flow", "smart_flow"),
-        load_strategy(
-            DATA / "macro_positions.csv", "entry_price", "leader_question",
-            "Macro (Fed cuts)", "macro"),
+        strat(DATA / "midprice_yes_10_20_positions.csv", "entry_ask", "question",
+              "YES [10–20%]", "midprice_yes_10_20", primary=False),
+        strat(DATA / "midprice_yes_10_30_positions.csv", "entry_ask", "question",
+              "YES [10–30%]", "midprice_yes_10_30", primary=False),
+        strat(DATA / "midprice_yes_positions.csv", "entry_ask", "question",
+              "YES [10–50%]", "midprice_yes", primary=True),
+        strat(DATA / "midprice_yes_20_40_positions.csv", "entry_ask", "question",
+              "YES [20–40%]", "midprice_yes_20_40", primary=False),
+        strat(DATA / "smart_flow_positions.csv", "entry_ask", "question",
+              "Smart Flow", "smart_flow", primary=True),
+        strat(DATA / "macro_positions.csv", "entry_price", "leader_question",
+              "Macro (Fed cuts)", "macro", primary=True),
     ]
     payload = {
         "generated":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "strategies": strategies,
-        "backtests":  {"midprice_yes": load_midprice_backtest()},
+        "backtests":  {
+            "midprice_yes": load_midprice_backtest(),
+            "band_sweep":   load_band_sweep(),
+        },
     }
     html = _HTML.replace("%%DATA%%",        json.dumps(payload, ensure_ascii=False))
     html = html.replace("%%ACTIONS_URL%%",  json.dumps(ACTIONS_URL))
