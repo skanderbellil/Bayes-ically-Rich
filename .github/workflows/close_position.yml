@@ -1,0 +1,57 @@
+name: Close paper-trade position
+
+on:
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "Strategy"
+        required: true
+        type: choice
+        options:
+          - midprice_yes
+          - smart_flow
+          - macro
+      question:
+        description: "Substring of the market question (case-insensitive)"
+        required: true
+        type: string
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install pandas numpy
+
+      - name: Close position
+        run: |
+          python experiments/close_position.py \
+            --strategy "${{ github.event.inputs.strategy }}" \
+            --question "${{ github.event.inputs.question }}"
+
+      - name: Regenerate dashboard
+        run: pip install scipy scikit-learn matplotlib seaborn tqdm requests tabulate 2>/dev/null; python experiments/generate_dashboard.py
+
+      - name: Commit
+        run: |
+          git config user.name  "paper-trade-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/paper_trade/
+          if ! git diff --cached --quiet; then
+            git commit -m "close position: ${{ github.event.inputs.question }}"
+            git push
+          else
+            echo "No changes to commit."
+          fi
