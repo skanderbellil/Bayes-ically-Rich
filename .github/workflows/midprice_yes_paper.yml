@@ -28,11 +28,14 @@ jobs:
       - name: Run mid-priced-YES update
         run: python experiments/run_midprice_yes_paper_update.py --fraction 0.10
 
+      - name: Generate dashboard
+        run: python experiments/generate_dashboard.py
+
       - name: Commit ledger if changed
         run: |
           git config user.name  "paper-trade-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/paper_trade/midprice_yes_positions.csv data/paper_trade/midprice_yes_benchmark.csv || true
+          git add data/paper_trade/midprice_yes_positions.csv data/paper_trade/midprice_yes_benchmark.csv data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then
             git commit -m "midprice-yes paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
             git push

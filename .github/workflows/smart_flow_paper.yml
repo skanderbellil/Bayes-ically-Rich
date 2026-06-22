@@ -28,11 +28,14 @@ jobs:
       - name: Run daily update
         run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
 
+      - name: Generate dashboard
+        run: python experiments/generate_dashboard.py
+
       - name: Commit ledger if changed
         run: |
           git config user.name  "paper-trade-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/paper_trade/smart_flow_positions.csv || true
+          git add data/paper_trade/smart_flow_positions.csv data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then
             git commit -m "smart-flow paper-trade: daily update $(date -u +%Y-%m-%d)"
             git push
