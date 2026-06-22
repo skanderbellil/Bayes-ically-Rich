@@ -52,6 +52,7 @@ def simulate(path: np.ndarray, outcome: float, entry: float, haircut: float,
 
     path[0] is the entry-day price; path[-1] is the last pre-resolution mark.
     Resolution payoff uses `outcome` (0/1). Path exits sell at price − haircut.
+    exit_kind: "won" | "lost" (held to resolution) | "cut" (stop fired) | "tp" (take-profit fired)
     """
     peak = entry
     n = len(path)
@@ -59,9 +60,11 @@ def simulate(path: np.ndarray, outcome: float, entry: float, haircut: float,
         px = path[d]
         peak = max(peak, px)
         days_left = total_days - d
-        cut = False
+        cut = tp = False
+
         if rule == "hold":
             pass
+        # ── downside stops ────────────────────────────────────────────────
         elif rule == "stop_30":
             cut = px <= entry * 0.70
         elif rule == "stop_50":
@@ -71,12 +74,36 @@ def simulate(path: np.ndarray, outcome: float, entry: float, haircut: float,
         elif rule == "below_d3":
             cut = (d >= 3) and (px < entry)
         elif rule == "decay":
-            floor = entry * (1.0 - 0.5 * days_left / total_days)  # loose→tight
+            floor = entry * (1.0 - 0.5 * days_left / total_days)
             cut = px < floor
-        if cut:
+        # ── take-profit only ──────────────────────────────────────────────
+        elif rule == "tp_2x":     # exit when price doubles from entry
+            tp = px >= entry * 2.0
+        elif rule == "tp_3x":     # exit when price triples from entry
+            tp = px >= entry * 3.0
+        elif rule == "tp_80pct":  # exit when market implies ≥80% YES
+            tp = px >= 0.80
+        elif rule == "tp_90pct":  # exit when market implies ≥90% YES
+            tp = px >= 0.90
+        # ── stop + take-profit combos ─────────────────────────────────────
+        elif rule == "s30_tp2x":
+            cut = px <= entry * 0.70
+            tp  = px >= entry * 2.0
+        elif rule == "s30_tp3x":
+            cut = px <= entry * 0.70
+            tp  = px >= entry * 3.0
+        elif rule == "s30_tp80":
+            cut = px <= entry * 0.70
+            tp  = px >= 0.80
+        elif rule == "s30_tp90":
+            cut = px <= entry * 0.70
+            tp  = px >= 0.90
+
+        if cut or tp:
             exit_px = max(px - haircut, 0.0)
-            return exit_px / entry - 1.0, "cut"
-    # never cut → hold to resolution
+            return exit_px / entry - 1.0, "tp" if tp else "cut"
+
+    # never triggered → hold to resolution
     return outcome / entry - 1.0, "won" if outcome == 1 else "lost"
 
 
@@ -100,7 +127,15 @@ def main() -> None:
 
     lo, hi = args.band
     H = args.horizon
-    RULES = ["hold", "stop_30", "stop_50", "trail_25", "below_d3", "decay"]
+    RULES = [
+        "hold",
+        # ── downside stops ──────────────────────────────────────────
+        "stop_30", "stop_50", "trail_25", "below_d3", "decay",
+        # ── take-profit only ────────────────────────────────────────
+        "tp_2x", "tp_3x", "tp_80pct", "tp_90pct",
+        # ── stop + take-profit combos ────────────────────────────────
+        "s30_tp2x", "s30_tp3x", "s30_tp80", "s30_tp90",
+    ]
 
     print("""
 ╔══════════════════════════════════════════════════════════╗
@@ -158,7 +193,7 @@ def main() -> None:
         eq = np.cumsum(rets)
         rule_curves[rule] = eq
         n_cut = int((kinds == "cut").sum())
-        # of the positions this rule cut, how many would have WON if held?
+        n_tp  = int((kinds == "tp").sum())
         held_outcomes = np.array([pm["outcome"] for pm in paths])
         cut_mask = kinds == "cut"
         cut_would_win = int(held_outcomes[cut_mask].sum()) if cut_mask.any() else 0
@@ -167,7 +202,7 @@ def main() -> None:
             "mean_ret": rets.mean(), "median_ret": float(np.median(rets)),
             "sharpe": rets.mean() / rets.std(ddof=1) if rets.std(ddof=1) > 0 else float("nan"),
             "tot_pnl": rets.sum(), "maxdd": max_drawdown(eq),
-            "n_cut": n_cut, "cut_would_have_won": cut_would_win,
+            "n_cut": n_cut, "n_tp": n_tp, "cut_would_have_won": cut_would_win,
         })
 
     res = pd.DataFrame(rows)
@@ -176,29 +211,40 @@ def main() -> None:
     print(f"{'═'*92}")
     print(f"  EXIT-RULE COMPARISON — {len(paths)} markets, entry {H}d out, band [{lo:.2f},{hi:.2f}]")
     print(f"{'═'*92}")
-    print(f"  {'rule':>9} | {'mean ret':>9} | {'median':>8} | {'Sharpe':>7} | "
-          f"{'tot PnL':>8} | {'maxDD':>7} | {'#cut':>5} | {'cut→wld-win':>11}")
-    print(f"  {'-'*9}-+-{'-'*9}-+-{'-'*8}-+-{'-'*7}-+-{'-'*8}-+-{'-'*7}-+-{'-'*5}-+-{'-'*11}")
+    print(f"  {'rule':>10} | {'mean ret':>9} | {'median':>8} | {'Sharpe':>7} | "
+          f"{'tot PnL':>8} | {'maxDD':>7} | {'#cut':>5} | {'#tp':>5} | {'cut→win':>7}")
+    print(f"  {'-'*10}-+-{'-'*9}-+-{'-'*8}-+-{'-'*7}-+-{'-'*8}-+-{'-'*7}-+-{'-'*5}-+-{'-'*5}-+-{'-'*7}")
     for _, r in res.iterrows():
-        print(f"  {r['rule']:>9} | {r['mean_ret']:>+8.1%} | {r['median_ret']:>+7.1%} | "
+        print(f"  {r['rule']:>10} | {r['mean_ret']:>+8.1%} | {r['median_ret']:>+7.1%} | "
               f"{r['sharpe']:>7.2f} | {r['tot_pnl']:>+7.2f} | {r['maxdd']:>7.2f} | "
-              f"{int(r['n_cut']):>5} | {int(r['cut_would_have_won']):>11}")
+              f"{int(r['n_cut']):>5} | {int(r['n_tp']):>5} | {int(r['cut_would_have_won']):>7}")
 
     hold = res[res["rule"] == "hold"].iloc[0]
     print(f"\n  Baseline (hold): Sharpe {hold['sharpe']:.2f}, PnL {hold['tot_pnl']:+.1f}, "
           f"maxDD {hold['maxdd']:.1f}")
-    print("  '#cut' = positions exited early; 'cut→wld-win' = how many of those")
-    print("  would have resolved YES if held (the opportunity cost of cutting).")
+    print("  '#cut'=stop exits  '#tp'=take-profit exits  'cut→win'=how many stops would have resolved YES")
 
     # ── Plot equity curves ────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(11, 6))
-    palette = {"hold": "#636363", "stop_30": "#fdae6b", "stop_50": "#e6550d",
-               "trail_25": "#756bb1", "below_d3": "#31a354", "decay": "#c51b8a"}
+    fig, ax = plt.subplots(figsize=(13, 7))
+    palette = {
+        "hold":     "#636363",
+        # stops (orange/red/purple spectrum)
+        "stop_30":  "#fdae6b", "stop_50":  "#e6550d",
+        "trail_25": "#756bb1", "below_d3": "#31a354", "decay": "#c51b8a",
+        # take-profits only (blue spectrum)
+        "tp_2x":    "#2196f3", "tp_3x":    "#0d47a1",
+        "tp_80pct": "#00bcd4", "tp_90pct": "#006064",
+        # combos (green spectrum)
+        "s30_tp2x": "#66bb6a", "s30_tp3x": "#2e7d32",
+        "s30_tp80": "#a5d6a7", "s30_tp90": "#1b5e20",
+    }
     for rule in RULES:
         eq = rule_curves[rule]
         rr = res[res["rule"] == rule].iloc[0]
-        ax.plot(range(len(eq)), eq, lw=1.9, color=palette[rule],
-                label=f"{rule:>9}  Sharpe {rr['sharpe']:.2f}  PnL {rr['tot_pnl']:+.1f}  DD {rr['maxdd']:.1f}")
+        color = palette.get(rule, "#999999")
+        lw = 2.5 if rule == "hold" else 1.6
+        ax.plot(range(len(eq)), eq, lw=lw, color=color,
+                label=f"{rule:<10}  Sh {rr['sharpe']:.2f}  PnL {rr['tot_pnl']:+.1f}  DD {rr['maxdd']:.1f}")
     ax.axhline(0, color="grey", lw=0.8)
     ax.set_title(f"Dynamic exits — long YES @ {H}d, band [{lo:.2f},{hi:.2f}], $1/trade")
     ax.set_xlabel("trade # (ordered by resolution date)")
