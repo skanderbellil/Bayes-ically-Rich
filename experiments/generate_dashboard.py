@@ -77,6 +77,58 @@ def load_strategy(path: Path, entry_col: str, q_col: str,
 
 
 # ---------------------------------------------------------------------------
+# Load backtest results
+# ---------------------------------------------------------------------------
+
+def load_midprice_backtest() -> dict:
+    """Load mid-priced YES historical backtest (5d horizon, [0.10, 0.50) band)."""
+    raw_path     = DATA / "midprice_backtest.csv"
+    summary_path = DATA / "midprice_backtest_summary.csv"
+    bench_path   = DATA / "midprice_yes_benchmark.csv"
+    BET = 0.10
+
+    if not all(p.exists() for p in [raw_path, summary_path, bench_path]):
+        return {"available": False}
+
+    bench = pd.read_csv(bench_path).iloc[0]
+
+    # Build flat-bet cumulative equity curve: 5d horizon, [0.10, 0.50) band
+    raw  = pd.read_csv(raw_path)
+    mask = (raw["horizon_d"] == 5) & (raw["price"] >= 0.10) & (raw["price"] < 0.50)
+    tr   = raw[mask].copy().sort_values("t_res")
+    tr["pnl"] = np.where(tr["outcome"] == 1,
+                         BET * (1.0 / tr["price"] - 1.0), -BET)
+
+    # Aggregate same-day resolutions, then cumulate
+    by_date = (tr.groupby("t_res")["pnl"]
+                 .sum()
+                 .cumsum()
+                 .reset_index()
+                 .rename(columns={"pnl": "cum", "t_res": "date"}))
+    equity = [{"date": r["date"], "cum": round(r["cum"], 4)}
+              for _, r in by_date.iterrows()]
+
+    # Per-horizon stats for [0.10, 0.50) band
+    summ = pd.read_csv(summary_path)
+    band = summ[(summ["lo"] == 0.10) & (summ["hi"] == 0.50)].sort_values("horizon_d")
+    by_horizon = [{"h": int(r["horizon_d"]), "n": int(r["n"]),
+                   "wr": round(float(r["win_rate"]), 4),
+                   "sharpe": round(float(r["sharpe"]), 3)}
+                  for _, r in band.iterrows()]
+
+    return {
+        "available":  True,
+        "n":          int(bench["n"]),
+        "win_rate":   round(float(bench["win_rate"]), 4),
+        "mean_ret":   round(float(bench["mean_ret"]) * BET, 4),
+        "sharpe":     round(float(bench["sharpe"]), 3),
+        "period":     f"{equity[0]['date'][:7]} – {equity[-1]['date'][:7]}",
+        "equity":     equity,
+        "by_horizon": by_horizon,
+    }
+
+
+# ---------------------------------------------------------------------------
 # HTML template
 # ---------------------------------------------------------------------------
 
@@ -252,6 +304,24 @@ tr:last-child td{border-bottom:none;}
 @media(max-width:380px){
   .hide-xs{display:none;}
 }
+/* ── BACKTEST PAGE ── */
+.bt-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.bt-kpi{background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;text-align:center;}
+.bt-kpi-lbl{font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px;}
+.bt-kpi-val{font-size:17px;font-weight:700;}
+.horizon-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(42,45,62,.5);}
+.horizon-row:last-child{border-bottom:none;}
+.horizon-d{width:26px;font-size:11px;color:var(--muted);flex-shrink:0;text-align:right;}
+.horizon-bar-wrap{flex:1;height:6px;background:#2a2d3e;border-radius:3px;overflow:hidden;}
+.horizon-bar{height:100%;border-radius:3px;background:var(--blue);transition:width .4s;}
+.horizon-bar.live{background:var(--green);}
+.horizon-stats{font-size:11px;color:var(--muted);white-space:nowrap;min-width:120px;text-align:right;}
+.horizon-live-tag{font-size:9px;font-weight:700;color:var(--green);margin-left:4px;
+                   background:rgba(34,197,94,.15);padding:1px 5px;border-radius:3px;}
+.bt-section-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+                  margin:14px 0 8px;font-weight:600;}
+.bt-note{font-size:11px;color:var(--muted);line-height:1.6;padding:10px 12px;
+          background:rgba(255,255,255,.03);border-radius:8px;border-left:3px solid var(--border);}
 /* ── SCHEDULE CARD ── */
 .sched-row{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid rgba(42,45,62,.6);}
 .sched-row:last-child{border-bottom:none;}
@@ -272,6 +342,7 @@ tr:last-child td{border-bottom:none;}
     <button class="dtab" onclick="showPage('open')" id="dtab-open">📋 Open</button>
     <button class="dtab" onclick="showPage('equity')" id="dtab-equity">📈 Equity</button>
     <button class="dtab" onclick="showPage('history')" id="dtab-history">🏁 History</button>
+    <button class="dtab" onclick="showPage('bt')" id="dtab-bt">🔬 Backtests</button>
   </div>
 </div>
 
@@ -314,6 +385,12 @@ tr:last-child td{border-bottom:none;}
   <div id="history-list"></div>
 </div>
 
+<!-- ── BACKTESTS ── -->
+<div id="page-bt" class="page">
+  <div class="page-hdr"><h2>Backtests</h2></div>
+  <div id="bt-content"></div>
+</div>
+
 <!-- Bottom nav (mobile) -->
 <nav class="bottom-nav">
   <button class="nav-btn active" onclick="showPage('overview')" id="nav-overview">
@@ -327,6 +404,9 @@ tr:last-child td{border-bottom:none;}
   </button>
   <button class="nav-btn" onclick="showPage('history')" id="nav-history">
     <span class="nav-icon">🏁</span><span class="nav-lbl">History</span>
+  </button>
+  <button class="nav-btn" onclick="showPage('bt')" id="nav-bt">
+    <span class="nav-icon">🔬</span><span class="nav-lbl">Tests</span>
   </button>
 </nav>
 
@@ -747,6 +827,150 @@ function copyCmd() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCut(); });
 
+// ── PAGE: BACKTESTS ───────────────────────────────────────────────────────────
+function buildBacktest() {
+  const bt  = DATA.backtests || {};
+  const mp  = bt.midprice_yes || {};
+  const sf  = DATA.strategies.find(s => s.strategy_id === 'smart_flow') || {};
+  const mac = DATA.strategies.find(s => s.strategy_id === 'macro') || {};
+  let html  = '';
+
+  // ── Mid-priced YES ──────────────────────────────────────────────────────────
+  if (mp.available) {
+    const eq  = mp.equity;               // [{date, cum}]
+    const MAX_EQ_PTS = 80;               // downsample for SVG clarity
+    const step = Math.max(1, Math.floor(eq.length / MAX_EQ_PTS));
+    const eq80 = eq.filter((_, i) => i % step === 0 || i === eq.length - 1);
+
+    // Scale so chart Y axis shows "portfolio %" (cum * 100 = % of initial capital)
+    // (each trade is 10% of capital; cum = sum of those returns)
+    const chartPts = eq80.map(p => ({date: p.date, cum: +(p.cum / 10).toFixed(4)}));
+
+    const finalPct  = fmtPct(eq[eq.length - 1].cum / 10);
+    const maxDD     = (() => {
+      let peak = 0, dd = 0;
+      for (const p of eq) { peak = Math.max(peak, p.cum); dd = Math.max(dd, peak - p.cum); }
+      return fmtPct(-(dd / 10));
+    })();
+
+    // Horizon comparison bars (max win rate for scale)
+    const maxWR = Math.max(...mp.by_horizon.map(h => h.wr));
+    const horizonRows = mp.by_horizon.map(h => {
+      const isLive = h.h === 5;
+      const barPct = (h.wr / maxWR * 100).toFixed(1);
+      return `<div class="horizon-row">
+        <span class="horizon-d">${h.h}d</span>
+        <div class="horizon-bar-wrap">
+          <div class="horizon-bar${isLive?' live':''}" style="width:${barPct}%"></div>
+        </div>
+        <span class="horizon-stats">
+          ${(h.wr*100).toFixed(0)}% win&nbsp; Sharpe ${h.sharpe.toFixed(2)}
+          ${isLive ? '<span class="horizon-live-tag">LIVE</span>' : ''}
+        </span>
+      </div>`;
+    }).join('');
+
+    html += `<div class="card">
+      <div class="card-title">Mid-priced YES
+        <span style="font-size:11px;font-weight:400;color:var(--muted)">${mp.period} · ${mp.n} trades</span>
+      </div>
+      <div class="bt-kpis">
+        <div class="bt-kpi">
+          <div class="bt-kpi-lbl">Portfolio return</div>
+          <div class="bt-kpi-val pos">${finalPct}</div>
+        </div>
+        <div class="bt-kpi">
+          <div class="bt-kpi-lbl">Win rate</div>
+          <div class="bt-kpi-val">${(mp.win_rate*100).toFixed(1)}%</div>
+        </div>
+        <div class="bt-kpi">
+          <div class="bt-kpi-lbl">Sharpe</div>
+          <div class="bt-kpi-val">${mp.sharpe.toFixed(2)}</div>
+        </div>
+      </div>
+      <div class="bt-note" style="margin-bottom:12px">
+        Flat 10% sizing per trade, non-compounded · ${mp.n} resolved markets from Polymarket ·
+        Buy YES at ask when price in [10%,50%] with 2–10 days to resolution, hold to settlement.
+        Max drawdown: <strong>${maxDD}</strong> from peak.
+      </div>
+      ${equitySVG(chartPts, '#3b82f6')}
+      <div class="bt-section-lbl">Win rate by entry horizon (band 10%–50%)</div>
+      ${horizonRows}
+    </div>`;
+  } else {
+    html += `<div class="card"><div class="bt-note">Mid-priced YES backtest data not found. Run <code>python experiments/run_midprice_yes_backtest.py</code> to generate it.</div></div>`;
+  }
+
+  // ── Smart Flow ───────────────────────────────────────────────────────────────
+  const sfRes = sf.resolved || [];
+  const sfN   = sfRes.length;
+  const sfW   = sf.nW || 0, sfL = sf.nL || 0, sfF = sf.nF || 0;
+  const sfWR  = sfN ? (sfW / sfN * 100).toFixed(0) : '—';
+  const sfPnl = fmtPct(sf.realized);
+
+  html += `<div class="card" style="margin-top:12px">
+    <div class="card-title">Smart Flow
+      <span style="font-size:11px;font-weight:400;color:var(--muted)">Live paper-trade · inception Jun 2026</span>
+    </div>
+    <div class="bt-kpis">
+      <div class="bt-kpi">
+        <div class="bt-kpi-lbl">Resolved</div>
+        <div class="bt-kpi-val neu">${sfN}</div>
+      </div>
+      <div class="bt-kpi">
+        <div class="bt-kpi-lbl">Win rate</div>
+        <div class="bt-kpi-val">${sfWR}%</div>
+      </div>
+      <div class="bt-kpi">
+        <div class="bt-kpi-lbl">Realized PnL</div>
+        <div class="bt-kpi-val ${cls(sf.realized)}">${sfPnl}</div>
+      </div>
+    </div>
+    <div class="bt-note">
+      <strong>No pre-launch historical backtest</strong> — strategy depends on live leaderboard wallet data
+      that doesn't exist for past dates. Live paper-trade started Jun 2026.<br><br>
+      <strong>Edge logic:</strong> When ≥ 3 top Polymarket wallets (ranked by 7d/30d profit, excluding
+      market-makers) all buy the same outcome within 7 days, enter long at the ask. Exit early if
+      smart-wallet net flow reverses (sellers > buyers) — this is the <em>flipped</em> status you see in History.
+      ${sfN > 0 ? `<br><br>Current record: <strong>${sfW}W / ${sfL}L / ${sfF} flip</strong>. Too early to draw conclusions — aim for 50+ resolved trades.` : ''}
+    </div>
+  </div>`;
+
+  // ── Macro ────────────────────────────────────────────────────────────────────
+  const macO = (mac.open || []).length;
+  const macR = (mac.resolved || []).length;
+
+  html += `<div class="card" style="margin-top:12px">
+    <div class="card-title">Macro (Fed cuts)
+      <span style="font-size:11px;font-weight:400;color:var(--muted)">Live paper-trade · inception Jun 2026</span>
+    </div>
+    <div class="bt-kpis">
+      <div class="bt-kpi">
+        <div class="bt-kpi-lbl">Open</div>
+        <div class="bt-kpi-val neu">${macO}</div>
+      </div>
+      <div class="bt-kpi">
+        <div class="bt-kpi-lbl">Resolved</div>
+        <div class="bt-kpi-val neu">${macR}</div>
+      </div>
+      <div class="bt-kpi">
+        <div class="bt-kpi-lbl">Unrealized</div>
+        <div class="bt-kpi-val ${cls(mac.unrealized)}">${fmtPct(mac.unrealized)}</div>
+      </div>
+    </div>
+    <div class="bt-note">
+      <strong>No historical backtest</strong> — macro markets on Polymarket only became liquid and
+      numerous from 2025 onward. Strategy holds a low-turnover position all year so sample size
+      grows very slowly.<br><br>
+      <strong>Edge logic:</strong> Scan multi-outcome macro events (e.g. "How many Fed rate cuts in 2026?"),
+      buy the current field leader (highest-priced outcome), hold to year-end resolution.
+      Conviction bet that the market's dominant macro view is also the right one.
+    </div>
+  </div>`;
+
+  document.getElementById('bt-content').innerHTML = html;
+}
+
 // ── SCHEDULE COUNTDOWN ───────────────────────────────────────────────────────
 // Cron definitions: every N hours starting at startH UTC, at :minute past the hour
 const CRONS = [
@@ -840,6 +1064,7 @@ buildOverview();
 buildOpen();
 buildEquity();
 buildHistory();
+buildBacktest();
 buildSchedule();
 setInterval(tickSchedule, 1000);
 </script>
@@ -863,6 +1088,7 @@ def generate() -> None:
     payload = {
         "generated":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "strategies": strategies,
+        "backtests":  {"midprice_yes": load_midprice_backtest()},
     }
     html = _HTML.replace("%%DATA%%",        json.dumps(payload, ensure_ascii=False))
     html = html.replace("%%ACTIONS_URL%%",  json.dumps(ACTIONS_URL))
