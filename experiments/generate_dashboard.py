@@ -53,6 +53,7 @@ def load_strategy(path: Path, entry_col: str, q_col: str,
             "pnl":        round(float(r["pnl"]), 4) if pd.notna(r.get("pnl")) else None,
             "exit_date":  safe_str(r.get("exit_date")),
             "entry_date": safe_str(r.get("entry_date")),
+            "token":      str(r["token"]) if "token" in r.index and pd.notna(r.get("token")) else "",
         }
         if include_mtm:
             d["mtm"] = round(float(r["mtm"]), 4) if pd.notna(r.get("mtm")) else None
@@ -126,6 +127,7 @@ def load_dip_confirm(path: Path, label: str = "Dip-Confirm YES",
             "entry":       round(float(r["entry_ask"]), 4)   if pd.notna(r.get("entry_ask"))   else None,
             "current":     round(float(r["current_price"]), 4) if pd.notna(r.get("current_price")) else None,
             "mtm":         round(float(r["mtm"]), 4) if pd.notna(r.get("mtm")) else None,
+            "token":       str(r["token"]) if "token" in r.index and pd.notna(r.get("token")) else "",
             "status":      "open",
         })
 
@@ -350,6 +352,13 @@ tr:last-child td{border-bottom:none;}
   cursor:pointer;white-space:nowrap;transition:background .15s;
 }
 .cut-btn:hover{background:rgba(239,68,68,.25);}
+.expand-btn{
+  background:rgba(59,130,246,.1);color:#60a5fa;
+  border:1px solid rgba(59,130,246,.25);border-radius:4px;
+  padding:3px 6px;font-size:10px;cursor:pointer;
+  transition:background .15s;margin-right:4px;
+}
+.expand-btn:hover{background:rgba(59,130,246,.25);}
 
 /* ── MODAL (slides up from bottom on mobile) ── */
 .modal-backdrop{
@@ -835,6 +844,105 @@ function buildOverview() {
   }).join('');
 }
 
+// ── POSITION PRICE CHART ─────────────────────────────────────────────────────
+function buildPriceChart(hist, entryPx, entryDate) {
+  const W = 520, H = 130;
+  const pad = {t: 12, r: 18, b: 24, l: 44};
+  const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+
+  const times  = hist.map(p => p.t);
+  const prices = hist.map(p => +p.p);
+  const tMin = times[0], tMax = times[times.length - 1];
+  const rawMin = Math.min(...prices, entryPx);
+  const rawMax = Math.max(...prices, entryPx);
+  const margin = Math.max((rawMax - rawMin) * 0.15, 0.03);
+  const pMin = Math.max(0, rawMin - margin);
+  const pMax = Math.min(1, rawMax + margin);
+
+  const tx = t => pad.l + (tMax > tMin ? (t - tMin) / (tMax - tMin) : 0.5) * cW;
+  const ty = p => pad.t + (1 - (p - pMin) / Math.max(pMax - pMin, 0.001)) * cH;
+
+  const lastPx = prices[prices.length - 1];
+  const col = lastPx >= entryPx ? '#22c55e' : '#ef4444';
+
+  const polyPts = hist.map(p => `${tx(p.t).toFixed(1)},${ty(p.p).toFixed(1)}`).join(' ');
+  const fillPts = `${tx(tMin).toFixed(1)},${(pad.t + cH).toFixed(1)} ${polyPts} ${tx(tMax).toFixed(1)},${(pad.t + cH).toFixed(1)}`;
+
+  const ey = +ty(entryPx).toFixed(1);
+
+  // Y-axis grid ticks
+  const step = (pMax - pMin) <= 0.15 ? 0.05 : 0.10;
+  const yTicks = [];
+  for (let v = Math.ceil(pMin / step) * step; v <= pMax + 1e-9; v = Math.round((v + step) * 1000) / 1000) {
+    yTicks.push(+v.toFixed(3));
+  }
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:${W}px">`;
+
+  // Grid
+  svg += yTicks.map(v => {
+    const y = ty(v).toFixed(1);
+    return `<line x1="${pad.l}" y1="${y}" x2="${pad.l+cW}" y2="${y}" stroke="#1e2436" stroke-width="1"/>` +
+           `<text x="${pad.l-5}" y="${+y+3.5}" fill="#64748b" font-size="9" text-anchor="end">${v.toFixed(2)}</text>`;
+  }).join('');
+
+  // Fill + line
+  svg += `<polygon points="${fillPts}" fill="${col}" opacity="0.1"/>`;
+  svg += `<line x1="${pad.l}" y1="${ey}" x2="${pad.l+cW}" y2="${ey}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3"/>`;
+  svg += `<polyline points="${polyPts}" fill="none" stroke="${col}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+  // Entry label
+  svg += `<text x="${pad.l-5}" y="${ey+3.5}" fill="#94a3b8" font-size="8.5" text-anchor="end">${entryPx.toFixed(3)}</text>`;
+
+  // Current dot + label
+  const lx = +tx(tMax).toFixed(1), ly = +ty(lastPx).toFixed(1);
+  svg += `<circle cx="${lx}" cy="${ly}" r="3.5" fill="${col}"/>`;
+  const lbX = lx + 6 + (W - pad.r - lx < 40 ? -50 : 0);
+  svg += `<text x="${lbX}" y="${ly+4}" fill="${col}" font-size="10" font-weight="600">${lastPx.toFixed(3)}</text>`;
+
+  // X axis dates
+  const fmt = ts => new Date(ts * 1000).toISOString().slice(5, 10);
+  svg += `<text x="${pad.l}" y="${H-4}" fill="#64748b" font-size="9">${entryDate || fmt(tMin)}</text>`;
+  svg += `<text x="${pad.l+cW}" y="${H-4}" fill="#64748b" font-size="9" text-anchor="end">${fmt(tMax)}</text>`;
+
+  svg += '</svg>';
+  return svg;
+}
+
+async function expandPos(btn, token, entryDate, entryPx, rowId) {
+  const tr = document.getElementById(rowId);
+  if (!tr) return;
+  if (tr.style.display !== 'none') {
+    tr.style.display = 'none';
+    btn.textContent = '▶';
+    return;
+  }
+  const td = tr.querySelector('td');
+  td.innerHTML = '<span style="color:var(--muted);font-size:12px;padding:4px 0;display:block">Loading…</span>';
+  tr.style.display = '';
+  btn.textContent = '▼';
+  try {
+    const url = `https://clob.polymarket.com/prices-history?market=${encodeURIComponent(token)}&interval=max&fidelity=60`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const json = await resp.json();
+    let hist = json.history || [];
+    if (entryDate) {
+      const since = new Date(entryDate).getTime() / 1000 - 86400;
+      hist = hist.filter(p => p.t >= since);
+    }
+    if (!hist.length) {
+      td.innerHTML = '<span style="color:var(--muted);font-size:12px;padding:4px 0;display:block">No price data available</span>';
+      return;
+    }
+    td.innerHTML = buildPriceChart(hist, entryPx, entryDate);
+  } catch(e) {
+    td.innerHTML = `<span style="color:var(--red);font-size:11px;padding:4px 0;display:block">Failed to load: ${e.message}</span>`;
+    btn.textContent = '▶';
+    tr.style.display = 'none';
+  }
+}
+
 // ── PAGE: OPEN POSITIONS ──────────────────────────────────────────────────────
 function buildOpen() {
   // Filter pill buttons
@@ -855,14 +963,25 @@ function buildOpen() {
         <div class="card"><div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No open positions</div></div>
       </div>`;
     }
-    const rows = d.open.map(r => `<tr>
+    const rows = d.open.flatMap((r, ri) => {
+      const chartId = `chart-${i}-${ri}`;
+      const hasToken = r.token && r.token.length > 8;
+      const expandBtn = hasToken
+        ? `<button class="expand-btn" title="Show price chart" onclick="expandPos(this,${JSON.stringify(r.token)},${JSON.stringify(r.entry_date||'')},${r.entry != null ? r.entry : 0},'${chartId}')">▶</button>`
+        : '';
+      const mainRow = `<tr>
       <td class="q">${r.question}</td>
       <td style="padding-right:2px">${miniTrack(r.entry, r.current)}</td>
       <td class="hide-xs">${r.entry   != null ? r.entry.toFixed(3)   : '—'}</td>
       <td>${r.current != null ? r.current.toFixed(3) : '—'}</td>
       <td class="${cls(r.mtm)}">${fmtPct(r.mtm)}</td>
-      <td><button class="cut-btn" data-sid="${d.strategy_id}" data-q="${esc(r.question)}" onclick="openCut(this)">✂</button></td>
-    </tr>`).join('');
+      <td style="white-space:nowrap">${expandBtn}<button class="cut-btn" data-sid="${d.strategy_id}" data-q="${esc(r.question)}" onclick="openCut(this)">✂</button></td>
+    </tr>`;
+      const chartRow = hasToken
+        ? `<tr id="${chartId}" style="display:none"><td colspan="6" style="padding:6px 14px 14px"></td></tr>`
+        : '';
+      return [mainRow, chartRow];
+    }).join('');
 
     const watchRows = nWatch ? (d.watching || []).map(r => {
       const dipPct = r.dip_pct ? (r.dip_pct * 100).toFixed(1) : '0.0';
