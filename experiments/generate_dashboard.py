@@ -54,6 +54,7 @@ def load_strategy(path: Path, entry_col: str, q_col: str,
             "exit_date":  safe_str(r.get("exit_date")),
             "entry_date": safe_str(r.get("entry_date")),
             "token":      str(r["token"]) if "token" in r.index and pd.notna(r.get("token")) else "",
+            "fraction":   round(float(r["bet_fraction"]), 4) if "bet_fraction" in r.index and pd.notna(r.get("bet_fraction")) else 0.1,
         }
         if include_mtm:
             d["mtm"] = round(float(r["mtm"]), 4) if pd.notna(r.get("mtm")) else None
@@ -128,6 +129,7 @@ def load_dip_confirm(path: Path, label: str = "Dip-Confirm YES",
             "current":     round(float(r["current_price"]), 4) if pd.notna(r.get("current_price")) else None,
             "mtm":         round(float(r["mtm"]), 4) if pd.notna(r.get("mtm")) else None,
             "token":       str(r["token"]) if "token" in r.index and pd.notna(r.get("token")) else "",
+            "fraction":    round(float(r["bet_fraction"]), 4) if pd.notna(r.get("bet_fraction")) else 0.1,
             "status":      "open",
         })
 
@@ -942,6 +944,21 @@ async function expandPos(btn) {
       return;
     }
     td.innerHTML = buildPriceChart(hist, entryPx, entryDate);
+
+    // Refresh Now / MTM / mini-track in the main row with live price
+    const livePx  = +hist[hist.length - 1].p;
+    const frac    = parseFloat(btn.dataset.fraction) || 0.1;
+    const mainRow = tr.previousElementSibling;
+    if (mainRow) {
+      const tds = mainRow.querySelectorAll('td');
+      if (tds[1]) tds[1].innerHTML = miniTrack(entryPx, livePx);
+      if (tds[3]) tds[3].innerHTML = `${livePx.toFixed(3)} <span style="font-size:9px;color:var(--accent);vertical-align:middle">live</span>`;
+      if (tds[4] && entryPx > 0) {
+        const mtm = (livePx / entryPx - 1) * frac;
+        tds[4].textContent = (mtm >= 0 ? '+' : '') + (mtm * 100).toFixed(1) + '%';
+        tds[4].className   = cls(mtm);
+      }
+    }
   } catch(e) {
     td.innerHTML = `<span style="color:var(--red);font-size:11px;padding:4px 0;display:block">Failed to load: ${e.message}</span>`;
     btn.textContent = '▶';
@@ -973,7 +990,7 @@ function buildOpen() {
       const chartId = `chart-${i}-${ri}`;
       const hasToken = r.token && r.token.length > 8;
       const expandBtn = hasToken
-        ? `<button class="expand-btn" title="Show price chart" data-token="${r.token}" data-entry-date="${r.entry_date||''}" data-entry="${r.entry != null ? r.entry : 0}" data-chart="${chartId}" onclick="expandPos(this)">▶</button>`
+        ? `<button class="expand-btn" title="Show price chart" data-token="${r.token}" data-entry-date="${r.entry_date||''}" data-entry="${r.entry != null ? r.entry : 0}" data-fraction="${r.fraction != null ? r.fraction : 0.1}" data-chart="${chartId}" onclick="expandPos(this)">▶</button>`
         : '';
       const mainRow = `<tr>
       <td class="q">${r.question}</td>
