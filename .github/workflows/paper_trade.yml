@@ -1,16 +1,16 @@
-name: Macro paper-trade tracker
+name: Paper-trade tracker — all strategies
 
 on:
   schedule:
-    # 09:00 UTC daily — after most macro markets open for the day
-    - cron: "0 9 * * *"
-  workflow_dispatch:       # run manually from GitHub Actions tab any time
+    # hourly — public repo, free minutes, keeps MTM fresh across all strategies
+    - cron: "15 * * * *"
+  workflow_dispatch:       # run manually from the Actions tab any time
 
 jobs:
   update:
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # needed to commit the ledger back
+      contents: write      # needed to commit ledgers back
 
     steps:
       - uses: actions/checkout@v4
@@ -25,19 +25,37 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]" 2>/dev/null || pip install pandas numpy scipy requests tabulate scikit-learn matplotlib seaborn tqdm
 
-      - name: Run daily update
+      - name: Mid-priced-YES — all bands (single scan)
+        run: python experiments/run_all_midprice_yes_update.py --fraction 0.10
+
+      - name: Dip-confirm YES
+        run: python experiments/run_dip_confirm_paper_update.py --fraction 0.10
+
+      - name: Smart-flow consensus
+        run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
+
+      - name: Macro
         run: python experiments/run_paper_trade_update.py --fraction 0.10
 
       - name: Generate dashboard
         run: python experiments/generate_dashboard.py
 
-      - name: Commit ledger if changed
+      - name: Commit ledgers if changed
         run: |
           git config user.name  "paper-trade-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/paper_trade/macro_positions.csv data/paper_trade/dashboard.html || true
+          git add \
+            data/paper_trade/midprice_yes_positions.csv \
+            data/paper_trade/midprice_yes_10_20_positions.csv \
+            data/paper_trade/midprice_yes_10_30_positions.csv \
+            data/paper_trade/midprice_yes_20_40_positions.csv \
+            data/paper_trade/midprice_yes_benchmark.csv \
+            data/paper_trade/dip_confirm_positions.csv \
+            data/paper_trade/smart_flow_positions.csv \
+            data/paper_trade/macro_positions.csv \
+            data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then
-            git commit -m "paper-trade: daily update $(date -u +%Y-%m-%d)"
+            git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
             git push
           else
             echo "No ledger changes — nothing to commit."
