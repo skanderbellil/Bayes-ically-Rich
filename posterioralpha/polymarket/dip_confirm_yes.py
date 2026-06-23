@@ -80,12 +80,29 @@ def _days_to_res(end_date: str | None) -> float | None:
 
 def _mid(token: str) -> float | None:
     feat = order_book_features(fetch_order_book(token))
-    return feat["mid"] if feat else None
+    if feat:
+        return feat["mid"]
+    try:
+        hist = fetch_token_history_raw(token, fidelity_minutes=60, use_cache=False)
+        if not hist.empty:
+            return float(hist.iloc[-1])
+    except Exception:
+        pass
+    return None
 
 
 def _ask(token: str) -> tuple[float, float] | None:
     feat = order_book_features(fetch_order_book(token))
-    return (feat["mid"], feat["best_ask"]) if feat else None
+    if feat:
+        return (feat["mid"], feat["best_ask"])
+    try:
+        hist = fetch_token_history_raw(token, fidelity_minutes=60, use_cache=False)
+        if not hist.empty:
+            last = float(hist.iloc[-1])
+            return (last, last)
+    except Exception:
+        pass
+    return None
 
 
 def load_ledger(state_file: Path = STATE_FILE) -> pd.DataFrame:

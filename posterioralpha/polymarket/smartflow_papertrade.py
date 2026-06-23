@@ -41,7 +41,7 @@ from pathlib import Path
 import pandas as pd
 
 from .categorize import market_category
-from .fetch import fetch_order_book, order_book_features
+from .fetch import fetch_order_book, fetch_token_history_raw, order_book_features
 from .traders import fetch_leaderboard, fetch_trader_trades
 
 logger = logging.getLogger(__name__)
@@ -224,11 +224,19 @@ def save_ledger(df: pd.DataFrame) -> None:
 
 
 def _price(token: str) -> tuple[float | None, float | None]:
-    """Live (mid, best_ask) for a token from the CLOB book; (None, None) if no book."""
+    """Live (mid, best_ask) for a token. Falls back to CLOB history if no active book."""
     feat = order_book_features(fetch_order_book(token))
-    if not feat:
-        return None, None
-    return feat["mid"], feat["best_ask"]
+    if feat:
+        return feat["mid"], feat["best_ask"]
+    # No active order book — market likely resolved. Fall back to CLOB history.
+    try:
+        hist = fetch_token_history_raw(token, fidelity_minutes=60, use_cache=False)
+        if not hist.empty:
+            last = float(hist.iloc[-1])
+            return last, last
+    except Exception:
+        pass
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +309,7 @@ def update_ledger(
     if new_rows:
         ledger = pd.concat([ledger, pd.DataFrame(new_rows)], ignore_index=True)
 
-    # -- 3. refresh + stop-loss + consensus-exit + resolve open positions --
+    # -- 3. refresh + resolve + stop-loss + consensus-exit open positions --
     for i, row in ledger[ledger["status"] == "open"].iterrows():
         mid, _ = _price(row["token"])
         if mid is None:
@@ -310,7 +318,21 @@ def update_ledger(
         entry_ask = float(row["entry_ask"])
         frac = float(row["bet_fraction"]) if row.get("bet_fraction") else bet_fraction
 
-        # stop-loss: check before resolution so we don't double-fire
+        # resolution first — a market that settled YES/NO must be closed correctly,
+        # not mislabelled "stopped" because the terminal price triggers a stop-loss.
+        outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
+        if outcome is not None:
+            pnl = (outcome / entry_ask - 1.0) * frac
+            ledger.at[i, "status"]        = "won" if outcome == 1.0 else "lost"
+            ledger.at[i, "exit_date"]     = today
+            ledger.at[i, "outcome"]       = str(outcome)
+            ledger.at[i, "pnl"]          = str(round(pnl, 4))
+            ledger.at[i, "current_price"] = str(outcome)
+            logger.info("RESOLVED %s  %s  pnl=%.4f",
+                        (row["question"] or "")[:40], ledger.at[i, "status"], pnl)
+            continue
+
+        # stop-loss
         if stop_loss is not None:
             stop_floor = entry_ask * (1.0 - stop_loss)
             if mid <= stop_floor:
@@ -334,18 +356,6 @@ def update_ledger(
                 logger.info("FLIPPED  %s  mid=%.4f  pnl=%.4f",
                             (row["question"] or "")[:40], mid, pnl)
                 continue
-
-        # resolution: price collapsed to 0 or 1
-        outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
-        if outcome is not None:
-            pnl = (outcome / entry_ask - 1.0) * frac
-            ledger.at[i, "status"]        = "won" if outcome == 1.0 else "lost"
-            ledger.at[i, "exit_date"]     = today
-            ledger.at[i, "outcome"]       = str(outcome)
-            ledger.at[i, "pnl"]          = str(round(pnl, 4))
-            ledger.at[i, "current_price"] = str(outcome)
-            logger.info("RESOLVED %s  %s  pnl=%.4f",
-                        (row["question"] or "")[:40], ledger.at[i, "status"], pnl)
 
     save_ledger(ledger)
     return ledger

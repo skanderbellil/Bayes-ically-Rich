@@ -48,6 +48,7 @@ from .fetch import (
     fetch_markets,
     fetch_order_book,
     fetch_token_history,
+    fetch_token_history_raw,
     order_book_features,
 )
 
@@ -149,7 +150,16 @@ def save_ledger(df: pd.DataFrame, state_file: Path = STATE_FILE) -> None:
 
 def _price(token: str) -> float | None:
     feat = order_book_features(fetch_order_book(token))
-    return feat["mid"] if feat else None
+    if feat:
+        return feat["mid"]
+    # No active order book — market likely resolved. Fall back to CLOB history.
+    try:
+        hist = fetch_token_history_raw(token, fidelity_minutes=60, use_cache=False)
+        if not hist.empty:
+            return float(hist.iloc[-1])
+    except Exception:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------------------
