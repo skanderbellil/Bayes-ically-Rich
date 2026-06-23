@@ -10,6 +10,7 @@ on:
         options:
           - midprice_yes
           - smart_flow
+          - smart_flow_roi
           - macro
       question:
         description: "Substring of the market question (case-insensitive)"
