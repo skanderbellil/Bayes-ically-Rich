@@ -1202,9 +1202,7 @@ function buildBacktest() {
 // ── SCHEDULE COUNTDOWN ───────────────────────────────────────────────────────
 // Cron definitions: every N hours starting at startH UTC, at :minute past the hour
 const CRONS = [
-  {label:'Macro',          color:'#a78bfa', every:24, startH:9,  minute:0,  wf:'paper_trade.yml'},
-  {label:'Smart Flow',     color:'#22c55e', every:4,  startH:0,  minute:30, wf:'smart_flow_paper.yml'},
-  {label:'Mid-priced YES', color:'#f59e0b', every:1,  startH:0,  minute:15, wf:'midprice_yes_paper.yml'},
+  {label:'All strategies', color:'#f59e0b', every:1,  startH:0,  minute:15, wf:'paper_trade.yml'},
 ];
 const PARIS_TZ = 'Europe/Paris';
 // Base URL for the Actions workflow pages (derive from the close-position ACTIONS_URL)
