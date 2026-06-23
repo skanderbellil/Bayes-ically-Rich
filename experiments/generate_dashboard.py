@@ -1496,6 +1496,8 @@ def generate() -> None:
               "YES [20–40%]", "midprice_yes_20_40", primary=False),
         strat(DATA / "smart_flow_positions.csv", "entry_ask", "question",
               "Smart Flow", "smart_flow", primary=True),
+        strat(DATA / "smart_flow_roi_positions.csv", "entry_ask", "question",
+              "Smart Flow (ROI)", "smart_flow_roi", primary=True),
         strat(DATA / "macro_positions.csv", "entry_price", "leader_question",
               "Macro (Fed cuts)", "macro", primary=True),
         load_dip_confirm(DATA / "dip_confirm_positions.csv"),

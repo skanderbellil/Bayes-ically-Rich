@@ -13,6 +13,7 @@ DATA = ROOT / "data" / "paper_trade"
 STRATEGY_MAP = {
     "midprice_yes": (DATA / "midprice_yes_positions.csv", "entry_ask",   "question"),
     "smart_flow":   (DATA / "smart_flow_positions.csv",   "entry_ask",   "question"),
+    "smart_flow_roi": (DATA / "smart_flow_roi_positions.csv", "entry_ask", "question"),
     "macro":        (DATA / "macro_positions.csv",         "entry_price", "leader_question"),
 }
 
