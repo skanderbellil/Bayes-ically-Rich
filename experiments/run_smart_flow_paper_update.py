@@ -21,12 +21,15 @@ Usage
 """
 import argparse
 import logging
+from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import pandas as pd
 from tabulate import tabulate
 
 from posterioralpha.polymarket.smartflow_papertrade import (
+    ROI_STATE_FILE,
+    STATE_FILE,
     scan_smart_flow_entries,
     update_ledger,
 )
@@ -50,8 +53,16 @@ def main() -> None:
                     help="exit when smart-wallet net flow flips bearish (sellers > buyers)")
     ap.add_argument("--flip-threshold", type=int, default=1, metavar="N",
                     help="sellers must exceed buyers by at least N to trigger consensus exit (default: 1)")
+    ap.add_argument("--selector", choices=["winners_minus_mm", "roi_topn"], default="winners_minus_mm",
+                    help="smart-pool rule: winners-minus-volume (default) or top-N by ROI (forward test)")
+    ap.add_argument("--top-n",   type=int, default=10, help="pool size when --selector roi_topn")
+    ap.add_argument("--state-file", type=str, default=None,
+                    help="ledger CSV path; defaults to the ROI ledger when --selector roi_topn, else the original")
     ap.add_argument("--dry-run",    action="store_true",       help="scan and print, no write")
     args = ap.parse_args()
+
+    state_file = (Path(args.state_file) if args.state_file
+                  else (ROI_STATE_FILE if args.selector == "roi_topn" else STATE_FILE))
 
     print("""
 ╔══════════════════════════════════════════════════════════╗
@@ -61,7 +72,16 @@ def main() -> None:
 ╚══════════════════════════════════════════════════════════╝""")
 
     if args.dry_run:
-        cands = scan_smart_flow_entries(window_days=args.window, min_buyers=args.min_buyers)
+        flow_index = None
+        if args.selector == "roi_topn":
+            from posterioralpha.polymarket.smartflow_papertrade import (
+                _fetch_pool_trades, _flow_index_from, roi_top_wallets, smart_pool,
+            )
+            tbw = _fetch_pool_trades(smart_pool())
+            keep = set(roi_top_wallets(tbw, args.top_n))
+            flow_index = _flow_index_from({w: d for w, d in tbw.items() if w in keep}, args.window)
+        cands = scan_smart_flow_entries(window_days=args.window, min_buyers=args.min_buyers,
+                                        _flow_index=flow_index)
         logger.info("Found %d qualifying open consensus tokens", len(cands))
         for c in cands:
             print(f"  [{c['domain'][:10]:10s}] {(c['question'] or '')[:46]:46s}  "
@@ -79,6 +99,9 @@ def main() -> None:
         stop_loss=args.stop_loss,
         consensus_exit=args.consensus_exit,
         flip_threshold=args.flip_threshold,
+        selector=args.selector,
+        top_n=args.top_n,
+        state_file=state_file,
     )
     open_pos = ledger[ledger["status"] == "open"]
     stopped  = ledger[ledger["status"] == "stopped"]
@@ -148,7 +171,7 @@ def main() -> None:
         print(f"\n  W/L/Stopped/Flipped: {won}W / {lost}L / {len(stopped)}S / {n_flip}F   "
               f"cumulative PnL (additive): {pnls.sum():+.4f}")
 
-    print(f"\n  Ledger -> data/paper_trade/smart_flow_positions.csv  ({len(ledger)} rows)")
+    print(f"\n  Ledger -> {state_file}  ({len(ledger)} rows)")
     print("✓  Update complete.")
 
 

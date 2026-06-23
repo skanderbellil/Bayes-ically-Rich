@@ -47,6 +47,11 @@ from .traders import fetch_leaderboard, fetch_trader_trades
 logger = logging.getLogger(__name__)
 
 STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "paper_trade" / "smart_flow_positions.csv"
+# Parallel forward ledger for the ROI-selected variant (see SELECTION_SWEEP.md):
+# same consensus mechanics, but the smart pool is the top-N wallets by ROI rather
+# than "all winners minus volume-leaders". Kept on its own file so the original
+# out-of-sample record is never contaminated.
+ROI_STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "paper_trade" / "smart_flow_roi_positions.csv"
 
 
 def kelly_fraction(
@@ -96,18 +101,63 @@ def smart_pool(per_window: int = 60) -> list[str]:
 # Scan recent consensus buys on currently-open markets
 # ---------------------------------------------------------------------------
 
-def _build_flow_index(pool: list[str], window_days: int) -> dict[str, dict]:
-    """Fetch recent trades for all pool wallets; index by token with buyer/seller sets.
+def _fetch_pool_trades(pool: list[str], max_trades: int = 500) -> dict[str, pd.DataFrame]:
+    """Live (uncached) recent trades for every pool wallet → {wallet: DataFrame}.
+
+    Fetched once per run and reused for both ROI ranking and consensus indexing,
+    so a wallet's history is never pulled twice.
+    """
+    out: dict[str, pd.DataFrame] = {}
+    for w in pool:
+        df = fetch_trader_trades(w, max_trades=max_trades, use_cache=False)
+        if not df.empty:
+            out[w] = df
+    return out
+
+
+def wallet_roi(trades: pd.DataFrame) -> float:
+    """Efficiency (PnL per dollar traded) of one wallet, from its own fills only.
+
+    ROI = (realised cash flow + net-open shares marked at the wallet's own last
+    trade price per token) / gross dollars traded. Self-contained — needs no price
+    panel or extra API calls — so it is cheap enough to rank the whole pool every
+    run. This is the live analogue of the ``roi`` metric that topped the selection
+    sweep (``SELECTION_SWEEP.md``).
+    """
+    if trades is None or trades.empty:
+        return 0.0
+    gross = float(trades["usdcSize"].sum())
+    if gross <= 0:
+        return 0.0
+    is_buy = trades["side"] == "BUY"
+    cash = float(trades.loc[~is_buy, "usdcSize"].sum() - trades.loc[is_buy, "usdcSize"].sum())
+    signed = trades["size"].where(is_buy, -trades["size"])
+    t = trades.assign(_sh=signed)
+    marked = 0.0
+    for _tok, g in t.groupby("asset"):
+        net = float(g["_sh"].sum())
+        if net > 0:                                  # only open longs carry value
+            last_px = float(g.sort_values("timestamp")["price"].iloc[-1])
+            marked += net * last_px
+    return (cash + marked) / gross
+
+
+def roi_top_wallets(trades_by_wallet: dict[str, pd.DataFrame], top_n: int) -> list[str]:
+    """The ``top_n`` pool wallets by :func:`wallet_roi` (descending)."""
+    scored = sorted(trades_by_wallet.items(), key=lambda kv: wallet_roi(kv[1]), reverse=True)
+    keep = [w for w, _ in scored[:top_n]]
+    logger.info("roi_top_wallets: kept top %d of %d wallets by ROI", len(keep), len(trades_by_wallet))
+    return keep
+
+
+def _flow_index_from(trades_by_wallet: dict[str, pd.DataFrame], window_days: int) -> dict[str, dict]:
+    """Index pre-fetched trades by token with buyer/seller sets over the recent window.
 
     Returns {token: {"token", "condition_id", "question", "slug", "buyers": set, "sellers": set}}.
-    Fetching once and sharing between entry scan and exit check avoids duplicate API calls.
     """
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
     index: dict[str, dict] = {}
-    for w in pool:
-        df = fetch_trader_trades(w, max_trades=500, use_cache=False)
-        if df.empty:
-            continue
+    for w, df in trades_by_wallet.items():
         recent = df[df["timestamp"] >= cutoff]
         for r in recent.itertuples(index=False):
             tok = str(r.asset)
@@ -126,8 +176,17 @@ def _build_flow_index(pool: list[str], window_days: int) -> dict[str, dict]:
                 e["buyers"].add(w)
             elif side == "SELL":
                 e["sellers"].add(w)
-    logger.info("_build_flow_index: %d tokens seen across %d wallets", len(index), len(pool))
+    logger.info("_flow_index_from: %d tokens seen across %d wallets", len(index), len(trades_by_wallet))
     return index
+
+
+def _build_flow_index(pool: list[str], window_days: int) -> dict[str, dict]:
+    """Fetch recent trades for all pool wallets and index them by token.
+
+    Thin wrapper over :func:`_fetch_pool_trades` + :func:`_flow_index_from`, kept
+    for the existing call sites and tests.
+    """
+    return _flow_index_from(_fetch_pool_trades(pool), window_days)
 
 
 def scan_smart_flow_entries(
@@ -205,10 +264,10 @@ def consensus_reversal_check(
 # Ledger I/O
 # ---------------------------------------------------------------------------
 
-def load_ledger() -> pd.DataFrame:
-    if not STATE_FILE.exists():
+def load_ledger(state_file: Path = STATE_FILE) -> pd.DataFrame:
+    if not state_file.exists():
         return pd.DataFrame(columns=_COLS)
-    df = pd.read_csv(STATE_FILE, dtype=str)
+    df = pd.read_csv(state_file, dtype=str)
     if "bet_fraction" not in df.columns:
         # Migrate legacy CSVs: assign flat-10% default so historical PnL is unchanged.
         df.insert(df.columns.get_loc("n_smart_buyers") + 1, "bet_fraction", "0.1")
@@ -218,9 +277,9 @@ def load_ledger() -> pd.DataFrame:
     return df[_COLS]
 
 
-def save_ledger(df: pd.DataFrame) -> None:
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    df[_COLS].to_csv(STATE_FILE, index=False)
+def save_ledger(df: pd.DataFrame, state_file: Path = STATE_FILE) -> None:
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    df[_COLS].to_csv(state_file, index=False)
 
 
 def _price(token: str) -> tuple[float | None, float | None]:
@@ -254,6 +313,9 @@ def update_ledger(
     consensus_exit: bool = False,
     flip_threshold: int = 1,
     per_window: int = 60,
+    selector: str = "winners_minus_mm",
+    top_n: int = 10,
+    state_file: Path = STATE_FILE,
 ) -> pd.DataFrame:
     """One daily cycle: append new consensus longs, refresh prices, mark resolutions.
 
@@ -279,14 +341,29 @@ def update_ledger(
         Sellers must exceed buyers by at least this many to trigger consensus exit.
     per_window : int
         Number of wallets to fetch from the leaderboard for the smart pool.
+    selector : str
+        How to choose the smart pool. "winners_minus_mm" (default) keeps the
+        profit-leaderboard winners minus the volume-leaders (original behaviour);
+        "roi_topn" instead keeps the top_n wallets by ROI (the live analogue of
+        the selection-sweep winner — see SELECTION_SWEEP.md), run as a separate
+        forward track on its own state_file.
+    top_n : int
+        Pool size when selector="roi_topn".
+    state_file : Path
+        Ledger CSV to read/write. Defaults to the original STATE_FILE; the ROI
+        variant uses ROI_STATE_FILE so the two forward records never mix.
     """
-    ledger = load_ledger()
+    ledger = load_ledger(state_file)
     today = date.today().isoformat()
     held = set(ledger["token"].tolist()) if not ledger.empty else set()
 
     # -- 1. build shared flow index (entries + exits share the same API fetch) -
-    pool       = smart_pool(per_window)
-    flow_index = _build_flow_index(pool, window_days)
+    pool            = smart_pool(per_window)
+    trades_by_wallet = _fetch_pool_trades(pool)
+    if selector == "roi_topn":
+        keep = set(roi_top_wallets(trades_by_wallet, top_n))
+        trades_by_wallet = {w: df for w, df in trades_by_wallet.items() if w in keep}
+    flow_index = _flow_index_from(trades_by_wallet, window_days)
 
     # -- 2. new consensus entries --
     new_rows = []
@@ -357,5 +434,5 @@ def update_ledger(
                             (row["question"] or "")[:40], mid, pnl)
                 continue
 
-    save_ledger(ledger)
+    save_ledger(ledger, state_file)
     return ledger
