@@ -164,15 +164,25 @@ def update_ledger(
     hi: float = BAND_HI,
     min_volume: float = 5_000.0,
     state_file: Path = STATE_FILE,
+    pre_scanned: list[dict] | None = None,
 ) -> pd.DataFrame:
-    """One cycle: append new band entries, refresh prices, mark resolutions."""
+    """One cycle: append new band entries, refresh prices, mark resolutions.
+
+    pre_scanned: if provided (from a shared scan), filter it to this band instead
+    of re-fetching markets from the API.
+    """
     ledger = load_ledger(state_file=state_file)
     today = date.today().isoformat()
     held = set(ledger["token"].tolist()) if not ledger.empty else set()
 
-    # 1. new entries
+    # 1. new entries — use pre-scanned list (filtered to band) or do a fresh scan
+    if pre_scanned is not None:
+        candidates = [c for c in pre_scanned if lo <= c["entry_mid"] < hi]
+    else:
+        candidates = scan_midprice_entries(days_min, days_max, lo, hi, min_volume=min_volume)
+
     new_rows = []
-    for c in scan_midprice_entries(days_min, days_max, lo, hi, min_volume=min_volume):
+    for c in candidates:
         if c["token"] in held:
             continue
         logger.info("NEW YES long: %s  (%.1fd out)  mid %.3f ask %.3f",
