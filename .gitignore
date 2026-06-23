@@ -34,3 +34,7 @@ results/
 !data/paper_trade/midprice_yes_positions.csv
 !data/paper_trade/midprice_yes_benchmark.csv
 !data/paper_trade/midprice_yes_backtest_curve.png
+!data/paper_trade/midprice_yes_10_20_positions.csv
+!data/paper_trade/midprice_yes_10_30_positions.csv
+!data/paper_trade/midprice_yes_20_40_positions.csv
+!data/paper_trade/dip_confirm_positions.csv
