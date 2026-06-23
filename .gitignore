@@ -9,9 +9,12 @@ results/
 *.csv
 # Bundled datasets are tracked despite the *.csv rule above
 !datasets/*.csv
+# Smart-money wallet-selection test snapshot (committed for reproducibility)
+!data/polymarket_smart_money_snapshot/*.csv
 # Paper-trade ledgers are tracked (the forward out-of-sample record)
 !data/paper_trade/macro_positions.csv
 !data/paper_trade/smart_flow_positions.csv
+!data/paper_trade/smart_flow_roi_positions.csv
 !data/paper_trade/insider_scorecard.csv
 !data/paper_trade/insider_scorecard
 !data/paper_trade/wallet_sentiment_study.csv

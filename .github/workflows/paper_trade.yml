@@ -34,6 +34,9 @@ jobs:
       - name: Smart-flow consensus
         run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
 
+      - name: Smart-flow consensus (ROI-selected, forward test)
+        run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --selector roi_topn --top-n 10 --min-buyers 2 --consensus-exit --flip-threshold 1
+
       - name: Macro
         run: python experiments/run_paper_trade_update.py --fraction 0.10
 
@@ -52,6 +55,7 @@ jobs:
             data/paper_trade/midprice_yes_benchmark.csv \
             data/paper_trade/dip_confirm_positions.csv \
             data/paper_trade/smart_flow_positions.csv \
+            data/paper_trade/smart_flow_roi_positions.csv \
             data/paper_trade/macro_positions.csv \
             data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then

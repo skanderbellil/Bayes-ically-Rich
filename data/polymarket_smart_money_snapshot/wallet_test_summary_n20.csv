@@ -1,0 +1,5 @@
+book,gross_sharpe,gross_pnl,net_sharpe,net_pnl,net_maxdd,avg_turnover,avg_n_followed
+smart_money,0.3968,0.5013,0.118,0.1491,-0.5523,0.0782,9.44
+all_leaders,0.4518,0.6144,0.1923,0.2613,-0.5536,0.0784,9.75
+anti_smart,0.4494,0.6207,0.1913,0.2639,-0.5536,0.0792,9.44
+with_mm,0.3968,0.5013,0.118,0.1491,-0.5523,0.0782,9.44

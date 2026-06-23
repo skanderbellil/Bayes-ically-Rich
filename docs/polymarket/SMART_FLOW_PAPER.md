@@ -41,6 +41,27 @@ back to `data/paper_trade/smart_flow_positions.csv`.
 - **Hold-to-resolution.** Discrete, low-turnover positions (vs the daily-rebalanced
   backtest) — the cleanest read on whether consensus buys actually resolve right.
 
+## ROI-selected variant (forward out-of-sample test)
+
+The selection sweep (`SELECTION_SWEEP.md`) found the original "all winners minus
+volume-leaders" pool is a weak selector, and that ranking the pool by **ROI** (PnL
+per dollar traded) and following the **top ~10** wallets was the configuration that
+beat both negative controls in-sample. To test whether that edge is real rather
+than overfit, a second forward ledger runs that exact selector alongside the
+original — same consensus mechanics, hold-to-resolution, live-ask entry:
+
+```bash
+python experiments/run_smart_flow_paper_update.py \
+    --selector roi_topn --top-n 10 --min-buyers 2 --consensus-exit --flip-threshold 1
+```
+
+It writes a **separate** ledger, `data/paper_trade/smart_flow_roi_positions.csv`,
+so the original out-of-sample record is never contaminated; both run hourly in the
+same Actions cron. `min-buyers` is 2 (not 3) because consensus among only 10 elite
+wallets is a far higher bar — this is a low-frequency, high-conviction track. The
+honest comparison is the resolved-PnL of the two ledgers over the coming weeks: if
+ROI selection has real edge, its ledger should out-resolve the original's.
+
 ## Reading the ledger
 
 Open `data/paper_trade/smart_flow_positions.csv` on GitHub, or ask Claude Code to
