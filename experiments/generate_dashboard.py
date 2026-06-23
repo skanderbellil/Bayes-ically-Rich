@@ -818,6 +818,8 @@ function buildOverview() {
                : tot < -0.001 ? '<span class="badge badge-red">▼ drawdown</span>'
                : '<span class="badge badge-grey">flat</span>';
     const nR = d.nW + d.nL + d.nF;
+    const nWatch = (d.watching || []).length;
+    const watchLine = nWatch ? `<span style="color:var(--accent)">${nWatch} watching</span> · ` : '';
     return `<div class="card">
       <div class="card-title">${d.label} ${bdge}</div>
       <div class="kpis">
@@ -826,7 +828,7 @@ function buildOverview() {
         <div class="kpi"><div class="kpi-lbl">Realized</div><div class="kpi-val ${cls(d.realized)}">${fmtPct(d.realized)}</div></div>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:${nR?'6px':'0'}">
-        ${d.open.length} open · ${d.resolved.length} resolved${nR ? ' (' + d.nW + 'W/' + d.nL + 'L' + (d.nF ? '/' + d.nF + 'F' : '') + ')' : ''}
+        ${watchLine}${d.open.length} open · ${d.resolved.length} resolved${nR ? ' (' + d.nW + 'W/' + d.nL + 'L' + (d.nF ? '/' + d.nF + 'F' : '') + ')' : ''}
       </div>
       ${nR ? wlfRow(d.nW, d.nL, d.nF) : ''}
     </div>`;
@@ -836,16 +838,19 @@ function buildOverview() {
 // ── PAGE: OPEN POSITIONS ──────────────────────────────────────────────────────
 function buildOpen() {
   // Filter pill buttons
-  document.getElementById('open-filter').innerHTML = DATA.strategies.map((d, i) =>
-    `<button class="seg-btn${i===0?' active':''}" onclick="filterOpen(${i})" id="ofilt-${i}">
-      ${d.label} <span style="opacity:.65">${d.open.length}</span>
-    </button>`
-  ).join('');
+  document.getElementById('open-filter').innerHTML = DATA.strategies.map((d, i) => {
+    const nWatch = (d.watching || []).length;
+    const total = d.open.length + nWatch;
+    return `<button class="seg-btn${i===0?' active':''}" onclick="filterOpen(${i})" id="ofilt-${i}">
+      ${d.label} <span style="opacity:.65">${total}</span>
+    </button>`;
+  }).join('');
 
   // Strategy sections
   document.getElementById('open-list').innerHTML = DATA.strategies.map((d, i) => {
     const show = i === 0 ? 'block' : 'none';
-    if (!d.open.length) {
+    const nWatch = (d.watching || []).length;
+    if (!d.open.length && !nWatch) {
       return `<div id="open-sec-${i}" style="display:${show}">
         <div class="card"><div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No open positions</div></div>
       </div>`;
@@ -859,18 +864,35 @@ function buildOpen() {
       <td><button class="cut-btn" data-sid="${d.strategy_id}" data-q="${esc(r.question)}" onclick="openCut(this)">✂</button></td>
     </tr>`).join('');
 
+    const watchRows = nWatch ? (d.watching || []).map(r => {
+      const dipPct = r.dip_pct ? (r.dip_pct * 100).toFixed(1) : '0.0';
+      const dipped = r.dip_pct >= 0.10;
+      return `<tr style="opacity:.8">
+        <td class="q">${r.question}</td>
+        <td style="padding-right:2px">—</td>
+        <td class="hide-xs" style="color:var(--muted)">${r.watch_price != null ? r.watch_price.toFixed(3) : '—'}</td>
+        <td>${r.current != null ? r.current.toFixed(3) : '—'}</td>
+        <td style="color:${dipped ? 'var(--green)' : 'var(--muted)'}">−${dipPct}%${dipped ? ' ✓' : ''}</td>
+        <td><span style="font-size:10px;color:var(--accent)">watching</span></td>
+      </tr>`;
+    }).join('') : '';
+
+    const posCount = d.open.length ? `${d.open.length} open` : '';
+    const watchCount = nWatch ? `${nWatch} watching` : '';
+    const subtitle = [posCount, watchCount].filter(Boolean).join(' · ');
+
     return `<div id="open-sec-${i}" style="display:${show}">
       <div class="card">
         <div class="card-title">${d.label}
-          <span style="font-size:12px;font-weight:400;color:var(--muted)">${d.open.length} positions</span>
+          <span style="font-size:12px;font-weight:400;color:var(--muted)">${subtitle}</span>
         </div>
         <div class="tbl-wrap">
           <table>
             <thead><tr>
               <th>Question</th><th>Track</th>
-              <th class="hide-xs">Entry</th><th>Now</th><th>MTM</th><th></th>
+              <th class="hide-xs">Entry</th><th>Now</th><th>MTM / Dip</th><th></th>
             </tr></thead>
-            <tbody>${rows}</tbody>
+            <tbody>${rows}${watchRows}</tbody>
           </table>
         </div>
       </div>
