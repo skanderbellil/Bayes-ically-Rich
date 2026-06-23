@@ -7,7 +7,7 @@ day 2 resolve YES 74-88% of the time vs a 38-40% base rate.
 Two-stage lifecycle
 -------------------
   watching : spotted at WATCH_MIN–WATCH_MAX days to resolution, price in band.
-             Running minimum price tracked each cycle.
+             True minimum tracked via 1-minute CLOB history each cycle.
   open     : dip-confirm triggered — dipped ≥ DIP_THRESH below watch_price
              and recovered to ≥ RECOVERY_FLOOR × watch_price.
              Entered at live ask, held to resolution.
@@ -22,7 +22,7 @@ question         : market question
 end_date         : scheduled resolution
 watch_date       : date first spotted
 watch_price      : YES mid when first spotted
-min_price        : running minimum mid since watch (tracks the dip)
+min_price        : true minimum from 1-min CLOB history since watch_date
 days_at_watch    : days-to-res when first spotted
 entry_date       : date entered (after confirm fires)
 days_at_entry    : days-to-res when entered
@@ -45,7 +45,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .fetch import fetch_markets, fetch_order_book, order_book_features
+from .fetch import fetch_markets, fetch_order_book, fetch_token_history_raw, order_book_features
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +154,20 @@ def update_ledger(
         ledger.at[i, "current_price"] = str(round(mid, 4))
 
         watch_price = float(row["watch_price"])
-        min_price   = min(float(row["min_price"]), mid)
+
+        # Fetch full 1-minute price history since watch_date so we catch any
+        # intraday dip that recovered within a single hourly polling cycle.
+        try:
+            hist = fetch_token_history_raw(row["token"], fidelity_minutes=1, use_cache=False)
+            if not hist.empty and row.get("watch_date"):
+                since = pd.Timestamp(row["watch_date"], tz="UTC")
+                hist = hist[hist.index >= since]
+            hist_min = float(hist.min()) if not hist.empty else mid
+        except Exception:
+            hist_min = mid
+
+        # True minimum = lowest price seen in history OR current order-book mid
+        min_price = min(hist_min, mid, float(row["min_price"]) if row.get("min_price") else mid)
         ledger.at[i, "min_price"] = str(round(min_price, 4))
 
         # expire if too close to resolution without confirming
