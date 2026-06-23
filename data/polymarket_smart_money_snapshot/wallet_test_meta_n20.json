@@ -1,0 +1,19 @@
+{
+  "run_date": "2026-06-23T22:28:14.304445+00:00",
+  "params": {
+    "per_window": 60,
+    "top_tokens": 150,
+    "max_trades": 2000,
+    "n_follow": 20,
+    "rebalance": 7,
+    "burn_in": 45,
+    "cost": 0.005,
+    "refresh": false
+  },
+  "pool_wallets": 121,
+  "mm_flagged": 12,
+  "universe_tokens": 82,
+  "panel_days": 901,
+  "panel_start": "2024-01-05",
+  "panel_end": "2026-06-23"
+}
