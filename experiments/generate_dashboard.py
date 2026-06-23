@@ -355,10 +355,12 @@ tr:last-child td{border-bottom:none;}
 .expand-btn{
   background:rgba(59,130,246,.1);color:#60a5fa;
   border:1px solid rgba(59,130,246,.25);border-radius:4px;
-  padding:3px 6px;font-size:10px;cursor:pointer;
+  padding:5px 8px;font-size:11px;cursor:pointer;
   transition:background .15s;margin-right:4px;
+  min-width:28px;min-height:28px;line-height:1;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
 }
-.expand-btn:hover{background:rgba(59,130,246,.25);}
+.expand-btn:hover,.expand-btn:active{background:rgba(59,130,246,.25);}
 
 /* ── MODAL (slides up from bottom on mobile) ── */
 .modal-backdrop{
@@ -909,7 +911,11 @@ function buildPriceChart(hist, entryPx, entryDate) {
   return svg;
 }
 
-async function expandPos(btn, token, entryDate, entryPx, rowId) {
+async function expandPos(btn) {
+  const token     = btn.dataset.token;
+  const entryDate = btn.dataset.entryDate;
+  const entryPx   = parseFloat(btn.dataset.entry) || 0;
+  const rowId     = btn.dataset.chart;
   const tr = document.getElementById(rowId);
   if (!tr) return;
   if (tr.style.display !== 'none') {
@@ -967,7 +973,7 @@ function buildOpen() {
       const chartId = `chart-${i}-${ri}`;
       const hasToken = r.token && r.token.length > 8;
       const expandBtn = hasToken
-        ? `<button class="expand-btn" title="Show price chart" onclick="expandPos(this,${JSON.stringify(r.token)},${JSON.stringify(r.entry_date||'')},${r.entry != null ? r.entry : 0},'${chartId}')">▶</button>`
+        ? `<button class="expand-btn" title="Show price chart" data-token="${r.token}" data-entry-date="${r.entry_date||''}" data-entry="${r.entry != null ? r.entry : 0}" data-chart="${chartId}" onclick="expandPos(this)">▶</button>`
         : '';
       const mainRow = `<tr>
       <td class="q">${r.question}</td>
