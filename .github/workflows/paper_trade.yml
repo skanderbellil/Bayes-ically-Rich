@@ -40,6 +40,9 @@ jobs:
       - name: Macro
         run: python experiments/run_paper_trade_update.py --fraction 0.10
 
+      - name: Bankroll simulation (real $1k returns)
+        run: python experiments/run_bankroll_sim.py --capital 1000 --stake 0.10
+
       - name: Generate dashboard
         run: python experiments/generate_dashboard.py
 
@@ -57,6 +60,7 @@ jobs:
             data/paper_trade/smart_flow_positions.csv \
             data/paper_trade/smart_flow_roi_positions.csv \
             data/paper_trade/macro_positions.csv \
+            data/paper_trade/bankroll_summary.csv \
             data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then
             git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
