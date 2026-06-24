@@ -94,6 +94,17 @@ from .volatility import (
     upside_vol,
     vol_skew,
 )
+from .weather import (
+    Bucket,
+    ForecastConsensus,
+    bucket_prob,
+    compute_edges,
+    fetch_token_window,
+    fetch_weather_event,
+    parse_bucket,
+    point_in_time_forecast,
+    realized_tmax,
+)
 
 __all__ = [
     # data
@@ -131,6 +142,16 @@ __all__ = [
     # paper-trade tracker
     "load_ledger",
     "update_ledger",
+    # weather edge (London max-temperature, forecast vs market)
+    "Bucket",
+    "ForecastConsensus",
+    "parse_bucket",
+    "bucket_prob",
+    "point_in_time_forecast",
+    "realized_tmax",
+    "fetch_weather_event",
+    "fetch_token_window",
+    "compute_edges",
     # cross-outcome structure
     "event_panels",
     "coupling_summary",
