@@ -172,3 +172,63 @@ edge +0.127 (t 3.51) vs turbulent +0.062 (t 1.70).
 gradient** — and VIX is a global-risk proxy, not a pure geopolitical-conflict
 index (GDELT would be the ideal next data source). But the result no longer
 depends on the home-made regime measure.
+
+## Domain-matched proxy: the GPR index (the confidence test)
+
+`experiments/run_regime_gpr.py` re-runs the **geopolitics** legs — the domain that
+carries the whole effect — against the **Caldara–Iacoviello Geopolitical Risk
+(GPR) index** (`datasets/gpr_daily.csv.gz`, daily, news-based, 1985→2026-06). This
+is the *right-domain* exogenous regime measure: VIX is financial risk, near-blind
+to geopolitical calm, whereas GPR is built to measure exactly this. It also lets us
+put numbers on the two open method questions — *is the calm/turbulent split robust,
+and is it real or a labelling artifact?*
+
+**No-lookahead construction.** Every regime quantity uses only GPR dated ≤ the
+decision date: a trailing-45d GPR mean and a trailing-365d GPR *median* baseline
+(both causal — pandas `.rolling` sees only past rows), attached with
+`merge_asof(direction="backward")`. **Calm = recent GPR below its own running
+1-yr normal** (a moving-average crossover). The baseline is *trailing*, not
+all-history, because GPR is structurally elevated in 2023–26 — an absolute 1985
+reference would mislabel every recent day "turbulent". The decision price is still
+the mid 7d pre-resolution; outcome is settlement.
+
+**Headline — geopolitics tail (price<0.35, n=117):**
+
+| regime (GPR) | n | CE | t |
+|---|---:|---:|---:|
+| **CALM** (trailing GPR < 1-yr median) | 25 | **+0.372** | 3.80 |
+| TURBULENT (recent GPR spike) | 92 | +0.105 | 2.34 |
+
+Difference **+0.266** in the predicted direction — *larger* than either S or VIX
+gave. The matched proxy strengthens the effect, exactly as it should if the effect
+is genuinely geopolitical.
+
+**The three confidence tests all pass:**
+
+1. **Continuous dose-response (the thing VIX failed):** within geopolitics,
+   `dCE/d(GPR) = −0.0018 per GPR-pt, t −2.42`. Higher recent geopolitical risk ⇒
+   less underpricing, as a **smooth gradient** — not just an on/off state. VIX's
+   continuous slope was t −0.44; the domain-matched index recovers the gradient,
+   which is strong evidence the regime variable is measuring the right thing.
+2. **Robustness grid** (trailing-mean window 30/45/60/90d × reference 365/730d,
+   all causal): **7 of 8 cells positive**, diff range −0.013…+0.312, median +0.232.
+   The effect lives at the **30–60d horizon**; it washes out at 90d (calm is a
+   relatively short-memory state). One cell (90d/730d) is marginally negative —
+   the honest edge of the grid, not the centre.
+3. **Placebo test:** reshuffling the calm label 5,000× gives a null centred at 0
+   (95% [−0.19, +0.20]); the real +0.266 sits in the tail, **one-sided p = 0.005**
+   (two-sided 0.008). The split is not an artifact of arbitrary labelling.
+
+**Caveats that remain.** GPR is geopolitics-specific — applied to the *whole*
+disruptive tail it adds nothing (calm vs turb diff +0.004), confirming the effect
+is specifically a geopolitical-calm phenomenon and not a generic one. Samples are
+still small (calm cell n=25 at baseline) and the price<0.35 / geopolitics segment
+was inherited, not re-derived, so forking-paths risk is reduced (pre-specified grid
++ placebo) but not zero.
+
+**Confidence verdict.** Three *independent* regime measures — endogenous surprise
+intensity `S`, exogenous VIX, and now the domain-matched GPR index — all show
+disruptive-tail underpricing concentrated in calm regimes, and GPR additionally
+delivers the **significant continuous gradient** the other two lacked. That moves
+the geopolitics result from "candidate" toward **solid**. The remaining honest
+limits are sample size and capacity, not the regime definition.
