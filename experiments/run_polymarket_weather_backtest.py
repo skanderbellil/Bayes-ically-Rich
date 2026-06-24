@@ -68,14 +68,18 @@ def _cached_event(d: date, city: wx.City, refresh: bool) -> dict | None:
     return ev
 
 
-def _cached_forecast(target: str, city: wx.City, refresh: bool) -> wx.ForecastConsensus:
+def _cached_forecast(target: str, city: wx.City, refresh: bool,
+                     lead_days: int = 0) -> wx.ForecastConsensus:
     FC_CACHE.mkdir(parents=True, exist_ok=True)
-    fp = FC_CACHE / f"{city.slug}_{target}.json"
+    # lead_days is part of the cache key: the lead-0 and lead-matched forecasts
+    # for the same date are different numbers and must not collide.
+    suffix = "" if lead_days <= 0 else f"_L{lead_days}"
+    fp = FC_CACHE / f"{city.slug}_{target}{suffix}.json"
     if fp.exists() and not refresh:
         d = json.loads(fp.read_text())
         return wx.ForecastConsensus(d["target"], d["mu"], d["sigma"], d["n_models"],
                                     d.get("unit", "C"), d["per_model"])
-    fc = wx.point_in_time_forecast(target, city)
+    fc = wx.point_in_time_forecast(target, city, lead_days)
     fp.write_text(json.dumps({
         "target": fc.target, "mu": fc.mu, "sigma": fc.sigma,
         "n_models": fc.n_models, "unit": fc.unit, "per_model": fc.per_model,
@@ -105,7 +109,8 @@ def _decision_price(token: str, end: datetime, decision_ts: datetime) -> float |
 # ---------------------------------------------------------------------------
 # Per-event evaluation
 # ---------------------------------------------------------------------------
-def evaluate_event(d: date, city: wx.City, lead_hours: int, refresh: bool) -> list[dict] | None:
+def evaluate_event(d: date, city: wx.City, lead_hours: int, refresh: bool,
+                   fc_lead_days: int = 0) -> list[dict] | None:
     ev = _cached_event(d, city, refresh)
     if not ev or not ev.get("end_date"):
         return None
@@ -115,7 +120,7 @@ def evaluate_event(d: date, city: wx.City, lead_hours: int, refresh: bool) -> li
     end = datetime.fromisoformat(ev["end_date"].replace("Z", "+00:00"))
     decision_ts = end - timedelta(hours=lead_hours)
 
-    fc = _cached_forecast(ev["date"], city, refresh)
+    fc = _cached_forecast(ev["date"], city, refresh, fc_lead_days)
     if not fc.trustworthy:
         return None
 
@@ -227,8 +232,16 @@ def main() -> None:
     ap.add_argument("--cities", default="london",
                     help="comma-separated city slugs, or 'all' (see weather.CITIES)")
     ap.add_argument("--refresh", action="store_true", help="ignore caches, re-pull")
+    ap.add_argument("--forecast-lead-days", type=int, default=-1,
+                    help="forecast run to pair with the decision: 0 = lead-0 archive "
+                         "(same-day, leaks forward info), N>=1 = run issued N days "
+                         "ahead. Default -1 = auto = ceil(lead_hours/24), i.e. the "
+                         "honest no-lookahead forecast for the chosen decision lead.")
     ap.add_argument("--workers", type=int, default=12)
     args = ap.parse_args()
+    # auto: match the forecast lead to the decision lead (round up to whole days)
+    fc_lead_days = (args.forecast_lead_days if args.forecast_lead_days >= 0
+                    else max(1, -(-args.lead_hours // 24)))
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     ensure_dirs()
@@ -247,15 +260,18 @@ def main() -> None:
     logger.info("Weather edge backtest  |  %s → %s  |  %d cities × %d days",
                 args.start, args.end, len(cities), len(days))
     logger.info("cities: %s", ", ".join(c.slug for c in cities))
-    logger.info("decision lead = %dh, slippage = %.0f bps, threshold = %.0f bps, mode = %s\n",
+    _fc_desc = ("lead-0 archive (same-day, LEAKS forward info)" if fc_lead_days == 0
+                else f"run issued ~{fc_lead_days}d ahead (no-lookahead)")
+    logger.info("decision lead = %dh, slippage = %.0f bps, threshold = %.0f bps, mode = %s",
                 args.lead_hours, args.slippage * 1e4, args.threshold * 1e4, args.mode)
+    logger.info("forecast = %s\n", _fc_desc)
 
     jobs = [(d, c) for c in cities for d in days]
 
     def _run(job):
         d, c = job
         try:
-            return evaluate_event(d, c, args.lead_hours, args.refresh)
+            return evaluate_event(d, c, args.lead_hours, args.refresh, fc_lead_days)
         except Exception as e:  # one bad city-day must not kill the run
             logger.debug("skip %s %s: %r", c.slug, d, e)
             return None

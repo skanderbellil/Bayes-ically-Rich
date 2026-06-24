@@ -217,16 +217,14 @@ class ForecastConsensus:
 _SANITY = {"C": (-40.0, 55.0), "F": (-40.0, 131.0)}
 
 
-def point_in_time_forecast(target: str, city: City = LONDON) -> ForecastConsensus:
-    """Five-model archived tmax forecast for ``target`` (YYYY-MM-DD) at ``city``.
+def _lead0_per_model(target: str, city: City, unit_param: str,
+                     lo_ok: float, hi_ok: float) -> dict:
+    """Per-model Tmax for ``target`` from the most-recent (≈same-day) archived run.
 
-    Uses Open-Meteo's *historical-forecast* archive — the forecast that the
-    models actually issued for that date — rather than the ERA5 reanalysis, so a
-    backtest decision on date ``t`` sees no information from after ``t``. The
-    forecast is requested in the city's quoting unit (°C or °F).
+    This is the *shortest-lead* forecast the archive holds for the date. It is the
+    sharpest number available but it is **not** what a trader deciding ``lead_days``
+    before settlement actually had — use ``lead_days >= 1`` for a no-lookahead read.
     """
-    unit_param = "fahrenheit" if city.unit == "F" else "celsius"
-    lo_ok, hi_ok = _SANITY[city.unit]
     data = _get(HIST_FORECAST_URL, {
         "latitude": city.lat, "longitude": city.lon,
         "start_date": target, "end_date": target,
@@ -241,6 +239,66 @@ def point_in_time_forecast(target: str, city: City = LONDON) -> ForecastConsensu
         if vals and vals[0] is not None and np.isfinite(vals[0]):
             if lo_ok <= float(vals[0]) <= hi_ok:
                 per_model[mdl] = float(vals[0])
+    return per_model
+
+
+def _leadmatched_per_model(target: str, city: City, lead_days: int, unit_param: str,
+                           lo_ok: float, hi_ok: float) -> dict:
+    """Per-model Tmax for ``target`` from the run issued ~``lead_days`` days earlier.
+
+    Open-Meteo's ``temperature_2m_previous_day{N}`` returns, for each valid hour,
+    the value from the model run ``N`` days before the most-recent one. Maxing the
+    hourly series over the target's local day reconstructs that run's daily-max
+    forecast — i.e. the forecast a trader genuinely had ``lead_days`` before
+    settlement. This is the no-lookahead replacement for the lead-0 archive value.
+    """
+    var = f"temperature_2m_previous_day{lead_days}"
+    data = _get(HIST_FORECAST_URL, {
+        "latitude": city.lat, "longitude": city.lon,
+        "start_date": target, "end_date": target,
+        "hourly": var, "timezone": city.timezone,
+        "temperature_unit": unit_param,
+        "models": ",".join(MODELS),
+    })
+    hourly = (data or {}).get("hourly", {}) if isinstance(data, dict) else {}
+    per_model: dict = {}
+    for mdl in MODELS:
+        vals = hourly.get(f"{var}_{mdl}")
+        if not vals:
+            continue
+        arr = np.array([v for v in vals if v is not None and np.isfinite(v)], dtype=float)
+        if arr.size == 0:
+            continue
+        tmax = float(arr.max())
+        if lo_ok <= tmax <= hi_ok:
+            per_model[mdl] = tmax
+    return per_model
+
+
+def point_in_time_forecast(target: str, city: City = LONDON,
+                           lead_days: int = 0) -> ForecastConsensus:
+    """Five-model archived tmax forecast for ``target`` (YYYY-MM-DD) at ``city``.
+
+    Uses Open-Meteo's *historical-forecast* archive — the forecast the models
+    actually issued — never the ERA5 reanalysis. ``lead_days`` controls **which
+    issued run** is used, which must match the decision lead of the backtest:
+
+    * ``lead_days=0`` — the most-recent (≈same-day, shortest-lead) run. Sharpest,
+      but a trade decided 24–48h before settlement could **not** have seen it;
+      pairing it with a 24–48h-ahead market price is a forward-information leak
+      (lead-0 pooled MAE ≈0.67 °C vs ≈0.87 °C at 24h, ≈1.04 °C at 48h).
+    * ``lead_days>=1`` — the run issued ~``lead_days`` days earlier, reconstructed
+      from the hourly ``previous_day{N}`` series. This is the honest, no-lookahead
+      forecast for a decision made that far ahead of settlement.
+
+    The forecast is requested in the city's quoting unit (°C or °F).
+    """
+    unit_param = "fahrenheit" if city.unit == "F" else "celsius"
+    lo_ok, hi_ok = _SANITY[city.unit]
+    if lead_days and lead_days > 0:
+        per_model = _leadmatched_per_model(target, city, lead_days, unit_param, lo_ok, hi_ok)
+    else:
+        per_model = _lead0_per_model(target, city, unit_param, lo_ok, hi_ok)
     if not per_model:
         return ForecastConsensus(target, np.nan, np.nan, 0, city.unit, {})
     arr = np.array(list(per_model.values()))
