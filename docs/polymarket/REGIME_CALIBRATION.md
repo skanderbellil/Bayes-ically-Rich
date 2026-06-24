@@ -144,3 +144,31 @@ and capacity-limited. A niche overlay, not a scalable strategy. Next: exogenous
 regime triggers (VIX/GDELT), time fixed-effects, and a forward paper ledger.
 
 Graph: `regime_strategy.png` (equity calm-vs-not · calibration · per-domain edge).
+
+## Exogenous-regime robustness (resolves the endogeneity caveat)
+
+`experiments/run_regime_exogenous.py` re-tests the effect with a **fully
+exogenous** regime indicator — market-wide risk (VIX) and credit stress (BofA US
+HY OAS) from the repo datasets, known as-of the decision date — instead of the
+home-made surprise intensity `S`. Recent-shock = trailing-45d max VIX above its
+median (≈23); calm = below.
+
+**Disruptive tail (price<0.35, n=317):**
+
+| regime (VIX) | n | CE | t |
+|---|---:|---:|---:|
+| **CALM** (low trailing VIX) | 172 | **+0.098** | 3.08 |
+| TURBULENT (recent VIX spike) | 145 | +0.032 | 1.14 |
+
+Same direction, calm ~3× larger — and the **VIX-calm flag is uncorrelated with the
+original S-calm flag (agreement 50%, corr 0.00)**. Two *independent* regime
+measures producing the same effect is much stronger than either alone; the
+endogeneity worry is largely resolved. Geopolitics again carries it (VIX-calm
++0.205 t 3.48 vs turbulent +0.107 t 1.81). The strategy book replicates: VIX-calm
+edge +0.127 (t 3.51) vs turbulent +0.062 (t 1.70).
+
+**Remaining honesty:** the *continuous* slope CE~VIX-level is insignificant
+(t −0.44) — the effect is **state-like (calm vs recently-shocked), not a smooth
+gradient** — and VIX is a global-risk proxy, not a pure geopolitical-conflict
+index (GDELT would be the ideal next data source). But the result no longer
+depends on the home-made regime measure.
