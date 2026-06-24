@@ -238,10 +238,19 @@ def load_midprice_backtest() -> dict:
     }
 
 
+def png_data_uri(path: Path) -> str | None:
+    """Base64-embed a PNG so the dashboard stays self-contained (no external files)."""
+    if not path.exists():
+        return None
+    import base64
+    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+
+
 def load_regime_backtest() -> dict:
     """Regime-calm disruptive-tail study: per-domain matched-proxy validation +
     the geopolitics audit headline (from validated_domains.json)."""
-    vpath = ROOT / "data" / "polymarket_calibration_snapshot" / "validated_domains.json"
+    snap = ROOT / "data" / "polymarket_calibration_snapshot"
+    vpath = snap / "validated_domains.json"
     if not vpath.exists():
         return {"available": False}
     info = json.loads(vpath.read_text())
@@ -272,6 +281,10 @@ def load_regime_backtest() -> dict:
         "max_price":  info.get("max_price"),
         "validated":  info.get("validated_domains", []),
         "per_domain": rows,
+        "graphs": {
+            "backtest": png_data_uri(snap / "validated_regime_backtest.png"),
+            "domains":  png_data_uri(snap / "regime_strategy.png"),
+        },
     }
 
 
@@ -478,6 +491,9 @@ tr:last-child td{border-bottom:none;}
                   margin:14px 0 8px;font-weight:600;}
 .bt-note{font-size:11px;color:var(--muted);line-height:1.6;padding:10px 12px;
           background:rgba(255,255,255,.03);border-radius:8px;border-left:3px solid var(--border);}
+.bt-graph{margin-top:12px;}
+.bt-graph-cap{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:6px;}
+.bt-graph img{width:100%;height:auto;border-radius:8px;background:#fff;border:1px solid var(--border);display:block;}
 /* ── SCHEDULE CARD ── */
 .sched-row{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid rgba(42,45,62,.6);}
 .sched-row:last-child{border-bottom:none;}
@@ -1253,6 +1269,14 @@ function buildBacktest() {
         [+0.19, +0.57]. Cost isn't the killer (edge holds to 5¢) — the honest limits are small n,
         lumpy payoff, and thin capacity. Forward ledger: <strong>Regime (geo-calm)</strong> on the Overview tab.
       </div>
+      ${(rg.graphs && rg.graphs.backtest) ? `<div class="bt-graph">
+        <div class="bt-graph-cap">Realistic-cost backtest — equity vs entry cost · net edge vs spread</div>
+        <img src="${rg.graphs.backtest}" alt="geo-calm realistic-cost backtest" loading="lazy">
+      </div>` : ''}
+      ${(rg.graphs && rg.graphs.domains) ? `<div class="bt-graph">
+        <div class="bt-graph-cap">Per-domain regime — equity (calm vs turbulent) · calibration · tail edge by domain</div>
+        <img src="${rg.graphs.domains}" alt="per-domain regime calm vs turbulent" loading="lazy">
+      </div>` : ''}
     </div>`;
   }
 
