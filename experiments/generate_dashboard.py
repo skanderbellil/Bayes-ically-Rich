@@ -807,23 +807,49 @@ function buildOverview() {
   const totalMTM = totalU + totalR;
   const totalO   = DATA.strategies.reduce((s, d) => s + d.open.length, 0);
 
-  document.getElementById('port-kpis').innerHTML = `
-    <div class="port-kpi">
-      <div class="kpi-lbl">Portfolio MTM</div>
-      <div class="kpi-val ${cls(totalMTM)}">${fmtPct(totalMTM)}</div>
-    </div>
-    <div class="port-kpi">
-      <div class="kpi-lbl">Unrealized</div>
-      <div class="kpi-val ${cls(totalU)}">${fmtPct(totalU)}</div>
-    </div>
-    <div class="port-kpi">
-      <div class="kpi-lbl">Realized</div>
-      <div class="kpi-val ${cls(totalR)}">${fmtPct(totalR)}</div>
-    </div>
-    <div class="port-kpi">
-      <div class="kpi-lbl">Open Positions</div>
-      <div class="kpi-val neu">${totalO}</div>
-    </div>`;
+  // Real equal-weighted portfolio: each strategy funded with its own $1k bankroll.
+  const p = DATA.portfolio;
+  if (p) {
+    document.getElementById('port-kpis').innerHTML = `
+      <div class="port-kpi">
+        <div class="kpi-lbl">Equity ($${p.capital.toLocaleString()} → )</div>
+        <div class="kpi-val ${cls(p.mtm)}">$${Math.round(p.equity).toLocaleString()}</div>
+      </div>
+      <div class="port-kpi">
+        <div class="kpi-lbl">Portfolio MTM</div>
+        <div class="kpi-val ${cls(p.mtm)}">${fmtPct(p.mtm)}</div>
+      </div>
+      <div class="port-kpi">
+        <div class="kpi-lbl">Unrealized</div>
+        <div class="kpi-val ${cls(p.unrealized)}">${fmtPct(p.unrealized)}</div>
+      </div>
+      <div class="port-kpi">
+        <div class="kpi-lbl">Realized</div>
+        <div class="kpi-val ${cls(p.realized)}">${fmtPct(p.realized)}</div>
+      </div>
+      <div class="port-kpi">
+        <div class="kpi-lbl">Open Positions</div>
+        <div class="kpi-val neu">${totalO}</div>
+      </div>`;
+  } else {
+    document.getElementById('port-kpis').innerHTML = `
+      <div class="port-kpi">
+        <div class="kpi-lbl">Portfolio MTM</div>
+        <div class="kpi-val ${cls(totalMTM)}">${fmtPct(totalMTM)}</div>
+      </div>
+      <div class="port-kpi">
+        <div class="kpi-lbl">Unrealized</div>
+        <div class="kpi-val ${cls(totalU)}">${fmtPct(totalU)}</div>
+      </div>
+      <div class="port-kpi">
+        <div class="kpi-lbl">Realized</div>
+        <div class="kpi-val ${cls(totalR)}">${fmtPct(totalR)}</div>
+      </div>
+      <div class="port-kpi">
+        <div class="kpi-lbl">Open Positions</div>
+        <div class="kpi-val neu">${totalO}</div>
+      </div>`;
+  }
 
   document.getElementById('strategy-grid').innerHTML = DATA.strategies.map(d => {
     const tot  = d.unrealized + d.realized;
@@ -845,7 +871,8 @@ function buildOverview() {
       </div>
       ${d.bankroll ? `<div style="font-size:12px;margin:0 0 6px;padding-top:6px;border-top:1px solid var(--border)">
         <span style="color:var(--muted)">Real $${d.bankroll.capital.toFixed(0)} acct (10%/trade):</span>
-        <strong class="${cls(d.bankroll.total_return)}">$${d.bankroll.final_equity.toFixed(0)} (${fmtPct(d.bankroll.total_return)})</strong>${d.bankroll.trades_skipped ? ` · <span style="color:var(--muted)">${d.bankroll.trades_skipped} unfundable</span>` : ''}${d.bankroll.edge_tstat !== null && d.bankroll.edge_tstat !== undefined ? ` · edge t=${d.bankroll.edge_tstat.toFixed(2)}` : ''}
+        <strong class="${cls(d.bankroll.total_return)}">$${d.bankroll.final_equity.toFixed(0)} (${fmtPct(d.bankroll.total_return)})</strong>
+        <span style="color:var(--muted)"> · R ${fmtPct(d.bankroll.realized/d.bankroll.capital)} · U ${fmtPct(d.bankroll.unrealized/d.bankroll.capital)}</span>${d.bankroll.trades_skipped ? ` · <span style="color:var(--muted)">${d.bankroll.trades_skipped} unfundable</span>` : ''}${d.bankroll.edge_tstat !== null && d.bankroll.edge_tstat !== undefined ? ` · edge t=${d.bankroll.edge_tstat.toFixed(2)}` : ''}
       </div>` : ''}
       ${nR ? wlfRow(d.nW, d.nL, d.nF) : ''}
     </div>`;
@@ -1508,19 +1535,33 @@ def generate() -> None:
     ]
     # attach real bankroll-sim metrics (from run_bankroll_sim.py) by strategy id
     bankroll_by_file: dict = {}
+    portfolio: dict | None = None
     bsum = DATA / "bankroll_summary.csv"
     if bsum.exists():
         bdf = pd.read_csv(bsum)
         for _, r in bdf.iterrows():
             et = r.get("edge_tstat")
-            bankroll_by_file[str(r["file"])] = {
+            rec = {
                 "capital":        float(r["capital"]),
                 "final_equity":   float(r["final_equity"]),
                 "total_return":   float(r["total_return"]),
-                "trades_taken":   int(r["trades_taken"]),
-                "trades_skipped": int(r["trades_skipped"]),
-                "edge_tstat":     (float(et) if pd.notna(et) and str(et) != "" else None),
+                "realized":       float(r["realized"]) if pd.notna(r.get("realized")) else 0.0,
+                "unrealized":     float(r["unrealized"]) if pd.notna(r.get("unrealized")) else 0.0,
             }
+            if str(r["file"]) == "" or str(r["strategy"]).startswith("GLOBAL"):
+                # equal-weighted portfolio of all strategies
+                portfolio = {
+                    "capital":      rec["capital"],
+                    "equity":       rec["final_equity"],
+                    "mtm":          rec["total_return"],
+                    "realized":     rec["realized"] / rec["capital"] if rec["capital"] else 0.0,
+                    "unrealized":   rec["unrealized"] / rec["capital"] if rec["capital"] else 0.0,
+                }
+                continue
+            rec["trades_taken"]   = int(r["trades_taken"])
+            rec["trades_skipped"] = int(r["trades_skipped"])
+            rec["edge_tstat"]     = (float(et) if pd.notna(et) and str(et) != "" else None)
+            bankroll_by_file[str(r["file"])] = rec
     file_by_id = {
         "midprice_yes": "midprice_yes_positions.csv",
         "smart_flow": "smart_flow_positions.csv",
@@ -1534,6 +1575,7 @@ def generate() -> None:
     payload = {
         "generated":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "strategies": strategies,
+        "portfolio":  portfolio,
         "backtests":  {
             "midprice_yes": load_midprice_backtest(),
             "band_sweep":   load_band_sweep(),
