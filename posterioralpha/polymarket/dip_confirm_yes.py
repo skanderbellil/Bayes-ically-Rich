@@ -45,7 +45,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .fetch import fetch_markets, fetch_order_book, fetch_token_history_raw, order_book_features
+from .fetch import (fetch_markets, fetch_order_book, fetch_token_history_raw,
+                    order_book_features, token_resolution)
 
 logger = logging.getLogger(__name__)
 
@@ -210,11 +211,17 @@ def update_ledger(
 
     # ── 3. Resolve open positions ─────────────────────────────────────────────
     for i, row in ledger[ledger["status"] == "open"].iterrows():
+        # authoritative resolution first (CLOB closed + per-token winner); closes
+        # settled markets whose order book is gone and whose fallback price never
+        # reaches the 0/1 threshold.
+        outcome = token_resolution(row.get("condition_id", ""), row["token"])
         mid = _mid(row["token"])
-        if mid is None:
+        if mid is not None:
+            ledger.at[i, "current_price"] = str(round(mid, 4))
+        if outcome is None and mid is None:
             continue
-        ledger.at[i, "current_price"] = str(round(mid, 4))
-        outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
+        if outcome is None and mid is not None:
+            outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
             entry_ask = float(row["entry_ask"])
             frac = float(row["bet_fraction"]) if row.get("bet_fraction") else bet_fraction

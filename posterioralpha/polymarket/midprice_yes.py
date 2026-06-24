@@ -50,6 +50,7 @@ from .fetch import (
     fetch_token_history,
     fetch_token_history_raw,
     order_book_features,
+    token_resolution,
 )
 
 logger = logging.getLogger(__name__)
@@ -210,11 +211,17 @@ def update_ledger(
 
     # 2. refresh + resolve open positions (hold to resolution — no exits)
     for i, row in ledger[ledger["status"] == "open"].iterrows():
+        # authoritative resolution first (CLOB closed + per-token winner); this
+        # closes settled markets whose order book is gone and whose fallback
+        # last-trade price never reaches the 0/1 threshold.
+        outcome = token_resolution(row.get("condition_id", ""), row["token"])
         mid = _price(row["token"])
-        if mid is None:
+        if mid is not None:
+            ledger.at[i, "current_price"] = str(round(mid, 4))
+        if outcome is None and mid is None:
             continue
-        ledger.at[i, "current_price"] = str(round(mid, 4))
-        outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
+        if outcome is None and mid is not None:
+            outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
             entry_ask = float(row["entry_ask"])
             frac = float(row["bet_fraction"]) if row.get("bet_fraction") else bet_fraction

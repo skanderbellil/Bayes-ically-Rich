@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 GAMMA_URL = "https://gamma-api.polymarket.com/markets"
 CLOB_URL  = "https://clob.polymarket.com/prices-history"
+CLOB_MARKETS_URL = "https://clob.polymarket.com/markets"   # /{condition_id} → resolution status
 
 _HEADERS = {"User-Agent": "posterioralpha-polymarket/1.0"}
 
@@ -132,6 +133,57 @@ def _yes_outcome(outcome_prices: str, outcomes: str) -> float:
     if val >= 0.98:
         return 1.0
     return float("nan")
+
+
+def fetch_market_resolution(condition_id: str) -> Optional[dict]:
+    """Authoritative resolution status of a market from the CLOB, by condition id.
+
+    The ``/markets/{condition_id}`` endpoint reports ``closed`` plus, per outcome
+    token, a settled ``price`` (0/1) and a ``winner`` flag — the ground truth for
+    whether a position resolved, independent of whether a tradeable order book or
+    a clean last-trade price still exists. Returns ``None`` on any failure so
+    callers can fall back to a price heuristic.
+
+    Shape: ``{"closed": bool, "tokens": {token_id: {"winner": bool, "price": float}}}``.
+    """
+    if not condition_id:
+        return None
+    data = _get(f"{CLOB_MARKETS_URL}/{condition_id}", {})
+    if not isinstance(data, dict):
+        return None
+    tokens: dict[str, dict] = {}
+    for t in data.get("tokens", []) or []:
+        tid = str(t.get("token_id") or "")
+        if not tid:
+            continue
+        try:
+            price = float(t.get("price") or 0.0)
+        except (TypeError, ValueError):
+            price = 0.0
+        tokens[tid] = {"winner": bool(t.get("winner")), "price": price}
+    return {"closed": bool(data.get("closed")), "tokens": tokens}
+
+
+def token_resolution(condition_id: str, token_id: str) -> Optional[float]:
+    """Settled outcome (1.0 won / 0.0 lost) for one token, or ``None`` if unresolved.
+
+    Authoritative: only returns a label when the market is ``closed`` *and* its
+    resolution is finalised (some token is a clear winner / sits at ~1). This is
+    what lets the trackers close positions whose order book has vanished but whose
+    fallback last-trade price never quite reaches the 0/1 threshold — the source
+    of "resolved markets stuck open".
+    """
+    res = fetch_market_resolution(condition_id)
+    if not res or not res["closed"]:
+        return None
+    toks = res["tokens"]
+    finalised = any(t["winner"] or t["price"] >= 0.99 for t in toks.values())
+    if not finalised:
+        return None
+    t = toks.get(str(token_id))
+    if t is None:
+        return None
+    return 1.0 if (t["winner"] or t["price"] >= 0.99) else 0.0
 
 
 def fetch_markets(
