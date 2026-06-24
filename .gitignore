@@ -28,6 +28,8 @@ results/
 !data/paper_trade/midprice_backtest_summary.csv
 !data/paper_trade/midprice_backtest.png
 !data/paper_trade/midprice_full_backtest_trades.csv
+!data/paper_trade/midprice_full_backtest_yes_trades.csv
+!data/paper_trade/midprice_full_backtest_no_trades.csv
 !data/paper_trade/midprice_full_backtest_equity.csv
 !data/paper_trade/midprice_full_backtest_summary.csv
 !data/paper_trade/midprice_full_backtest.png

@@ -1,2 +1,4 @@
-n_trades,win_rate,mean_trade_return,median_trade_return,fair_pricing_edge_per_$1,edge_tstat,start_capital,final_equity,total_return,max_drawdown,stake_frac,band,entry_window_days
-465,0.3548,0.2226,-1.0,0.0536,2.49,1000.0,2651.0,1.6509,-0.1534,0.01,"[0.10,0.50)",2-10
+side,n,win,edge_per_$1,edge_tstat,mean_ret,median_ret
+both,908,0.3711,0.0578,3.7,0.244,-1.0
+yes,451,0.388,0.1005,4.59,0.4003,-1.0
+no,331,0.3414,-0.0073,-0.28,0.0005,-1.0
