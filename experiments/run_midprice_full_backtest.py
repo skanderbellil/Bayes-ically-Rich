@@ -78,17 +78,22 @@ def fetch_resolved_tokens(n_markets: int, min_volume: float, page_size: int = 10
             try:
                 toks = json.loads(m.get("clobTokenIds") or "[]")
                 prices = [float(x) for x in json.loads(m.get("outcomePrices") or "[]")]
+                labels = json.loads(m.get("outcomes") or "[]")
             except (json.JSONDecodeError, TypeError, ValueError):
                 continue
             if len(toks) != len(prices) or not toks:
                 continue
-            for tok, settled in zip(toks, prices):
+            for i, (tok, settled) in enumerate(zip(toks, prices)):
                 # keep only cleanly-settled legs (0/1)
                 oc = 1.0 if settled >= 0.98 else (0.0 if settled <= 0.02 else None)
                 if oc is None:
                     continue
+                # leg label for the yes/no decomposition: use the market's own
+                # outcome name when present, else fall back to index (0=Yes, 1=No).
+                leg = (str(labels[i]) if i < len(labels) else
+                       ("Yes" if i == 0 else "No")).strip().lower()
                 rows.append({
-                    "token": str(tok), "outcome": oc,
+                    "token": str(tok), "outcome": oc, "leg": leg,
                     "condition_id": str(m.get("conditionId") or ""),
                     "neg_risk": bool(m.get("negRisk")),
                     "end_date": m.get("endDate"), "volume": vol,
@@ -186,6 +191,9 @@ def main() -> None:
     ap.add_argument("--fidelity", type=int, default=1440, help="1440=daily, 60=hourly intraday")
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--collect-only", action="store_true", help="warm price cache, skip sim")
+    ap.add_argument("--side", choices=["both", "yes", "no"], default="both",
+                    help="which outcome leg to trade: 'both' (any in-band leg, the "
+                         "default), 'yes' (Yes/first leg only), 'no' (No/second leg only)")
     ap.add_argument("--sleep", type=float, default=0.05)
     args = ap.parse_args()
     ensure_dirs()
@@ -194,6 +202,14 @@ def main() -> None:
     uni = fetch_resolved_tokens(args.n_markets, args.min_volume)
     if uni.empty:
         raise SystemExit("No resolved markets returned.")
+
+    # yes/no decomposition: restrict the candidate legs before entry detection.
+    if args.side != "both":
+        before = len(uni)
+        uni = uni[uni["leg"] == args.side].reset_index(drop=True)
+        logger.info("side=%s filter: %d → %d candidate outcome tokens", args.side, before, len(uni))
+        if uni.empty:
+            raise SystemExit(f"No '{args.side}' legs in the resolved universe.")
 
     rows = []
     for k, r in enumerate(uni.itertuples(index=False), 1):
@@ -208,7 +224,7 @@ def main() -> None:
         entry_ts, entry_px = res
         rows.append({
             "token": r.token, "condition_id": r.condition_id, "question": r.question,
-            "entry_date": entry_ts, "entry_price": entry_px,
+            "leg": r.leg, "entry_date": entry_ts, "entry_price": entry_px,
             "res_date": pd.Timestamp(r.end_date).tz_localize(None) if r.end_date else entry_ts,
             "outcome": r.outcome, "volume": r.volume,
         })
@@ -237,15 +253,16 @@ def main() -> None:
     edge = cand["outcome"] - cand["entry_price"]
     tstat = float(edge.mean() / (edge.std(ddof=1) / math.sqrt(len(edge)))) if len(edge) > 1 else float("nan")
 
-    # persist
-    out_csv = RESULTS_DIR / "midprice_full_backtest_trades.csv"
+    # persist (suffix by side so yes/no/both runs don't overwrite each other)
+    tag = "" if args.side == "both" else f"_{args.side}"
+    out_csv = RESULTS_DIR / f"midprice_full_backtest{tag}_trades.csv"
     cand.assign(trade_return=r).to_csv(out_csv, index=False)
     if len(sim["equity_curve"]) > 1:
-        sim["equity_curve"].to_csv(RESULTS_DIR / "midprice_full_backtest_equity.csv",
+        sim["equity_curve"].to_csv(RESULTS_DIR / f"midprice_full_backtest{tag}_equity.csv",
                                    header=["equity"])
 
     print(f"\n{'='*84}")
-    print(f"  MID-PRICED-YES — FULL BACKTEST  ·  band [{args.lo:.2f},{args.hi:.2f})  ·  "
+    print(f"  MID-PRICED — FULL BACKTEST  ·  side={args.side}  ·  band [{args.lo:.2f},{args.hi:.2f})  ·  "
           f"enter {args.days_min}-{args.days_max}d pre-res  ·  {args.haircut*100:.0f}¢ haircut")
     print(f"  ${args.capital:,.0f} start · {args.stake:.0%} of equity per trade · "
           f"{'daily' if args.fidelity>=1440 else str(args.fidelity)+'-min'} marks")
