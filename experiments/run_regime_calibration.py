@@ -68,11 +68,12 @@ _KW = {
 
 
 def classify(question: str, leg: str) -> str:
+    # whole-word match: avoids 'eth' ⊂ 'Netherlands', 'btc' ⊂ ... etc.
     if leg not in ("yes", "no"):
         return "sports/other"
     q = question.lower()
     for dom, kws in _KW.items():
-        if any(k in q for k in kws):
+        if any(re.search(r"\b" + re.escape(k) + r"\b", q) for k in kws):
             return dom
     return "other-binary"
 
