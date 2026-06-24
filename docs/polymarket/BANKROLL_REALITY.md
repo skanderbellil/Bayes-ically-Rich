@@ -26,17 +26,21 @@ Identity: `additive = de-levered × (N · stake)`. So the headline is just the
 de-levered return times the nominal summed exposure — when many trades overlap it
 is a **leverage artifact, not extra revenue**.
 
-## Result (snapshot)
+## Result (snapshot) — each strategy funded with its own $1,000
 
-| strategy | real $1k | additive | de-levered | peak leverage | edge t |
-|---|---:|---:|---:|---:|---:|
-| Smart Flow | **−39%** | +124% | +7% | 12.1× | +0.34 |
-| Smart Flow (ROI) | −19% | −20% | — (n=2) | 0.1× | — |
-| Mid-priced YES | **+63%** | +39% | +35% | 1.8× | +0.90 |
-| Dip-Confirm YES | +54%¹ | +12% | — (n=2) | 0.8× | — |
-| Macro | +1%¹ | — | — | — | — |
+| strategy | start | now | MTM | realized | unrealized | edge t |
+|---|---:|---:|---:|---:|---:|---:|
+| Smart Flow | $1,000 | **$610** | −39.0% | −24.2% | −14.8% | +0.34 |
+| Smart Flow (ROI) | $1,000 | $810 | −19.0% | −10.0% | −9.0% | −5.31 |
+| Mid-priced YES | $1,000 | **$1,631** | +63.1% | +31.0% | +32.1% | +0.90 |
+| Dip-Confirm YES | $1,000 | $1,541 | +54.1% | +11.7% | +42.3%¹ | — |
+| Macro | $1,000 | $1,012 | +1.2% | +0.0% | +1.2%¹ | — |
 
-¹ mostly *unrealized* — few positions resolved yet.
+**GLOBAL — equal-weighted portfolio (5 × $1,000 = $5,000):**
+**$5,603 (+12.1% MTM)** · realized **+1.7%** · unrealized **+10.4%**
+
+¹ much of the gain is still *unrealized* — few positions resolved yet, so it is
+mark-to-market, not banked.
 
 ## What it says
 
