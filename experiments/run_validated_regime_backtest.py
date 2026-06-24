@@ -50,6 +50,16 @@ def tstat(x):
     return x.mean() / (x.std(ddof=1) / math.sqrt(len(x))) if len(x) > 1 and x.std() > 0 else np.nan
 
 
+def _max_concurrent(df):
+    """Max number of positions open simultaneously (overlap of [decision, res] windows)."""
+    ev = [(r.decision_date, 1) for r in df.itertuples()] + [(r.res_date, -1) for r in df.itertuples()]
+    ev.sort(key=lambda e: (e[0], e[1]))
+    cur = mx = 0
+    for _, d in ev:
+        cur += d; mx = max(mx, cur)
+    return mx
+
+
 def gpr_calm_flag(P):
     """Causal GPR-calm flag per leg: trailing-45d mean GPR <= trailing-365d median."""
     g = pd.read_csv(GPR, parse_dates=["date"]).set_index("date")["GPRD"].sort_index()
@@ -63,8 +73,9 @@ def gpr_calm_flag(P):
     return m
 
 
-def sim(df, cap=1000.0, stake=0.01, cost=0.0, cap_frac=None):
-    """Chronological stake-of-equity capital sim; entry at mid+cost, hold to settlement.
+def sim(df, cap=1000.0, stake=0.01, cost=0.0, cap_frac=None, fixed=None):
+    """Chronological capital sim; entry at mid+cost, hold to settlement. Sizing is
+    `fixed` dollars/trade if given (flat, non-compounding), else `stake` of equity.
     If cap_frac set, position is also capped at cap_frac * market volume."""
     d = df.sort_values("decision_date").copy()
     d["ep"] = (d["price"] + cost).clip(lower=0.01, upper=0.99)
@@ -80,7 +91,7 @@ def sim(df, cap=1000.0, stake=0.01, cost=0.0, cap_frac=None):
                 cash += p["shares"] * float(d.at[i, "outcome"])
         else:
             eq = cash + sum(v["cost"] for v in open_pos.values())
-            s = min(stake * eq, cash)
+            s = min(fixed, cash) if fixed is not None else min(stake * eq, cash)
             if cap_frac is not None:
                 s = min(s, cap_frac * float(d.at[i, "volume"]))
             px = float(d.at[i, "ep"])
@@ -133,6 +144,8 @@ def main():
     ap.add_argument("--stake", type=float, default=0.02, help="fraction of equity per trade")
     ap.add_argument("--base-cost", type=float, default=0.03, help="realistic entry spread (abs, $)")
     ap.add_argument("--cap-frac", type=float, default=0.01, help="max position as frac of market volume")
+    ap.add_argument("--fixed-stake", type=float, default=None, help="flat $/trade (non-compounding) instead of %% of equity")
+    ap.add_argument("--capital", type=float, default=1000.0, help="starting bankroll for the $ sim")
     args = ap.parse_args()
 
     P = pd.read_csv(PANEL, parse_dates=["decision_date", "res_date"])
@@ -175,6 +188,32 @@ def main():
     print("  Sharpe %.2f  Sortino %.2f  Calmar %.2f  maxDD %.0f%%  Ulcer %.3f  final $%.0f"
           % (m.get("sharpe", np.nan), m.get("sortino", np.nan), m.get("calmar", np.nan),
              100 * m.get("maxdd", np.nan), m.get("ulcer", np.nan), m.get("final", np.nan)))
+
+    # ---- flat-dollar sizing ----
+    if args.fixed_stake:
+        fs = args.fixed_stake
+        ep = (book["price"] + c).clip(lower=0.01)
+        pnl = np.where(book["outcome"] == 1, fs * (1.0 / ep - 1.0), -fs)   # $ per trade
+        wins, losses = pnl[pnl > 0], pnl[pnl < 0]
+        eqf, mf = sim(book, cap=args.capital, cost=c, fixed=fs)
+        staked = fs * mf.get("taken", len(book))
+        print("\n" + "-" * 90)
+        print("FLAT-DOLLAR SIZING — $%.0f per trade (non-compounding), %.0f¢ entry spread" % (fs, c * 100))
+        print("-" * 90)
+        print("  trades funded      %d / %d   (total staked $%.0f, max %d open at once)"
+              % (mf.get("taken", 0), len(book), staked, _max_concurrent(book)))
+        print("  total P&L          %+.0f $   (avg %+.1f $/trade)" % (pnl.sum(), pnl.mean()))
+        print("  ROI on $ staked    %+.1f%%   ROI on $%.0f bankroll  %+.1f%%"
+              % (100 * pnl.sum() / staked, args.capital, 100 * (eqf.iloc[-1] / args.capital - 1)))
+        print("  avg win  %+.0f $ (n=%d)   avg loss  %+.0f $ (n=%d)   profit factor %.2f"
+              % (wins.mean() if len(wins) else 0, len(wins),
+                 losses.mean() if len(losses) else 0, len(losses),
+                 wins.sum() / abs(losses.sum()) if losses.sum() else float("inf")))
+        print("  best trade %+.0f $   worst trade %.0f $   $ maxDD %.0f"
+              % (pnl.max(), pnl.min(), (eqf - eqf.cummax()).min()))
+        print("  Sharpe %.2f  Sortino %.2f  maxDD %.0f%%  final bankroll $%.0f"
+              % (mf.get("sharpe", float("nan")), mf.get("sortino", float("nan")),
+                 100 * mf.get("maxdd", float("nan")), eqf.iloc[-1]))
 
     # ---- capacity ----
     print("\n[CAPACITY] position capped at %.1f%% of market lifetime volume" % (100 * args.cap_frac))
