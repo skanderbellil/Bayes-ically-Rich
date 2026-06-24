@@ -42,3 +42,6 @@ results/
 !data/paper_trade/midprice_yes_10_30_positions.csv
 !data/paper_trade/midprice_yes_20_40_positions.csv
 !data/paper_trade/dip_confirm_positions.csv
+
+# Polymarket/PEAD runtime fetch caches (created on demand)
+data/raw/
