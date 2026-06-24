@@ -1242,10 +1242,16 @@ function buildBacktest() {
       </table></div>
       <div class="bt-note" style="margin-top:10px">
         <strong>Geopolitics</strong> (GPR-calm) is the lone survivor: calm edge
-        <strong>+0.41/$1 (t 3.9)</strong>, walk-forward OOS <strong>+0.36 (t 3.3)</strong>, net
-        <strong>+0.36/$1 after 5¢</strong>, bootstrap P(edge≤0)=0, top-1 only 17% of profit.
-        Crypto/politics fail significance; ai/tech lacks tail data. Forward ledger:
-        <strong>Regime (geo-calm)</strong> on the Overview tab.
+        <strong>+0.41/$1 (t 3.9)</strong>, walk-forward OOS <strong>+0.36 (t 3.3)</strong>,
+        bootstrap P(edge≤0)=0, top-1 only 17% of profit.
+        Crypto/politics fail significance; ai/tech lacks tail data.
+      </div>
+      <div class="bt-note" style="margin-top:8px">
+        <strong>Realistic-cost backtest</strong> (entry at ask = mid + 3¢, 2% stake, hold to
+        settlement, n=15): net edge <strong>+0.40/$1 (t 3.2)</strong>, win 53%, profit factor 7.3,
+        CAGR +70%, <strong>Sharpe 1.26</strong>, maxDD −6%, Calmar 11.9; bootstrap 90% CI
+        [+0.19, +0.57]. Cost isn't the killer (edge holds to 5¢) — the honest limits are small n,
+        lumpy payoff, and thin capacity. Forward ledger: <strong>Regime (geo-calm)</strong> on the Overview tab.
       </div>
     </div>`;
   }

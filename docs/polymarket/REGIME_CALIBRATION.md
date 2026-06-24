@@ -269,3 +269,49 @@ follows automatically. It is wired into the hourly `paper_trade.yml` workflow
 dashboard, with the per-domain kill-test table on the Backtests tab. The regime
 gate genuinely fires: when GPR is elevated (as during an active Middle-East
 flare-up) the strategy logs no new entries and waits for calm.
+
+## Realistic-cost backtest + portfolio metrics
+
+`experiments/run_validated_regime_backtest.py` runs the validated book as an actual
+portfolio sleeve with an honest execution-cost model — the step the validation did
+not do. Filters match the live ledger exactly (geopolitics · YES · price≤0.35 ·
+GPR-calm · resolving in 2–45 d), which leaves **15 historical trades**. Costs: entry
+at the **ask = mid + c** (the spread is the dominant cost on thin markets — swept
+0–5¢, base 3¢); **no exit cost** (held to settlement, winners settle at $1).
+
+**Base case — 3¢ realistic spread, 2% stake, hold to settlement:**
+
+| metric | value |
+|---|---|
+| trades / win rate | 15 / 53% |
+| net edge per $1 | **+0.399 (t 3.15)**, profit factor 7.3 |
+| bootstrap 90% CI | [+0.19, +0.57], P(edge≤0)=0.001 |
+| total return / CAGR | +115% / +70% |
+| Sharpe / Sortino | 1.26 / 1.59 |
+| max drawdown / Calmar / Ulcer | −6% / 11.9 / 0.022 |
+
+**Cost is not the killer.** Because contracts are cheap (entry 2–35¢) and winners pay
+$1, the per-$1 edge is large relative to the spread: it only decays from +0.43 (mid)
+to +0.38 at a punishing 5¢, staying t≈3 throughout. The edge survives realistic
+execution comfortably.
+
+**The honest weaknesses are sample and shape, not costs:**
+- **n=15.** Tiny. Sharpe 1.26 and CAGR 70% are economically attractive but
+  statistically thin; the bootstrap CI is wide ([+0.19, +0.57]).
+- **Lumpy, concentrated.** The equity curve is flat for long stretches with a few
+  step-ups; 2025 (the largest sub-sample, n=9) is only net +0.20/$1 (t 1.28), while
+  2026 (n=5) carries +0.65 (t 3.63). Few escalation events drive the result.
+- **Low capital efficiency.** At 2% stake with sparse calm-geopolitical entries the
+  book sits ~98% in cash — the 70% CAGR rides a small deployed fraction earning large
+  multiples. It is best run as an **overlay sleeve**, not a standalone book; the
+  standalone risk-adjusted number to trust is the **Sharpe ≈ 1.3**, not the headline
+  CAGR.
+- **Capacity is optimistic.** Position capped at 1% of lifetime volume, the cap only
+  bites near ~$3M AUM — but lifetime volume overstates real-time depth, so treat that
+  ceiling as a loose upper bound.
+
+**Sizing note.** The live ledger currently bets 10%/trade; given the lumpy, small-n
+payoff, 2% (this backtest's base) is the more defensible size — 10% would amplify
+both the CAGR and the drawdown materially. Graph: `validated_regime_backtest.png`
+(equity vs entry cost · net edge vs spread); trades in
+`validated_regime_backtest_trades.csv`.
