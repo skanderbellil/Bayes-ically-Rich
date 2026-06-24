@@ -843,6 +843,10 @@ function buildOverview() {
       <div style="font-size:12px;color:var(--muted);margin-bottom:${nR?'6px':'0'}">
         ${watchLine}${d.open.length} open · ${d.resolved.length} resolved${nR ? ' (' + d.nW + 'W/' + d.nL + 'L' + (d.nF ? '/' + d.nF + 'F' : '') + ')' : ''}
       </div>
+      ${d.bankroll ? `<div style="font-size:12px;margin:0 0 6px;padding-top:6px;border-top:1px solid var(--border)">
+        <span style="color:var(--muted)">Real $${d.bankroll.capital.toFixed(0)} acct (10%/trade):</span>
+        <strong class="${cls(d.bankroll.total_return)}">$${d.bankroll.final_equity.toFixed(0)} (${fmtPct(d.bankroll.total_return)})</strong>${d.bankroll.trades_skipped ? ` · <span style="color:var(--muted)">${d.bankroll.trades_skipped} unfundable</span>` : ''}${d.bankroll.edge_tstat !== null && d.bankroll.edge_tstat !== undefined ? ` · edge t=${d.bankroll.edge_tstat.toFixed(2)}` : ''}
+      </div>` : ''}
       ${nR ? wlfRow(d.nW, d.nL, d.nF) : ''}
     </div>`;
   }).join('');
@@ -1502,6 +1506,31 @@ def generate() -> None:
               "Macro (Fed cuts)", "macro", primary=True),
         load_dip_confirm(DATA / "dip_confirm_positions.csv"),
     ]
+    # attach real bankroll-sim metrics (from run_bankroll_sim.py) by strategy id
+    bankroll_by_file: dict = {}
+    bsum = DATA / "bankroll_summary.csv"
+    if bsum.exists():
+        bdf = pd.read_csv(bsum)
+        for _, r in bdf.iterrows():
+            et = r.get("edge_tstat")
+            bankroll_by_file[str(r["file"])] = {
+                "capital":        float(r["capital"]),
+                "final_equity":   float(r["final_equity"]),
+                "total_return":   float(r["total_return"]),
+                "trades_taken":   int(r["trades_taken"]),
+                "trades_skipped": int(r["trades_skipped"]),
+                "edge_tstat":     (float(et) if pd.notna(et) and str(et) != "" else None),
+            }
+    file_by_id = {
+        "midprice_yes": "midprice_yes_positions.csv",
+        "smart_flow": "smart_flow_positions.csv",
+        "smart_flow_roi": "smart_flow_roi_positions.csv",
+        "dip_confirm": "dip_confirm_positions.csv",
+        "macro": "macro_positions.csv",
+    }
+    for s in strategies:
+        s["bankroll"] = bankroll_by_file.get(file_by_id.get(s["strategy_id"], ""))
+
     payload = {
         "generated":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "strategies": strategies,
