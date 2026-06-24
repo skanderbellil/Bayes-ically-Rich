@@ -11,6 +11,8 @@ results/
 !datasets/*.csv
 # Smart-money wallet-selection test snapshot (committed for reproducibility)
 !data/polymarket_smart_money_snapshot/*.csv
+# Regime-calibration study: panel + cached token histories (valuable; keep)
+!data/polymarket_calibration_snapshot/*.csv
 # Paper-trade ledgers are tracked (the forward out-of-sample record)
 !data/paper_trade/macro_positions.csv
 !data/paper_trade/smart_flow_positions.csv
