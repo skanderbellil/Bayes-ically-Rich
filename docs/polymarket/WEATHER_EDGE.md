@@ -1,17 +1,55 @@
-# Weather edge — London max-temperature, forecast vs market
+# Weather edge — city max-temperature, forecast vs market
 
-> Short answer: **a candidate edge, and the best-powered one in this thread.** A
-> five-model NWP consensus is *sharper and better-calibrated* than the Polymarket
-> crowd on London daily-max-temperature buckets. Buying the model's favorite
-> bucket the day before settlement earns **+0.11 per contract per event**, 95% CI
-> **[+0.029, +0.197]** over **128 settled days** — the CI excludes zero, it
-> survives a 1¢ half-spread, and it is stable across the whole 3–15% edge sweep.
-> Two honest qualifiers (below): the alpha is really *"the forecast beats the
-> market"* (the price filter adds little), and the sample is one city / one
-> spring — a seasonal regime, exactly the caveat the macro trade carries.
+> Short answer: **a candidate edge, and now the best-powered one in this thread.**
+> A five-model NWP consensus is *sharper and better-calibrated* than the
+> Polymarket crowd on daily-max-temperature buckets. Buying the model's favorite
+> bucket the day before settlement earns **+0.13 per contract per event**, 95% CI
+> **[+0.093, +0.161]** pooled over **724 settled city-days across 6 cities** — the
+> CI excludes zero, survives a 1¢ half-spread, and is stable across the whole
+> 3–15% edge sweep. Crucially it **generalises**: 5 of 6 cities clear zero
+> independently (London, Paris, NYC, Tokyo, Miami; only Chicago is noise),
+> spanning °C and °F, Europe/Asia/US, and very different climates — which retires
+> the original "one city / one spring" caveat. One honest qualifier remains: the
+> alpha is really *"the forecast beats the market"* (the price filter adds little).
 
 ```bash
+# London only (the original study)
 python experiments/run_polymarket_weather_backtest.py
+# multi-city — the generalisation test
+python experiments/run_polymarket_weather_backtest.py --cities all
+python experiments/run_polymarket_weather_backtest.py --cities london,paris,nyc,tokyo --lead-hours 48
+```
+
+## Generalisation across cities (the robustness test)
+
+Polymarket runs the same daily-max-temperature event for **16 cities**. Extending
+the method there multiplies the sample *and* breaks the seasonal/spatial
+correlation that the single-city study could not. Two gotchas the code handles:
+**US cities quote °F in 2-degree buckets** ("between 38-39°F") while Europe/Asia
+quote °C in 1-degree buckets, and the forecast must be pulled in the market's own
+unit (`weather.City` carries `unit`, `lat/lon`, `timezone`).
+
+Pooled (24h lead, edge ≥ 5%, 100 bps): **661 trades, +0.127/event, CI
+[+0.093, +0.161]** — a far tighter interval than London-alone's [+0.029, +0.197].
+Per city:
+
+| city | n | PnL/event | 95% CI | hit | CI > 0 |
+|---|---:|---:|---|---:|:--:|
+| paris | 113 | **+0.217** | [+0.133, +0.304] | 50% | ✓ |
+| nyc | 118 | +0.158 | [+0.082, +0.235] | 39% | ✓ |
+| tokyo | 90 | +0.127 | [+0.040, +0.216] | 33% | ✓ |
+| london | 120 | +0.113 | [+0.029, +0.197] | 38% | ✓ |
+| miami | 121 | +0.083 | [+0.002, +0.167] | 35% | ✓ |
+| chicago | 99 | +0.059 | [−0.011, +0.131] | 26% | ✗ |
+
+Five of six exclude zero; Chicago (continental, high day-to-day temperature
+variance → the forecast's edge over the crowd shrinks) is the honest failure.
+Calibration pooled over 7,513 buckets stays near-perfect (top bin: model 0.391 /
+realized 0.389; market more diffuse at 0.303). **Next:** the remaining 10 cities,
+and a forward paper ledger per city.
+
+```bash
+python experiments/run_polymarket_weather_backtest.py    # single-city default (London)
 python experiments/run_polymarket_weather_backtest.py --lead-hours 48 --threshold 0.08
 ```
 
@@ -90,9 +128,10 @@ the opposite of a microstructure artifact, which would decay away from settlemen
   well as the price-filtered edge book. So execution reduces to *trust the NWP
   consensus*; the `edge ≥ thr` filter mostly trims days where the market already
   agrees. Treat capacity as the favorite bucket's depth, not the whole field.
-- **One city, one spring.** 128 days is 7× the macro sample, but they are
-  serially/seasonally correlated (London, Feb–Jun 2026). A blocked-bootstrap or a
-  second city/season is the next robustness step before sizing up.
+- **~~One city, one spring~~ — now retired.** The original London-only sample was
+  seasonally correlated; the 6-city pooled study (724 city-days, 5/6 cities
+  clearing zero across Europe/Asia/US) breaks that dependence. Remaining residual:
+  all six are the *same Feb–Jun 2026 window*, so a different season is still untested.
 - **Short forecast lead.** The historical-forecast archive is ≈0–1 day lead; the
   48h result reuses that archive on the market side only, so it slightly flatters
   the forecast. A true multi-lead study needs raw model-run archives.

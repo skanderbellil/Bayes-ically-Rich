@@ -53,13 +53,13 @@ FC_CACHE = RAW_DIR / "weather_fc"
 # ---------------------------------------------------------------------------
 # Cached data access
 # ---------------------------------------------------------------------------
-def _cached_event(d: date, refresh: bool) -> dict | None:
+def _cached_event(d: date, city: wx.City, refresh: bool) -> dict | None:
     EVENT_CACHE.mkdir(parents=True, exist_ok=True)
-    fp = EVENT_CACHE / f"{d.isoformat()}.json"
+    fp = EVENT_CACHE / f"{city.slug}_{d.isoformat()}.json"
     if fp.exists() and not refresh:
         txt = fp.read_text()
         return json.loads(txt) if txt.strip() else None
-    ev = wx.fetch_weather_event(d)
+    ev = wx.fetch_weather_event(d, city)
     # strip the non-serialisable Bucket object before caching
     if ev:
         for b in ev["buckets"]:
@@ -68,16 +68,17 @@ def _cached_event(d: date, refresh: bool) -> dict | None:
     return ev
 
 
-def _cached_forecast(target: str, refresh: bool) -> wx.ForecastConsensus:
+def _cached_forecast(target: str, city: wx.City, refresh: bool) -> wx.ForecastConsensus:
     FC_CACHE.mkdir(parents=True, exist_ok=True)
-    fp = FC_CACHE / f"{target}.json"
+    fp = FC_CACHE / f"{city.slug}_{target}.json"
     if fp.exists() and not refresh:
         d = json.loads(fp.read_text())
-        return wx.ForecastConsensus(d["target"], d["mu"], d["sigma"], d["n_models"], d["per_model"])
-    fc = wx.point_in_time_forecast(target)
+        return wx.ForecastConsensus(d["target"], d["mu"], d["sigma"], d["n_models"],
+                                    d.get("unit", "C"), d["per_model"])
+    fc = wx.point_in_time_forecast(target, city)
     fp.write_text(json.dumps({
         "target": fc.target, "mu": fc.mu, "sigma": fc.sigma,
-        "n_models": fc.n_models, "per_model": fc.per_model,
+        "n_models": fc.n_models, "unit": fc.unit, "per_model": fc.per_model,
     }))
     return fc
 
@@ -104,8 +105,8 @@ def _decision_price(token: str, end: datetime, decision_ts: datetime) -> float |
 # ---------------------------------------------------------------------------
 # Per-event evaluation
 # ---------------------------------------------------------------------------
-def evaluate_event(d: date, lead_hours: int, refresh: bool) -> list[dict] | None:
-    ev = _cached_event(d, refresh)
+def evaluate_event(d: date, city: wx.City, lead_hours: int, refresh: bool) -> list[dict] | None:
+    ev = _cached_event(d, city, refresh)
     if not ev or not ev.get("end_date"):
         return None
     # only settled events (every bucket has a 0/1 outcome) are scoreable
@@ -114,14 +115,14 @@ def evaluate_event(d: date, lead_hours: int, refresh: bool) -> list[dict] | None
     end = datetime.fromisoformat(ev["end_date"].replace("Z", "+00:00"))
     decision_ts = end - timedelta(hours=lead_hours)
 
-    fc = _cached_forecast(ev["date"], refresh)
+    fc = _cached_forecast(ev["date"], city, refresh)
     if not fc.trustworthy:
         return None
 
     # rebuild Bucket objects (cache dropped them) and collect decision-time prices
     prices, bks = {}, []
     for b in ev["buckets"]:
-        bucket = wx.Bucket(b["question"], b["lo"], b["hi"], b["label"])
+        bucket = wx.Bucket(b["question"], b["lo"], b["hi"], b["label"], b.get("unit", "C"))
         b2 = dict(b); b2["bucket"] = bucket
         bks.append(b2)
         p = _decision_price(b["token_yes"], end, decision_ts)
@@ -131,7 +132,8 @@ def evaluate_event(d: date, lead_hours: int, refresh: bool) -> list[dict] | None
         return None
     rows = wx.compute_edges(bks, fc, prices)
     for r in rows:
-        r["event"] = ev["date"]
+        r["event"] = f"{city.slug}:{ev['date']}"   # unique cluster id per city-day
+        r["city"] = city.slug
         r["mu"] = fc.mu
         r["sigma"] = fc.sigma
     return rows
@@ -222,6 +224,8 @@ def main() -> None:
     ap.add_argument("--slippage", type=float, default=0.01, help="half-spread paid per entry")
     ap.add_argument("--mode", choices=["best", "all"], default="best",
                     help="'best' = one max-edge bucket/day; 'all' = every qualifier")
+    ap.add_argument("--cities", default="london",
+                    help="comma-separated city slugs, or 'all' (see weather.CITIES)")
     ap.add_argument("--refresh", action="store_true", help="ignore caches, re-pull")
     ap.add_argument("--workers", type=int, default=12)
     args = ap.parse_args()
@@ -232,21 +236,33 @@ def main() -> None:
     end = date.fromisoformat(args.end)
     days = list(daterange(start, end))
 
-    logger.info("Weather edge backtest — London tmax  |  %s → %s  (%d candidate days)",
-                args.start, args.end, len(days))
+    if args.cities.strip().lower() == "all":
+        cities = list(wx.CITIES.values())
+    else:
+        cities = [wx.CITIES[c.strip()] for c in args.cities.split(",") if c.strip() in wx.CITIES]
+    if not cities:
+        logger.error("No valid cities. Choose from: %s", ", ".join(wx.CITIES))
+        return
+
+    logger.info("Weather edge backtest  |  %s → %s  |  %d cities × %d days",
+                args.start, args.end, len(cities), len(days))
+    logger.info("cities: %s", ", ".join(c.slug for c in cities))
     logger.info("decision lead = %dh, slippage = %.0f bps, threshold = %.0f bps, mode = %s\n",
                 args.lead_hours, args.slippage * 1e4, args.threshold * 1e4, args.mode)
 
-    def _run(d):
+    jobs = [(d, c) for c in cities for d in days]
+
+    def _run(job):
+        d, c = job
         try:
-            return evaluate_event(d, args.lead_hours, args.refresh)
-        except Exception as e:  # one bad day must not kill the run
-            logger.debug("skip %s: %r", d, e)
+            return evaluate_event(d, c, args.lead_hours, args.refresh)
+        except Exception as e:  # one bad city-day must not kill the run
+            logger.debug("skip %s %s: %r", c.slug, d, e)
             return None
 
     rows: list[dict] = []
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        for res in ex.map(_run, days):
+        for res in ex.map(_run, jobs):
             if res:
                 rows.extend(res)
 
@@ -255,7 +271,8 @@ def main() -> None:
         return
     edges = pd.DataFrame(rows)
     n_events = edges["event"].nunique()
-    logger.info("Scored %d buckets across %d settled event-days.\n", len(edges), n_events)
+    logger.info("Scored %d buckets across %d settled city-days (%d cities).\n",
+                len(edges), n_events, edges["city"].nunique())
 
     # ---- headline strategy ------------------------------------------------
     trades = select_trades(edges, args.threshold, args.mode)
@@ -297,6 +314,22 @@ def main() -> None:
                           f"[{lo:+.4f}, {hi:+.4f}]", f"{s['hit']:.0%}", f"{s['worst']:+.3f}"])
     logger.info(tabulate(sweep, headers=["thr", "n", "PnL/event", "95% CI", "hit", "worst"],
                          tablefmt="github"))
+
+    # ---- per-city breakdown (does the edge generalise, or is it London?) --
+    if edges["city"].nunique() > 1:
+        logger.info("\nPer-city breakdown (edge ≥ %.0f%%, mode=%s):", args.threshold * 100, args.mode)
+        per_city = []
+        for cslug, sub in edges.groupby("city"):
+            s = summarise_trades(select_trades(sub, args.threshold, args.mode), args.slippage)
+            if s.get("n", 0):
+                lo, hi = s["ci"]
+                per_city.append([cslug, s["n"], f"{s['pnl_per_event']:+.4f}",
+                                 f"[{lo:+.4f}, {hi:+.4f}]", f"{s['hit']:.0%}",
+                                 f"{s['worst']:+.3f}", "✓" if lo > 0 else ""])
+        per_city.sort(key=lambda r: r[0])
+        logger.info(tabulate(per_city,
+                             headers=["city", "n", "PnL/event", "95% CI", "hit", "worst", "CI>0"],
+                             tablefmt="github"))
 
     # ---- calibration ------------------------------------------------------
     cal = calibration_table(edges)

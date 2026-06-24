@@ -52,10 +52,6 @@ CLOB_HISTORY_URL = "https://clob.polymarket.com/prices-history"
 HIST_FORECAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
-# London (Polymarket settles on the LHR-area reading; coords match london-edge).
-LAT, LON = 51.51, -0.13
-TIMEZONE = "Europe/London"
-
 # Five global models, exactly the london-edge panel. Open-Meteo suffixes each
 # requested variable with the model id when ``&models=`` lists more than one.
 MODELS = [
@@ -66,9 +62,12 @@ MODELS = [
     "meteofrance_seamless",
 ]
 
-# Inter-model σ floor: even unanimous models are not certain N days out, so the
-# implied distribution never collapses below this width (london-edge uses 0.7°C).
-SIGMA_FLOOR = 0.7
+# Inter-model σ floor, in *degrees of the market's own unit*: even unanimous
+# models are not certain N days out, so the implied distribution never collapses
+# below this width. London-edge uses 0.7°C; we scale it to 1.3°F for Fahrenheit
+# markets so the floor is the same physical uncertainty either way.
+SIGMA_FLOOR_C = 0.7
+SIGMA_FLOOR_F = 0.7 * 9.0 / 5.0
 MIN_MODELS = 3  # require ≥3/5 models to trust the consensus (london-edge rule)
 
 _MONTHS = [
@@ -78,52 +77,117 @@ _MONTHS = [
 
 
 # ---------------------------------------------------------------------------
+# City registry
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class City:
+    """A Polymarket temperature-market location.
+
+    ``unit`` is the market's quoting unit ('C' or 'F') — US cities quote °F in
+    2-degree buckets, Europe/Asia quote °C in 1-degree buckets — and the forecast
+    is pulled in that same unit so edges are computed apples-to-apples. ``lat``/
+    ``lon`` are a representative city-center reading (an approximation of the
+    exact resolution station; see WEATHER_EDGE.md caveats).
+    """
+    slug: str          # Polymarket slug fragment, e.g. "nyc"
+    display: str       # human label
+    lat: float
+    lon: float
+    timezone: str
+    unit: str          # 'C' or 'F'
+
+
+CITIES: dict[str, City] = {
+    # Europe / Asia — °C, 1-degree buckets
+    "london": City("london", "London", 51.51, -0.13, "Europe/London", "C"),
+    "paris": City("paris", "Paris", 48.85, 2.35, "Europe/Paris", "C"),
+    "tokyo": City("tokyo", "Tokyo", 35.68, 139.69, "Asia/Tokyo", "C"),
+    "moscow": City("moscow", "Moscow", 55.76, 37.62, "Europe/Moscow", "C"),
+    # North America — °F, 2-degree buckets
+    "nyc": City("nyc", "New York City", 40.78, -73.97, "America/New_York", "F"),
+    "chicago": City("chicago", "Chicago", 41.88, -87.63, "America/Chicago", "F"),
+    "miami": City("miami", "Miami", 25.79, -80.32, "America/New_York", "F"),
+    "seattle": City("seattle", "Seattle", 47.61, -122.33, "America/Los_Angeles", "F"),
+    "toronto": City("toronto", "Toronto", 43.65, -79.38, "America/Toronto", "F"),
+    "dallas": City("dallas", "Dallas", 32.78, -96.80, "America/Chicago", "F"),
+    "los-angeles": City("los-angeles", "Los Angeles", 33.94, -118.41, "America/Los_Angeles", "F"),
+    "denver": City("denver", "Denver", 39.74, -104.99, "America/Denver", "F"),
+    "houston": City("houston", "Houston", 29.76, -95.37, "America/Chicago", "F"),
+    "austin": City("austin", "Austin", 30.27, -97.74, "America/Chicago", "F"),
+    "san-francisco": City("san-francisco", "San Francisco", 37.77, -122.42, "America/Los_Angeles", "F"),
+    "atlanta": City("atlanta", "Atlanta", 33.64, -84.43, "America/New_York", "F"),
+}
+
+# Backward-compatible London constants (some callers import these directly).
+LONDON = CITIES["london"]
+LAT, LON, TIMEZONE = LONDON.lat, LONDON.lon, LONDON.timezone
+
+
+def sigma_floor(unit: str) -> float:
+    return SIGMA_FLOOR_F if unit.upper() == "F" else SIGMA_FLOOR_C
+
+
+# ---------------------------------------------------------------------------
 # Bucket parsing  (research)
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Bucket:
-    """One quoted temperature bucket and its half-open integer-degree span.
+    """One quoted temperature bucket and its inclusive integer-degree span.
 
-    ``lo``/``hi`` are the *inclusive* integer edges in °C; an open side is
-    ``-inf`` / ``+inf``. A single-degree bucket has ``lo == hi``.
+    ``lo``/``hi`` are the *inclusive* integer edges in the market's own unit; an
+    open side is ``-inf`` / ``+inf``. A single-degree bucket has ``lo == hi``; a
+    US 2-degree bucket ("between 38-39°F") has ``hi == lo + 1``. ``unit`` is
+    'C' or 'F'.
     """
     question: str
     lo: float
     hi: float
     label: str
+    unit: str = "C"
 
 
-_RE_DEG = re.compile(r"(-?\d+)\s*°?\s*c", re.IGNORECASE)
+_RE_RANGE = re.compile(r"between\s+(-?\d+)\s*[-–]\s*(-?\d+)\s*°?\s*([cf])", re.IGNORECASE)
+_RE_SINGLE = re.compile(r"(-?\d+)\s*°\s*([cf])", re.IGNORECASE)
 
 
 def parse_bucket(question: str) -> Optional[Bucket]:
-    """Parse a 'highest temperature in London' market question into a Bucket.
+    """Parse a 'highest temperature in <city>' market question into a Bucket.
 
-    Handles the three shapes the market quotes::
+    Handles both quoting conventions::
 
-        "... be 6°C or below on March 1?"  → (-inf, 6)   tmax ≤ 6
-        "... be 11°C on March 1?"          → (11, 11)    tmax == 11
-        "... be 14°C or higher on ...?"    → (14, +inf)  tmax ≥ 14
+        "... be 6°C or below ...?"          → (-inf, 6)   °C, tmax ≤ 6
+        "... be 11°C ...?"                  → (11, 11)    °C, tmax == 11
+        "... be 14°C or higher ...?"        → (14, +inf)  °C, tmax ≥ 14
+        "... be 37°F or below ...?"         → (-inf, 37)  °F, tmax ≤ 37
+        "... be between 38-39°F ...?"       → (38, 39)    °F, 2-degree bucket
+        "... be 90°F or above ...?"         → (90, +inf)  °F, tmax ≥ 90
     """
-    m = _RE_DEG.search(question)
+    q = question.lower()
+    rng = _RE_RANGE.search(question)
+    if rng:
+        lo, hi = int(rng.group(1)), int(rng.group(2))
+        unit = rng.group(3).upper()
+        return Bucket(question, float(lo), float(hi), f"{lo}-{hi}", unit)
+    m = _RE_SINGLE.search(question)
     if not m:
         return None
     t = int(m.group(1))
-    q = question.lower()
+    unit = m.group(2).upper()
     if "or below" in q or "or lower" in q or "or colder" in q:
-        return Bucket(question, -np.inf, float(t), f"≤{t}")
+        return Bucket(question, -np.inf, float(t), f"≤{t}", unit)
     if "or higher" in q or "or above" in q or "or hotter" in q or "or more" in q:
-        return Bucket(question, float(t), np.inf, f"≥{t}")
-    return Bucket(question, float(t), float(t), f"{t}")
+        return Bucket(question, float(t), np.inf, f"≥{t}", unit)
+    return Bucket(question, float(t), float(t), f"{t}", unit)
 
 
 def bucket_prob(b: Bucket, mu: float, sigma: float) -> float:
-    """P(tmax falls in bucket) under N(μ, σ) with ±0.5°C continuity correction.
+    """P(tmax falls in bucket) under N(μ, σ) with a ±0.5° continuity correction.
 
     The quoted buckets partition the integers, so the boundary between integer
     ``d`` and ``d+1`` sits at ``d+0.5``. An open bucket integrates the whole tail.
+    ``μ``/``σ`` must already be in the bucket's unit.
     """
-    sigma = max(float(sigma), SIGMA_FLOOR)
+    sigma = max(float(sigma), sigma_floor(b.unit))
     lo_edge = -np.inf if np.isneginf(b.lo) else (b.lo - 0.5)
     hi_edge = np.inf if np.isposinf(b.hi) else (b.hi + 0.5)
     p_hi = 1.0 if np.isposinf(hi_edge) else norm.cdf((hi_edge - mu) / sigma)
@@ -138,9 +202,10 @@ def bucket_prob(b: Bucket, mu: float, sigma: float) -> float:
 class ForecastConsensus:
     """Point-in-time multi-model max-temperature forecast for one target date."""
     target: str            # YYYY-MM-DD
-    mu: float              # cross-model mean tmax (°C)
+    mu: float              # cross-model mean tmax (in the city's unit)
     sigma: float           # inter-model std (pre-floor; floored in bucket_prob)
     n_models: int
+    unit: str = "C"
     per_model: dict = field(default_factory=dict)
 
     @property
@@ -148,17 +213,25 @@ class ForecastConsensus:
         return self.n_models >= MIN_MODELS and np.isfinite(self.mu)
 
 
-def point_in_time_forecast(target: str) -> ForecastConsensus:
-    """Five-model archived tmax forecast for ``target`` (YYYY-MM-DD), London.
+# plausibility window for a daily max, per unit, to drop garbage model values
+_SANITY = {"C": (-40.0, 55.0), "F": (-40.0, 131.0)}
+
+
+def point_in_time_forecast(target: str, city: City = LONDON) -> ForecastConsensus:
+    """Five-model archived tmax forecast for ``target`` (YYYY-MM-DD) at ``city``.
 
     Uses Open-Meteo's *historical-forecast* archive — the forecast that the
     models actually issued for that date — rather than the ERA5 reanalysis, so a
-    backtest decision on date ``t`` sees no information from after ``t``.
+    backtest decision on date ``t`` sees no information from after ``t``. The
+    forecast is requested in the city's quoting unit (°C or °F).
     """
+    unit_param = "fahrenheit" if city.unit == "F" else "celsius"
+    lo_ok, hi_ok = _SANITY[city.unit]
     data = _get(HIST_FORECAST_URL, {
-        "latitude": LAT, "longitude": LON,
+        "latitude": city.lat, "longitude": city.lon,
         "start_date": target, "end_date": target,
-        "daily": "temperature_2m_max", "timezone": TIMEZONE,
+        "daily": "temperature_2m_max", "timezone": city.timezone,
+        "temperature_unit": unit_param,
         "models": ",".join(MODELS),
     })
     daily = (data or {}).get("daily", {}) if isinstance(data, dict) else {}
@@ -166,17 +239,17 @@ def point_in_time_forecast(target: str) -> ForecastConsensus:
     for mdl in MODELS:
         vals = daily.get(f"temperature_2m_max_{mdl}")
         if vals and vals[0] is not None and np.isfinite(vals[0]):
-            # sanity window: London daily max realistically in [-15, 45] °C
-            if -15.0 <= float(vals[0]) <= 45.0:
+            if lo_ok <= float(vals[0]) <= hi_ok:
                 per_model[mdl] = float(vals[0])
     if not per_model:
-        return ForecastConsensus(target, np.nan, np.nan, 0, {})
+        return ForecastConsensus(target, np.nan, np.nan, 0, city.unit, {})
     arr = np.array(list(per_model.values()))
     return ForecastConsensus(
         target=target,
         mu=float(arr.mean()),
         sigma=float(arr.std(ddof=1)) if len(arr) > 1 else 0.0,
         n_models=len(per_model),
+        unit=city.unit,
         per_model=per_model,
     )
 
@@ -214,16 +287,18 @@ def fetch_token_window(token_id: str, start_ts: int, end_ts: int,
     return s
 
 
-def realized_tmax(target: str) -> Optional[float]:
+def realized_tmax(target: str, city: City = LONDON) -> Optional[float]:
     """Observed daily max temperature (ERA5 archive) — calibration cross-check only.
 
     Settlement PnL uses the *market's* resolution, not this; ERA5 is here so the
     backtest can check that the model forecasts were themselves well-calibrated.
+    Returned in the city's quoting unit.
     """
     data = _get(ARCHIVE_URL, {
-        "latitude": LAT, "longitude": LON,
+        "latitude": city.lat, "longitude": city.lon,
         "start_date": target, "end_date": target,
-        "daily": "temperature_2m_max", "timezone": TIMEZONE,
+        "daily": "temperature_2m_max", "timezone": city.timezone,
+        "temperature_unit": "fahrenheit" if city.unit == "F" else "celsius",
     })
     daily = (data or {}).get("daily", {}) if isinstance(data, dict) else {}
     vals = daily.get("temperature_2m_max")
@@ -235,19 +310,19 @@ def realized_tmax(target: str) -> Optional[float]:
 # ---------------------------------------------------------------------------
 # Market event  (data)
 # ---------------------------------------------------------------------------
-def event_slug(d: _date) -> str:
-    """The Polymarket event slug for a given London-temperature day."""
-    return f"highest-temperature-in-london-on-{_MONTHS[d.month - 1]}-{d.day}-{d.year}"
+def event_slug(d: _date, city: City = LONDON) -> str:
+    """The Polymarket event slug for a given city-temperature day."""
+    return f"highest-temperature-in-{city.slug}-on-{_MONTHS[d.month - 1]}-{d.day}-{d.year}"
 
 
-def fetch_weather_event(d: _date) -> Optional[dict]:
-    """Fetch one day's London-temperature event from Gamma by dated slug.
+def fetch_weather_event(d: _date, city: City = LONDON) -> Optional[dict]:
+    """Fetch one day's city-temperature event from Gamma by dated slug.
 
-    Returns ``{date, end_date, buckets:[...]}`` where each bucket carries its
-    parsed span, Yes-token id, resolution outcome (0/1 once settled) and volume —
-    or ``None`` if the market does not exist for that date.
+    Returns ``{date, city, unit, end_date, buckets:[...]}`` where each bucket
+    carries its parsed span, Yes-token id, resolution outcome (0/1 once settled)
+    and volume — or ``None`` if the market does not exist for that date.
     """
-    evs = _get(GAMMA_EVENTS_URL, {"slug": event_slug(d)})
+    evs = _get(GAMMA_EVENTS_URL, {"slug": event_slug(d, city)})
     if not evs or not isinstance(evs, list):
         return None
     ev = evs[0]
@@ -276,13 +351,15 @@ def fetch_weather_event(d: _date) -> Optional[dict]:
                 vol = 0.0
         buckets.append({
             "question": b.question, "lo": b.lo, "hi": b.hi, "label": b.label,
-            "token_yes": token_yes, "outcome": outcome, "volume": float(vol or 0.0),
-            "bucket": b,
+            "unit": b.unit, "token_yes": token_yes, "outcome": outcome,
+            "volume": float(vol or 0.0), "bucket": b,
         })
     if not buckets:
         return None
     return {
         "date": d.isoformat(),
+        "city": city.slug,
+        "unit": city.unit,
         "end_date": ev.get("endDate"),
         "closed": bool(ev.get("closed")),
         "volume": float(ev.get("volume") or 0.0),
