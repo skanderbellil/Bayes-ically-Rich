@@ -238,6 +238,43 @@ def load_midprice_backtest() -> dict:
     }
 
 
+def load_regime_backtest() -> dict:
+    """Regime-calm disruptive-tail study: per-domain matched-proxy validation +
+    the geopolitics audit headline (from validated_domains.json)."""
+    vpath = ROOT / "data" / "polymarket_calibration_snapshot" / "validated_domains.json"
+    if not vpath.exists():
+        return {"available": False}
+    info = json.loads(vpath.read_text())
+    per = info.get("per_domain", {})
+    rows = []
+    for dom, r in per.items():
+        rows.append({
+            "domain":    dom,
+            "proxy":     r.get("proxy", "—"),
+            "verdict":   r.get("verdict", "—"),
+            "n_calm":    r.get("n_calm"),
+            "base_edge": r.get("base_edge"),
+            "base_t":    r.get("base_t"),
+            "gap":       r.get("gap"),
+            "oos_edge":  r.get("oos_edge"),
+            "oos_t":     r.get("oos_t"),
+            "net_5c":    r.get("net_5c"),
+            "boot_p":    r.get("boot_p"),
+            "top1":      r.get("top1"),
+            "reason":    r.get("reason", ""),
+        })
+    # verdict order: validated first, then by base_t desc
+    rows.sort(key=lambda x: (x["verdict"] != "VALIDATED", -(x["base_t"] or -99)))
+    return {
+        "available":  True,
+        "generated":  info.get("generated", ""),
+        "method":     info.get("method", ""),
+        "max_price":  info.get("max_price"),
+        "validated":  info.get("validated_domains", []),
+        "per_domain": rows,
+    }
+
+
 # ---------------------------------------------------------------------------
 # HTML template
 # ---------------------------------------------------------------------------
@@ -1168,6 +1205,51 @@ function buildBacktest() {
   const mac = DATA.strategies.find(s => s.strategy_id === 'macro') || {};
   let html  = '';
 
+  // ── Regime-calm disruptive tail (per-domain validation) ─────────────────────
+  const rg = bt.regime || {};
+  if (rg.available) {
+    const vBadge = v => v === 'VALIDATED'
+      ? '<span class="pill pill-won">VALIDATED</span>'
+      : '<span class="pill pill-lost">killed</span>';
+    const fmtE = v => (v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(3));
+    const rows = (rg.per_domain || []).map(r => `<tr>
+        <td style="white-space:nowrap">${esc(r.domain)}</td>
+        <td>${vBadge(r.verdict)}</td>
+        <td style="color:var(--muted);font-size:11px">${esc(r.proxy)}</td>
+        <td class="${cls(r.base_edge)}">${fmtE(r.base_edge)}</td>
+        <td>${r.base_t == null ? '—' : r.base_t.toFixed(2)}</td>
+        <td class="${cls(r.gap)}">${fmtE(r.gap)}</td>
+        <td class="${cls(r.oos_edge)}">${fmtE(r.oos_edge)}</td>
+        <td>${r.boot_p == null ? '—' : r.boot_p.toFixed(2)}</td>
+        <td>${r.top1 == null ? '—' : (r.top1*100).toFixed(0)+'%'}</td>
+      </tr>`).join('');
+    html += `<div class="card">
+      <div class="card-title">Regime-Calm Disruptive Tail
+        <span style="font-size:11px;font-weight:400;color:var(--muted)">per-domain kill test · 1,576-leg panel · price≤${rg.max_price ?? 0.35}</span>
+      </div>
+      <div class="bt-note" style="margin-bottom:12px">
+        Cheap YES legs of disruptive markets are underpriced <strong>while that domain is calm</strong>.
+        Each domain is judged against its <strong>own exogenous proxy</strong> and put through a strict
+        kill battery (base t, walk-forward OOS, cost@3¢/5¢, week-clustered bootstrap, placebo regime,
+        winner concentration). Only survivors trade live. <strong>Validated: ${(rg.validated||[]).join(', ') || 'none'}</strong>.
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Domain</th><th>Verdict</th><th>Proxy</th><th>Calm edge/$1</th><th>t</th>
+          <th>Calm−Turb</th><th>OOS edge</th><th>boot P≤0</th><th>top1</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div class="bt-note" style="margin-top:10px">
+        <strong>Geopolitics</strong> (GPR-calm) is the lone survivor: calm edge
+        <strong>+0.41/$1 (t 3.9)</strong>, walk-forward OOS <strong>+0.36 (t 3.3)</strong>, net
+        <strong>+0.36/$1 after 5¢</strong>, bootstrap P(edge≤0)=0, top-1 only 17% of profit.
+        Crypto/politics fail significance; ai/tech lacks tail data. Forward ledger:
+        <strong>Regime (geo-calm)</strong> on the Overview tab.
+      </div>
+    </div>`;
+  }
+
   // ── Mid-priced YES ──────────────────────────────────────────────────────────
   if (mp.available) {
     const eq  = mp.equity;               // [{date, cum}]
@@ -1531,6 +1613,8 @@ def generate() -> None:
               "Smart Flow (ROI)", "smart_flow_roi", primary=True),
         strat(DATA / "macro_positions.csv", "entry_price", "leader_question",
               "Macro (Fed cuts)", "macro", primary=True),
+        strat(DATA / "validated_regime_positions.csv", "entry_ask", "question",
+              "Regime (geo-calm)", "validated_regime", primary=True),
         load_dip_confirm(DATA / "dip_confirm_positions.csv"),
     ]
     # attach real bankroll-sim metrics (from run_bankroll_sim.py) by strategy id
@@ -1579,6 +1663,7 @@ def generate() -> None:
         "backtests":  {
             "midprice_yes": load_midprice_backtest(),
             "band_sweep":   load_band_sweep(),
+            "regime":       load_regime_backtest(),
         },
     }
     html = _HTML.replace("%%DATA%%",        json.dumps(payload, ensure_ascii=False))

@@ -43,6 +43,12 @@ jobs:
       - name: Regime-calm disruptive-tail (forward ledger)
         run: python experiments/run_regime_paper_update.py || true
 
+      - name: Regime per-domain validation (refresh validated set)
+        run: python experiments/run_regime_domain_validation.py || true
+
+      - name: Validated regime strategy (geo-calm forward ledger)
+        run: python experiments/run_validated_regime_paper_update.py || true
+
       - name: Bankroll simulation (real $1k returns)
         run: python experiments/run_bankroll_sim.py --capital 1000 --stake 0.10
 
@@ -64,6 +70,8 @@ jobs:
             data/paper_trade/smart_flow_roi_positions.csv \
             data/paper_trade/macro_positions.csv \
             data/paper_trade/regime_positions.csv \
+            data/paper_trade/validated_regime_positions.csv \
+            data/polymarket_calibration_snapshot/validated_domains.json \
             data/paper_trade/bankroll_summary.csv \
             data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then

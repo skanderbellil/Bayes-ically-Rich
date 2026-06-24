@@ -232,3 +232,40 @@ disruptive-tail underpricing concentrated in calm regimes, and GPR additionally
 delivers the **significant continuous gradient** the other two lacked. That moves
 the geopolitics result from "candidate" toward **solid**. The remaining honest
 limits are sample size and capacity, not the regime definition.
+
+## Per-domain validation with matched proxies — what actually trades
+
+`experiments/run_regime_domain_validation.py` does the disciplined version of "is
+this real per domain": each disruptive domain is judged against **its own
+exogenous proxy** (not one global index), then put through a strict kill battery
+(base t, calm−turb gap, walk-forward OOS, cost @3¢/5¢, week-clustered bootstrap,
+placebo regime, winner concentration). A domain is VALIDATED only if it clears
+*all* gates; otherwise KILLED.
+
+| domain | matched proxy | calm edge/$1 (t) | OOS edge (t) | boot P≤0 | top1 | verdict |
+|---|---|---:|---:|---:|---:|:--|
+| **geopolitics** | GPR index | **+0.406 (3.93)** | +0.357 (3.31) | 0.00 | 17% | **VALIDATED** |
+| crypto/financial | BTC 30d realized vol | +0.044 (0.69) | +0.072 (0.81) | 0.26 | 36% | killed (insignificant) |
+| politics | EPU (daily) | +0.062 (0.38) | +0.082 (0.40) | 0.35 | 100% | killed (6 calm legs, 1 winner) |
+| ai/tech | — | — | — | — | — | killed (no tail data) |
+
+**Only geopolitics survives.** Crypto's calm edge points the right way (gap +0.089)
+but base t 0.69 and bootstrap P 0.26 — not real. Politics has 6 calm legs and a
+single winner (top1 100%). ai/tech has no cheap-tail legs. This is the rigorous
+confirmation of the earlier hunch: the effect is a *war/escalation-underpriced-
+during-calm* phenomenon, nothing broader. The verdict is written to
+`data/polymarket_calibration_snapshot/validated_domains.json`, which drives what
+trades live.
+
+## Deployed: the validated strategy (live, on the cron + dashboard)
+
+`experiments/run_validated_regime_paper_update.py` is the forward paper ledger of
+the distilled strategy: **buy the cheap (≤0.35) YES leg of a geopolitical market
+while geopolitical risk is calm** (GPR trailing-45d mean below its trailing-1yr
+median, computed causally from the committed dataset), 10%/bet, hold to settlement.
+It reads `validated_domains.json`, so if a domain's verdict changes the live book
+follows automatically. It is wired into the hourly `paper_trade.yml` workflow
+(validation → ledger → dashboard) and shows up as **"Regime (geo-calm)"** on the
+dashboard, with the per-domain kill-test table on the Backtests tab. The regime
+gate genuinely fires: when GPR is elevated (as during an active Middle-East
+flare-up) the strategy logs no new entries and waits for calm.

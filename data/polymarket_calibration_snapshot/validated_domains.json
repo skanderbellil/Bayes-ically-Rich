@@ -1,0 +1,85 @@
+{
+  "generated": "2026-06-24 23:21 UTC",
+  "max_price": 0.35,
+  "method": "domain-matched exogenous proxy, causal trailing regime, strict kill battery",
+  "proxies": {
+    "geopolitics": "GPR index",
+    "crypto/financial": "BTC 30d realized vol",
+    "politics": "EPU (daily)"
+  },
+  "validated_domains": [
+    "geopolitics"
+  ],
+  "per_domain": {
+    "geopolitics": {
+      "domain": "geopolitics",
+      "proxy": "GPR index",
+      "n_tail": 101,
+      "n_calm": 22,
+      "n_turb": 79,
+      "base_edge": 0.406,
+      "base_t": 3.93,
+      "gap": 0.2615,
+      "turb_edge": 0.1445,
+      "oos_n": 20,
+      "oos_edge": 0.3571,
+      "oos_t": 3.31,
+      "net_3c": 0.376,
+      "net_5c": 0.356,
+      "boot_p": 0.0,
+      "top1": 0.17,
+      "placebo_p": 0.0086,
+      "verdict": "VALIDATED",
+      "reason": "survives all kill tests"
+    },
+    "crypto/financial": {
+      "domain": "crypto/financial",
+      "proxy": "BTC 30d realized vol",
+      "n_tail": 64,
+      "n_calm": 33,
+      "n_turb": 31,
+      "base_edge": 0.0442,
+      "base_t": 0.69,
+      "gap": 0.0892,
+      "turb_edge": -0.045,
+      "oos_n": 18,
+      "oos_edge": 0.0719,
+      "oos_t": 0.81,
+      "net_3c": 0.0142,
+      "net_5c": -0.0058,
+      "boot_p": 0.2618,
+      "top1": 0.36,
+      "placebo_p": 0.1318,
+      "verdict": "KILLED",
+      "reason": "fails: base_t>=2, boot_p<=0.10, placebo_p<=0.10"
+    },
+    "politics": {
+      "domain": "politics",
+      "proxy": "EPU (daily)",
+      "n_tail": 75,
+      "n_calm": 6,
+      "n_turb": 69,
+      "base_edge": 0.0621,
+      "base_t": 0.38,
+      "gap": 0.0163,
+      "turb_edge": 0.0458,
+      "oos_n": 5,
+      "oos_edge": 0.0815,
+      "oos_t": 0.4,
+      "net_3c": 0.0321,
+      "net_5c": 0.0121,
+      "boot_p": 0.353,
+      "top1": 1.0,
+      "placebo_p": 0.394,
+      "verdict": "KILLED",
+      "reason": "fails: n_calm>=20, base_t>=2, boot_p<=0.10, placebo_p<=0.10, top1<0.60"
+    },
+    "ai/tech": {
+      "domain": "ai/tech",
+      "proxy": "(none)",
+      "n_tail": 0,
+      "verdict": "KILLED",
+      "reason": "no matched proxy / insufficient tail data (n_tail=0)"
+    }
+  }
+}
