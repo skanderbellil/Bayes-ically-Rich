@@ -30,11 +30,13 @@ from .papertrade import load_ledger, update_ledger
 from . import smartflow_papertrade
 from .fetch import (
     build_price_panel,
+    fetch_market_resolution,
     fetch_markets,
     fetch_order_book,
     fetch_token_history,
     order_book_features,
     resolution_outcomes,
+    token_resolution,
 )
 from .signals import (
     bayesian_shrink,
@@ -101,6 +103,8 @@ __all__ = [
     "fetch_order_book",
     "order_book_features",
     "resolution_outcomes",
+    "fetch_market_resolution",
+    "token_resolution",
     # research: momentum signals
     "to_logodds",
     "from_logodds",

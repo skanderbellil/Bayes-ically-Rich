@@ -41,7 +41,12 @@ from pathlib import Path
 import pandas as pd
 
 from .categorize import market_category
-from .fetch import fetch_order_book, fetch_token_history_raw, order_book_features
+from .fetch import (
+    fetch_order_book,
+    fetch_token_history_raw,
+    order_book_features,
+    token_resolution,
+)
 from .traders import fetch_leaderboard, fetch_trader_trades
 
 logger = logging.getLogger(__name__)
@@ -388,16 +393,24 @@ def update_ledger(
 
     # -- 3. refresh + resolve + stop-loss + consensus-exit open positions --
     for i, row in ledger[ledger["status"] == "open"].iterrows():
-        mid, _ = _price(row["token"])
-        if mid is None:
-            continue
-        ledger.at[i, "current_price"] = str(round(mid, 4))
         entry_ask = float(row["entry_ask"])
         frac = float(row["bet_fraction"]) if row.get("bet_fraction") else bet_fraction
 
-        # resolution first — a market that settled YES/NO must be closed correctly,
-        # not mislabelled "stopped" because the terminal price triggers a stop-loss.
-        outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
+        # resolution first, from the AUTHORITATIVE CLOB market status (closed +
+        # per-token winner). This catches settled markets whose order book is gone
+        # and whose fallback last-trade price never reaches the 0/1 threshold —
+        # the cause of resolved positions getting stuck "open".
+        outcome = token_resolution(row.get("condition_id", ""), row["token"])
+
+        mid, _ = _price(row["token"])
+        if mid is not None:
+            ledger.at[i, "current_price"] = str(round(mid, 4))
+        if outcome is None and mid is None:
+            continue  # neither resolution nor a fresh mark — leave untouched this run
+
+        # price-heuristic fallback only if the API didn't confirm resolution
+        if outcome is None and mid is not None:
+            outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
             pnl = (outcome / entry_ask - 1.0) * frac
             ledger.at[i, "status"]        = "won" if outcome == 1.0 else "lost"
