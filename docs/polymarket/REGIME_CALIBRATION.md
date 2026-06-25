@@ -363,3 +363,34 @@ since it admits looser-calm entries) but still strongly significant. **Verdict:*
 keep `gpr_level` as the high-purity core; the actionable upgrade is the
 **level-OR-vol** gate when throughput matters more than per-trade purity. VIX and
 vol-forecasting are dead ends for this edge.
+
+### Deployed: level-OR-vol gate (live ledger + backtest)
+
+The level-OR-vol gate is now the live gate (`run_validated_regime_paper_update.py`)
+and the backtest default (`run_validated_regime_backtest.py --gate level_or_vol`).
+On the wider book it is **better, not just bigger** — realistic 3¢ spread, 2% stake:
+
+| | level (n=17) | **level-OR-vol (n=35, deployed)** |
+|---|---:|---:|
+| net edge/$1 (t) | +0.497 (4.87) | +0.382 (**4.58**) |
+| Sharpe / Calmar | 1.26 / 11.9 | **1.77** / 16.5 |
+| max drawdown | −6% | −10% |
+| bootstrap 90% CI | [+0.19,+0.57] | [+0.23,+0.55], P(edge≤0)=0 |
+| year significance | 2025 t **1.28** | 2025 t **3.07**, 2026 t 2.79 |
+
+The decisive gain is **temporal stability**: under level-only, 2025 (the largest
+sub-sample) was insignificant; the OR-gate makes *both* major years significant, so
+the edge is no longer carried by a handful of events. A live illustration of the
+mechanism: at deploy time GPR *level* sat above its 1-yr median (level-only =
+turbulent, no trades) but GPR *volatility* was low — the elevated risk was **stable,
+not jumpy** — so the OR-gate reads calm and trades, exactly the "stable-but-elevated
+is calm for pricing" case the vol signal is meant to catch.
+
+**Why not also OR-in VIX?** Tested — it dilutes. Earlier VIX *was* significant, but
+on the **pooled** disruptive tail (`run_regime_exogenous.py`: VIX-calm CE +0.098,
+t 3.08), a composition effect — not a per-domain one. Adding VIX-calm (level or vol)
+as a third OR term to the geopolitics gate admits ~13 more "calm" legs but they are
+low-edge: calm CE falls +0.367 → +0.260, the calm−turbulent gap **halves** (+0.322 →
++0.15), and the deployable net edge drops +0.382 → +0.288. VIX also does **not**
+rescue the killed crypto domain (VIX-calm crypto gap +0.002, t 0.03). So the gate
+stays the two-term `gpr_level OR gpr_vol`; VIX stays out.
