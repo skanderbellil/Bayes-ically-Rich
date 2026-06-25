@@ -14,6 +14,9 @@ results/
 # Regime-calibration study: panel + cached token histories (valuable; keep)
 !data/polymarket_calibration_snapshot/*.csv
 !data/polymarket_calibration_snapshot/*.png
+# Cross-asset GPR-gate study (reproducible artifacts; keep)
+!data/cross_asset/*.csv
+!data/cross_asset/*.png
 # Paper-trade ledgers are tracked (the forward out-of-sample record)
 !data/paper_trade/macro_positions.csv
 !data/paper_trade/regime_positions.csv
