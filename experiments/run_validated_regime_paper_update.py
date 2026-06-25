@@ -67,16 +67,22 @@ def _series(domain):
 
 
 def regime_now(domain):
-    """Current CALM/TURBULENT for a domain from committed proxy data (causal)."""
+    """Current CALM/TURBULENT for a domain from committed proxy data (causal).
+
+    Gate = level-OR-vol (the validated upgrade, see run_regime_gpr_vol.py): calm if
+    the proxy's trailing-`win` mean is below its trailing-1yr median (level-calm) OR
+    its trailing-`win` daily-change std is below its trailing-1yr median (vol-calm).
+    The union ~doubles the deployable book while keeping the sharpest calm split."""
     s, name, win = _series(domain)
     if s is None:
         return None, name, None
     s = s.asfreq("D").ffill().dropna()
-    trail = s.rolling(win, min_periods=max(5, win // 3)).mean()
-    base = s.rolling(_REF, min_periods=_REF // 2).median()
-    t, b = trail.iloc[-1], base.iloc[-1]
-    calm = bool(t <= b)
-    return ("calm" if calm else "turbulent"), name, round(float(t), 2)
+    lvl = s.rolling(win, min_periods=max(5, win // 3)).mean()
+    lvl_calm = lvl.iloc[-1] <= lvl.rolling(_REF, min_periods=_REF // 2).median().iloc[-1]
+    vol = s.diff().rolling(win, min_periods=max(5, win // 3)).std()
+    vol_calm = vol.iloc[-1] <= vol.rolling(_REF, min_periods=_REF // 2).median().iloc[-1]
+    calm = bool(lvl_calm or vol_calm)
+    return ("calm" if calm else "turbulent"), name, round(float(lvl.iloc[-1]), 2)
 
 
 def days_to_res(end_date):

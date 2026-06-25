@@ -1263,11 +1263,13 @@ function buildBacktest() {
         Crypto/politics fail significance; ai/tech lacks tail data.
       </div>
       <div class="bt-note" style="margin-top:8px">
-        <strong>Realistic-cost backtest</strong> (entry at ask = mid + 3¢, 2% stake, hold to
-        settlement, n=15): net edge <strong>+0.40/$1 (t 3.2)</strong>, win 53%, profit factor 7.3,
-        CAGR +70%, <strong>Sharpe 1.26</strong>, maxDD −6%, Calmar 11.9; bootstrap 90% CI
-        [+0.19, +0.57]. Cost isn't the killer (edge holds to 5¢) — the honest limits are small n,
-        lumpy payoff, and thin capacity. Forward ledger: <strong>Regime (geo-calm)</strong> on the Overview tab.
+        <strong>Realistic-cost backtest</strong> — deployed <strong>level-OR-vol</strong> gate
+        (calm if GPR level OR GPR volatility is below its 1-yr median; entry at ask = mid + 3¢,
+        2% stake, hold to settlement, <strong>n=35</strong>): net edge <strong>+0.38/$1 (t 4.58)</strong>,
+        win 54%, profit factor 7.2, CAGR +165%, <strong>Sharpe 1.77</strong>, maxDD −10%, Calmar 16.5;
+        bootstrap 90% CI [+0.23, +0.55], P(edge≤0)=0. Both major years significant (2025 t 3.1,
+        2026 t 2.8). The OR-gate ~doubles the book vs level-only (n=17) and lifts Sharpe 1.26→1.77.
+        Cost isn't the killer (edge holds to 5¢). Forward ledger: <strong>Regime (geo-calm)</strong> on the Overview tab.
       </div>
       ${(rg.graphs && rg.graphs.backtest) ? `<div class="bt-graph">
         <div class="bt-graph-cap">Realistic-cost backtest — equity vs entry cost · net edge vs spread</div>

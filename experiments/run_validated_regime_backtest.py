@@ -60,16 +60,22 @@ def _max_concurrent(df):
     return mx
 
 
-def gpr_calm_flag(P):
-    """Causal GPR-calm flag per leg: trailing-45d mean GPR <= trailing-365d median."""
+def gpr_calm_flag(P, gate="level_or_vol"):
+    """Causal GPR-calm flag per leg. Two gates:
+      level        : trailing-45d mean GPR <= trailing-365d median (high-purity core)
+      level_or_vol : level-calm OR vol-calm, where vol-calm = trailing-45d std of daily
+                     GPR <= its trailing-365d median (wider book, ~2x trades).
+    Both inputs are backward-rolling (causal) and attached with merge_asof backward."""
     g = pd.read_csv(GPR, parse_dates=["date"]).set_index("date")["GPRD"].sort_index()
     g = g.asfreq("D").ffill()
-    trail = g.rolling(45, min_periods=15).mean()
-    base = g.rolling(365, min_periods=180).median()
-    daily = pd.DataFrame({"Date": g.index, "trail": trail.values, "base": base.values}).dropna()
+    lvl = g.rolling(45, min_periods=15).mean()
+    lvl_calm = lvl <= lvl.rolling(365, min_periods=180).median()
+    vol = g.diff().rolling(45, min_periods=15).std()
+    vol_calm = vol <= vol.rolling(365, min_periods=180).median()
+    calm = (lvl_calm | vol_calm) if gate == "level_or_vol" else lvl_calm
+    daily = pd.DataFrame({"Date": g.index, "calm": calm.values}).dropna()
     m = pd.merge_asof(P.sort_values("decision_date"), daily,
-                      left_on="decision_date", right_on="Date", direction="backward")
-    m["calm"] = m["trail"] <= m["base"]
+                      left_on="decision_date", right_on="Date", direction="backward").drop(columns="Date")
     return m
 
 
@@ -146,18 +152,20 @@ def main():
     ap.add_argument("--cap-frac", type=float, default=0.01, help="max position as frac of market volume")
     ap.add_argument("--fixed-stake", type=float, default=None, help="flat $/trade (non-compounding) instead of %% of equity")
     ap.add_argument("--capital", type=float, default=1000.0, help="starting bankroll for the $ sim")
+    ap.add_argument("--gate", choices=["level", "level_or_vol"], default="level_or_vol",
+                    help="regime gate: level (high-purity) or level_or_vol (wider book, deployed)")
     args = ap.parse_args()
 
     P = pd.read_csv(PANEL, parse_dates=["decision_date", "res_date"])
-    P = gpr_calm_flag(P)
+    P = gpr_calm_flag(P, gate=args.gate)
     hold = (P["res_date"] - P["decision_date"]).dt.days
     book = P[(P.domain == "geopolitics") & (P.leg == "yes") & (P.price <= args.max_price)
              & P["calm"] & hold.between(2, 45)].copy().reset_index(drop=True)
 
     print("=" * 90)
     print("VALIDATED GEO-CALM STRATEGY — realistic-cost backtest")
-    print("  geopolitics · YES · price<=%.2f · GPR-calm · hold 2-45d · stake %.0f%%/trade"
-          % (args.max_price, args.stake * 100))
+    print("  geopolitics · YES · price<=%.2f · GPR-calm[%s] · hold 2-45d · stake %.0f%%/trade"
+          % (args.max_price, args.gate, args.stake * 100))
     print("  n=%d trades · %s → %s" % (len(book), book.decision_date.min().date(), book.res_date.max().date()))
     print("=" * 90)
 
