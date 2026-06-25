@@ -315,3 +315,51 @@ payoff, 2% (this backtest's base) is the more defensible size — 10% would ampl
 both the CAGR and the drawdown materially. Graph: `validated_regime_backtest.png`
 (equity vs entry cost · net edge vs spread); trades in
 `validated_regime_backtest_trades.csv`.
+
+## GPR volatility & GPR+VIX composites — do they beat the level gate?
+
+`experiments/run_regime_gpr_vol.py` tests two refinements of the regime signal,
+all causal, on the geopolitics tail (CE = outcome − price, n=117 for power):
+**(A)** combine GPR with VIX, and **(B)** use GPR *volatility* — including a
+RiskMetrics EWMA **forecast** of it — instead of the level. CALM = signal below its
+trailing-1yr median. Calm−turbulent CE gap (bigger = sharper regime split):
+
+| signal | nCalm | calm CE (t) | gap |
+|---|---:|---:|---:|
+| **gpr_level** (deployed) | 26 | +0.433 (4.70) | **+0.311** |
+| gpr+vix_z | 24 | +0.395 (4.12) | +0.253 |
+| gpr_vol | 38 | +0.340 (4.24) | +0.221 |
+| gpr_vol_ewma (forecast) | 42 | +0.287 (3.75) | +0.146 |
+| gpr_AND_vix | 17 | +0.255 (2.35) | +0.064 |
+| **vix_level** | 50 | +0.168 (2.61) | **−0.067** |
+
+**(A) Adding VIX does not help — it dilutes.** For *geopolitics*, VIX alone has a
+**negative** gap (financial calm ≠ geopolitical calm — markets are often calm while
+conflict risk builds). Intersecting (`gpr_AND_vix`) throws away good GPR-calm legs
+(gap → +0.064); the z-composite is 96% identical to GPR-level, just slightly worse.
+GPR alone is the cleaner instrument — consistent with the earlier finding that VIX
+and the geo edge are near-orthogonal.
+
+**(B) GPR volatility has real signal but doesn't beat level — and forecasting it is
+the weakest variant.** `gpr_vol` (gap +0.221) and the EWMA forecast (+0.146) are
+both positive and significant, so instability genuinely tracks mispricing — but
+neither discriminates as well as the simple level, and *forecasting* the vol adds
+noise versus just measuring trailing vol.
+
+**The one useful refinement: "calm by level OR by low vol" — same edge, ~2× the
+trades.** Because level and vol agree only 66%, their **union** keeps the sharpest
+split while widening the book:
+
+| signal | book n (hold 2-45d) | net edge/$1 @3¢ (t) | CE-gap | calm-CE t |
+|---|---:|---:|---:|---:|
+| gpr_level (deployed) | 17 | +0.497 (4.87) | +0.311 | 4.70 |
+| **gpr_level OR gpr_vol** | **35** | +0.382 (4.94) | +0.322 | **5.29** |
+| gpr_level AND gpr_vol | 12 | +0.439 (3.47) | +0.246 | 3.27 |
+
+The union **doubles the deployable trade count (17 → 35)** — the strategy's single
+biggest weakness is its tiny sample — while holding the highest calm-CE t-stat
+(5.29) and an equal calm−turbulent gap. Per-trade edge is lower (+0.38 vs +0.50 net,
+since it admits looser-calm entries) but still strongly significant. **Verdict:**
+keep `gpr_level` as the high-purity core; the actionable upgrade is the
+**level-OR-vol** gate when throughput matters more than per-trade purity. VIX and
+vol-forecasting are dead ends for this edge.
