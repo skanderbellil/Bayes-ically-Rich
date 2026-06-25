@@ -394,3 +394,38 @@ low-edge: calm CE falls +0.367 → +0.260, the calm−turbulent gap **halves** (
 +0.15), and the deployable net edge drops +0.382 → +0.288. VIX also does **not**
 rescue the killed crypto domain (VIX-calm crypto gap +0.002, t 0.03). So the gate
 stays the two-term `gpr_level OR gpr_vol`; VIX stays out.
+
+## What *kinds* of geopolitical markets carry the edge
+
+`experiments/run_geo_subtypes.py` buckets the cheap geopolitical tail (n=101) by
+event type. The edge lives in **deadline-bound, named-actor, discrete-event**
+markets — "Will *actor* do *action* by *date*?" (deadline-bound CE +0.187, t 3.94;
+that one structural feature covers 92 of 101 legs).
+
+| sub-type | n | realized | CE | t |
+|---|---:|---:|---:|---:|
+| sanctions / deals (tiny n) | 3 | 1.00 | +0.771 | (n=3) |
+| **ceasefire / peace / withdrawal** | 27 | 0.48 | **+0.341** | 3.73 |
+| nuclear / enrichment | 5 | 0.40 | +0.228 | (n=5) |
+| **strike / attack / incursion** | 32 | 0.38 | **+0.225** | 2.56 |
+| leadership / regime (tiny n) | 3 | 0.33 | +0.207 | (n=3) |
+| airspace / shipping closure | 12 | 0.25 | +0.117 | 0.86 |
+| **vague "other" (no catalyst)** | 19 | 0.05 | **−0.081** | −1.78 |
+
+**The underpricing is symmetric in direction**, which revises the "dread of war"
+reading: ESCALATION (strike/nuclear/closure, n=49, CE +0.199 t 2.90) *and*
+DE-ESCALATION (ceasefire/peace, n=27, CE +0.341 t 3.73) are both underpriced —
+peace deals most of all. One-sided dread would underprice only escalation; instead
+*any* discrete break from the status quo is too cheap. The cleaner mechanism is
+**status-quo / continuity bias**: the crowd over-weights "nothing decisive happens
+by the deadline," so both the strike and the ceasefire arrive more often than
+priced. Vague no-catalyst "other" markets are, if anything, slightly *over*-priced —
+the crowd prices genuine no-catalyst longshots about right.
+
+**Does tilting toward the high-edge buckets help the live book? No — and that's
+reassuring.** In the deployable OR-gate book the regime+price+horizon filters have
+*already* removed the bad "other" bucket (only 1 of 35 survives), so excluding it is
+immaterial (+0.382 → +0.396 net), and cherry-picking only peace+strike *lowers* the
+Sharpe (1.77 → 1.53, t 4.58 → 3.77) by shrinking n — the textbook overfitting
+penalty. So **no sub-type filter is added to the live strategy**; the existing
+filters already select the structured, catalyst-driven markets where the edge lives.
