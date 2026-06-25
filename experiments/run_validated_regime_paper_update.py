@@ -112,8 +112,9 @@ def signal_fraction(base, strength, g, cap):
     multiplier = exp(g*z) / exp(g^2/2), clipped to [1/cap, cap]; fraction = base*mult.
     The exp(g^2/2) divisor is the unconditional E[exp(g*z)] for z~N(0,1) — an
     analytic constant (no lookahead) that keeps the long-run average near ``base``.
-    g=0 reproduces the old flat fraction; g~0.5 is the validated risk-adjusted
-    sweet spot (best Sortino/Calmar in the sizing sweep) without over-betting."""
+    g=0 reproduces the old flat fraction; g=1.0 (the deployed default) is the
+    max-CAGR point in the sizing sweep; g~0.5 trades a little CAGR for the best
+    Sortino/Calmar if you prefer a smoother ride."""
     if g == 0.0:
         return base
     mult = math.exp(g * strength) / math.exp(g * g / 2.0)
@@ -151,7 +152,7 @@ def main():
     ap.add_argument("--fraction", type=float, default=0.10, help="base (average) bet fraction")
     ap.add_argument("--size-mode", choices=["flat", "signal"], default="signal",
                     help="flat = constant --fraction (old behaviour); signal = scale by GPR-calm depth")
-    ap.add_argument("--tilt", type=float, default=0.5, help="signal tilt strength g (0=flat, ~0.5 validated)")
+    ap.add_argument("--tilt", type=float, default=1.0, help="signal tilt strength g (0=flat; 1.0 = max-CAGR point in the sweep)")
     ap.add_argument("--size-cap", type=float, default=2.0, help="max/min size multiple vs base fraction")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
