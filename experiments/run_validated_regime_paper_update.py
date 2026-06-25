@@ -19,6 +19,15 @@ What it does each run:
     with YES mid <= --max-price resolving in [--days-min,--days-max] days, **only
     when that domain is currently calm** (the gate actually fires — unlike the
     exploratory all-domain ledger which logs both regimes for comparison),
+  * SIZES each bet by the DEPTH of the calm (--size-mode signal, the default):
+    bet_fraction = base * exp(g*z)/exp(g^2/2), capped, where z is the causal
+    GPR-calm depth z-score. This deploys the sizing study's conclusion
+    (run_regime_sizing_sensitivity.py): size by the SIGNAL, not the price —
+    calm-depth predicts edge (corr +0.32) so deeper calm bets bigger, while
+    price does not (corr +0.04) so sizing stays FLAT across price. Price risk is
+    instead controlled by the --max-price cap, which the breakeven model
+    (run_regime_breakeven_model.py) shows keeps the breakeven win rate <= ~0.38.
+    --size-mode flat restores the old constant fraction.
   * marks + resolves to settlement (hold, no exits).
 
 Ledger: data/paper_trade/validated_regime_positions.csv (dashboard-compatible).
@@ -72,17 +81,44 @@ def regime_now(domain):
     Gate = level-OR-vol (the validated upgrade, see run_regime_gpr_vol.py): calm if
     the proxy's trailing-`win` mean is below its trailing-1yr median (level-calm) OR
     its trailing-`win` daily-change std is below its trailing-1yr median (vol-calm).
-    The union ~doubles the deployable book while keeping the sharpest calm split."""
+    The union ~doubles the deployable book while keeping the sharpest calm split.
+
+    Also returns ``strength`` = how DEEP the calm is, as a causal z-score:
+    (trailing-1yr-median - trailing-`win` mean) / trailing-1yr std of that mean.
+    Positive = calmer than the recent normal; bigger = deeper calm. This is the
+    SAME continuous signal whose cross-sectional tilt earned the size-weighted
+    edge in run_regime_sizing_sensitivity.py (corr(edge, calm-depth)=+0.32) — the
+    live ledger turns that cross-sectional tilt into a temporal one (size up when
+    the calm is deep, fully causal)."""
     s, name, win = _series(domain)
     if s is None:
-        return None, name, None
+        return None, name, None, None
     s = s.asfreq("D").ffill().dropna()
     lvl = s.rolling(win, min_periods=max(5, win // 3)).mean()
-    lvl_calm = lvl.iloc[-1] <= lvl.rolling(_REF, min_periods=_REF // 2).median().iloc[-1]
+    lvl_med = lvl.rolling(_REF, min_periods=_REF // 2).median().iloc[-1]
+    lvl_std = lvl.rolling(_REF, min_periods=_REF // 2).std().iloc[-1]
+    lvl_now = float(lvl.iloc[-1])
+    lvl_calm = lvl_now <= lvl_med
     vol = s.diff().rolling(win, min_periods=max(5, win // 3)).std()
     vol_calm = vol.iloc[-1] <= vol.rolling(_REF, min_periods=_REF // 2).median().iloc[-1]
     calm = bool(lvl_calm or vol_calm)
-    return ("calm" if calm else "turbulent"), name, round(float(lvl.iloc[-1]), 2)
+    strength = float((lvl_med - lvl_now) / lvl_std) if lvl_std and not math.isnan(lvl_std) else 0.0
+    return ("calm" if calm else "turbulent"), name, round(lvl_now, 2), strength
+
+
+def signal_fraction(base, strength, g, cap):
+    """Signal-scaled bet fraction: deeper calm -> bigger size (and vice-versa).
+
+    multiplier = exp(g*z) / exp(g^2/2), clipped to [1/cap, cap]; fraction = base*mult.
+    The exp(g^2/2) divisor is the unconditional E[exp(g*z)] for z~N(0,1) — an
+    analytic constant (no lookahead) that keeps the long-run average near ``base``.
+    g=0 reproduces the old flat fraction; g~0.5 is the validated risk-adjusted
+    sweet spot (best Sortino/Calmar in the sizing sweep) without over-betting."""
+    if g == 0.0:
+        return base
+    mult = math.exp(g * strength) / math.exp(g * g / 2.0)
+    mult = min(max(mult, 1.0 / cap), cap)
+    return round(base * mult, 4)
 
 
 def days_to_res(end_date):
@@ -101,7 +137,9 @@ def load_ledger():
     for c in COLS:
         if c not in df.columns:
             df[c] = ""
-    return df[COLS]
+    # object (not the strict pandas>=3 StringArray) so in-place numeric marks
+    # like current_price/outcome/pnl assign cleanly across pandas versions.
+    return df[COLS].astype(object)
 
 
 def main():
@@ -110,7 +148,11 @@ def main():
     ap.add_argument("--days-min", type=int, default=2)
     ap.add_argument("--days-max", type=int, default=45)
     ap.add_argument("--min-volume", type=float, default=5_000.0)
-    ap.add_argument("--fraction", type=float, default=0.10)
+    ap.add_argument("--fraction", type=float, default=0.10, help="base (average) bet fraction")
+    ap.add_argument("--size-mode", choices=["flat", "signal"], default="signal",
+                    help="flat = constant --fraction (old behaviour); signal = scale by GPR-calm depth")
+    ap.add_argument("--tilt", type=float, default=0.5, help="signal tilt strength g (0=flat, ~0.5 validated)")
+    ap.add_argument("--size-cap", type=float, default=2.0, help="max/min size multiple vs base fraction")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -122,9 +164,14 @@ def main():
         logger.warning("no validated domains — nothing to trade"); return
 
     regimes = {d: regime_now(d) for d in validated}
-    for d, (reg, name, val) in regimes.items():
-        logger.info("validated domain %-16s proxy=%-22s now=%s (%.2f)", d, name, (reg or "?").upper(), val or float("nan"))
-    calm_domains = {d for d, (reg, _, _) in regimes.items() if reg == "calm"}
+    for d, (reg, name, val, strength) in regimes.items():
+        logger.info("validated domain %-16s proxy=%-22s now=%s (%.2f, calm-depth z=%+.2f)",
+                    d, name, (reg or "?").upper(), val or float("nan"), strength or 0.0)
+    calm_domains = {d for d, (reg, _, _, _) in regimes.items() if reg == "calm"}
+    g = args.tilt if args.size_mode == "signal" else 0.0
+    if args.size_mode == "signal":
+        logger.info("sizing: signal-scaled (base %.2f, tilt g=%.2f, cap %.1fx) — deeper calm bets bigger",
+                    args.fraction, g, args.size_cap)
 
     try:
         markets = fetch_markets(n_markets=1200, min_volume=args.min_volume, min_liquidity=300.0, closed=False)
@@ -149,13 +196,15 @@ def main():
         mid, ask = feat["mid"], feat["best_ask"]
         if not (0.02 <= mid <= args.max_price):
             continue
-        reg, name, val = regimes[dom]
-        logger.info("ENTRY [%s/calm] %s  ask %.3f  %.1fd", dom, (m.question or "")[:42], ask, dtr)
+        reg, name, val, strength = regimes[dom]
+        frac = signal_fraction(args.fraction, strength, g, args.size_cap)
+        logger.info("ENTRY [%s/calm] %s  ask %.3f  %.1fd  size %.3f (z=%+.2f)",
+                    dom, (m.question or "")[:42], ask, dtr, frac, strength)
         new.append({"token": m.yes_token, "condition_id": getattr(m, "condition_id", ""),
                     "question": m.question, "domain": dom, "proxy": name, "proxy_value": val,
                     "regime": "calm", "end_date": getattr(m, "end_date", ""), "entry_date": today,
                     "days_to_res": round(dtr, 2), "entry_ask": round(ask, 4), "current_price": round(mid, 4),
-                    "bet_fraction": args.fraction, "status": "open", "exit_date": "", "outcome": "", "pnl": ""})
+                    "bet_fraction": frac, "status": "open", "exit_date": "", "outcome": "", "pnl": ""})
     logger.info("scanned %d open markets → %d new validated-strategy entries", len(markets), len(new))
     if new:
         ledger = pd.concat([ledger, pd.DataFrame(new)], ignore_index=True)
@@ -177,10 +226,14 @@ def main():
             outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
             entry = float(row["entry_ask"])
+            try:
+                row_frac = float(row.get("bet_fraction") or args.fraction)
+            except (TypeError, ValueError):
+                row_frac = args.fraction
             ledger.at[i, "status"] = "won" if outcome == 1.0 else "lost"
             ledger.at[i, "exit_date"] = today
             ledger.at[i, "outcome"] = outcome
-            ledger.at[i, "pnl"] = round((outcome / entry - 1.0) * args.fraction, 4)
+            ledger.at[i, "pnl"] = round((outcome / entry - 1.0) * row_frac, 4)
             resolved += 1
 
     done = ledger[ledger["status"].isin(["won", "lost"])].copy()
