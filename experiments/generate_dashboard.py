@@ -103,15 +103,24 @@ def equity_curves(resolved):
                              finflat=eqf, retflat=eqf / CAP0 - 1.0, dd10=dd)
 
 
+def pnl_fields(k, opens):
+    """Realized / unrealized / MTM in $ at the flat-$10 stake (additive).
+    realized = settled P&L (= finflat - CAP0); unrealized = open-position marks;
+    mtm = realized + unrealized."""
+    realized = k["finflat"] - CAP0
+    unreal = sum(FLAT * o["ret"] for o in opens)
+    return dict(realized=realized, unreal=unreal, mtm=realized + unreal)
+
+
 def build():
-    strategies, series, all_resolved = [], {}, []
+    strategies, series, all_resolved, all_opens = [], {}, [], []
     for fname, ecol, qcol, label in REGISTRY:
         resolved, opens = load_ledger(DATA / fname, ecol)
-        all_resolved.extend(resolved)
+        all_resolved.extend(resolved); all_opens.extend(opens)
         pts10, ptsf, k = equity_curves(resolved)
         sid = fname.replace("_positions.csv", "")
         strategies.append(dict(id=sid, label=label, open=len(opens),
-                               unreal=sum(FLAT * o["ret"] for o in opens), **k))
+                               **pnl_fields(k, opens), **k))
         if k["n"]:
             series[sid] = {"label": label, "pts10": pts10, "ptsf": ptsf}
     all_resolved.sort(key=lambda x: x["date"])
@@ -119,7 +128,7 @@ def build():
     if gk["n"]:
         series = {"GLOBAL": {"label": "All combined", "pts10": gp10, "ptsf": gpf}, **series}
     combined = dict(label="ALL COMBINED", open=sum(s["open"] for s in strategies),
-                    unreal=sum(s["unreal"] for s in strategies), **gk)
+                    **pnl_fields(gk, all_opens), **gk)
     return combined, strategies, series
 
 
@@ -127,9 +136,16 @@ def fmt_money(v):
     return f"${v:,.0f}"
 
 
+def signed(v):
+    return f"${v:+,.0f}"
+
+
+def _sc(v):
+    return "pos" if v >= 0 else "neg"
+
+
 def kpi_card(s):
-    c10 = "pos" if s["ret10"] >= 0 else "neg"
-    cf = "pos" if s["retflat"] >= 0 else "neg"
+    c10, cf = _sc(s["ret10"]), _sc(s["retflat"])
     return f"""
     <div class="card">
       <div class="card-h">{s['label']}</div>
@@ -138,7 +154,12 @@ def kpi_card(s):
         <div class="k"><div class="kl">10% stake</div><div class="kv {c10}">{fmt_money(s['fin10'])}</div><div class="kd {c10}">{s['ret10']*100:+.1f}%</div></div>
         <div class="k"><div class="kl">flat $10</div><div class="kv {cf}">{fmt_money(s['finflat'])}</div><div class="kd {cf}">{s['retflat']*100:+.1f}%</div></div>
       </div>
-      <div class="card-f">max DD {s['dd10']*100:.0f}% · unreal (flat) ${s['unreal']:+,.0f}</div>
+      <div class="pnl3">
+        <div><span class="kl">Realized</span><span class="{_sc(s['realized'])}">{signed(s['realized'])}</span></div>
+        <div><span class="kl">Unrealized</span><span class="{_sc(s['unreal'])}">{signed(s['unreal'])}</span></div>
+        <div><span class="kl">MTM</span><span class="{_sc(s['mtm'])}">{signed(s['mtm'])}</span></div>
+      </div>
+      <div class="card-f">max DD {s['dd10']*100:.0f}% · P&amp;L shown at flat $10/trade</div>
     </div>"""
 
 
@@ -172,25 +193,31 @@ button{{cursor:pointer;border:1px solid var(--line);background:var(--panel);colo
 button:hover{{border-color:var(--acc)}}
 .btn-run{{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}}
 .runinfo{{font-size:12px;color:var(--mut)}}.runinfo b{{color:var(--ink)}}
-.combined{{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}}
+.combined{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}}
 .cell{{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}}
 .cell .l{{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}}
-.cell .v{{font-size:20px;font-weight:680;margin-top:3px}}.cell .v.small{{font-size:16px}}
+.cell .l .tag{{text-transform:none;letter-spacing:0;opacity:.7;font-size:10px}}
+.cell .v{{font-size:20px;font-weight:680;margin-top:3px}}.cell .v.small{{font-size:17px}}
 .kd{{font-size:12px}}
 .section-h{{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px}}
 #chartbtns{{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}}
-.chartbtn{{font-size:12px;padding:6px 10px}}.chartbtn.active{{background:var(--acc);border-color:var(--acc);color:#fff}}
+.chartbtn{{font-size:12px;padding:8px 11px}}.chartbtn.active{{background:var(--acc);border-color:var(--acc);color:#fff}}
 .chartwrap{{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}}
-.legend{{display:flex;gap:16px;font-size:12px;color:var(--mut);margin-bottom:6px}}
+.legend{{display:flex;gap:16px;font-size:12px;color:var(--mut);margin-bottom:6px;flex-wrap:wrap}}
 .legend i{{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}}
-.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:10px}}
 .card{{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}}
 .card-h{{font-weight:640}}.card-sub{{font-size:12px;color:var(--mut);margin:2px 0 8px}}
 .kgrid{{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
 .k{{background:#10151b;border:1px solid var(--line);border-radius:8px;padding:8px}}
 .kl{{font-size:10px;color:var(--mut);text-transform:uppercase}}.kv{{font-size:17px;font-weight:680}}
+.pnl3{{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}}
+.pnl3 div{{background:#10151b;border:1px solid var(--line);border-radius:7px;padding:6px;display:flex;flex-direction:column;gap:2px}}
+.pnl3 span:last-child{{font-size:13px;font-weight:640}}
 .card-f{{font-size:11px;color:var(--mut);margin-top:8px}}.pos{{color:var(--pos)}}.neg{{color:var(--neg)}}
-@media(max-width:820px){{.combined{{grid-template-columns:repeat(2,1fr)}}.grid{{grid-template-columns:1fr}}}}
+@media(max-width:600px){{.wrap{{padding:12px}}.bar{{gap:8px}}h1{{font-size:16px;width:100%}}
+  .runinfo{{width:100%;order:3}}.bar button{{flex:1}}.cell .v{{font-size:18px}}
+  #chart{{height:260px}}.section-h{{margin:14px 0 6px}}}}
 </style></head><body><div class="wrap">
 
 <div class="bar">
@@ -204,9 +231,12 @@ button:hover{{border-color:var(--acc)}}
 <div class="combined">
   <div class="cell"><div class="l">Combined trades</div><div class="v">{cm['n']}</div></div>
   <div class="cell"><div class="l">Win rate</div><div class="v">{cm['win']*100:.0f}%</div></div>
+  <div class="cell"><div class="l">Open positions</div><div class="v">{cm['open']}</div></div>
   <div class="cell"><div class="l">$1k @ 10% stake</div><div class="v {cret10}">{fmt_money(cm['fin10'])}</div><div class="kd {cret10}">{cm['ret10']*100:+.1f}%</div></div>
   <div class="cell"><div class="l">$1k @ flat $10</div><div class="v small {cretf}">{fmt_money(cm['finflat'])}</div><div class="kd {cretf}">{cm['retflat']*100:+.1f}%</div></div>
-  <div class="cell"><div class="l">Open positions</div><div class="v">{cm['open']}</div></div>
+  <div class="cell"><div class="l">Realized <span class="tag">flat $10</span></div><div class="v small {_sc(cm['realized'])}">{signed(cm['realized'])}</div></div>
+  <div class="cell"><div class="l">Unrealized <span class="tag">open marks</span></div><div class="v small {_sc(cm['unreal'])}">{signed(cm['unreal'])}</div></div>
+  <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small {_sc(cm['mtm'])}">{signed(cm['mtm'])}</div></div>
 </div>
 
 <div class="section-h">Equity curve — $1,000 from start</div>
