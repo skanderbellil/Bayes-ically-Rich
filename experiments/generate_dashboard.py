@@ -174,7 +174,29 @@ def kelly_fraction(returns, cap=0.5):
     return round(min(f, cap), 4)
 
 
-def sim(trades, mode, marks=None, frac=STAKE_FRAC):
+def walkforward_kelly(trades, min_hist=10, cap=0.5):
+    """Per-trade WALK-FORWARD Kelly (no lookahead): trade t is sized from the Kelly
+    of only the trades that had SETTLED before t was entered (exit_date <= t entry).
+    No bet until `min_hist` prior settles. Returns (fracs[idx], current_rate) where
+    current_rate is the all-history estimate (the stake you'd use on the next trade)."""
+    settled = sorted(((t["xd"], t["outcome"] / t["entry"] - 1.0)
+                      for t in trades if t["resolved"] and t["xd"]), key=lambda x: x[0])
+    sx = [d for d, _ in settled]
+    sr = [r for _, r in settled]
+    import bisect
+    fracs = {}
+    for idx, t in enumerate(trades):
+        k = bisect.bisect_right(sx, t["ed"])            # how many had settled by entry
+        prior = sr[:k]
+        if len(prior) < min_hist:
+            fracs[idx] = 0.0
+        else:
+            fracs[idx] = round(kelly_fraction(prior, cap=cap) * min(1.0, len(prior) / 20.0), 4)
+    cur = round(kelly_fraction(sr, cap=cap) * min(1.0, len(sr) / 20.0), 4) if len(sr) >= min_hist else 0.0
+    return fracs, cur
+
+
+def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
     """Realistic daily cash sim from $1,000 — NO LEVERAGE. A position ties up cash
     from entry to exit; new trades are sized min(target, cash) so overlapping
     positions can't be funded on margin. Each day, OPEN positions are marked to
@@ -213,16 +235,17 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC):
                 cash += proc; realized += proc - h["cost"]
         for idx in buys.get(day, []):
             eq = cash + sum(h["shares"] * mp(i, day) for i, h in hold.items())
-            target = frac * eq if mode == "pct" else FLAT
+            fr = (fracs.get(idx, 0.0) if fracs is not None else frac)
+            target = fr * eq if mode == "pct" else FLAT
+            if target <= 1e-9:
+                continue                               # Kelly says don't bet (no edge / no history yet)
             stake = min(target, cash)
             if stake > 1e-6:
                 if stake < target - 1e-6:
-                    constrained += 1
+                    constrained += 1                   # capital-limited (real margin constraint)
                 hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
                 cash -= stake; taken += 1
                 maxconc = max(maxconc, len(hold))
-            else:
-                constrained += 1
         cost = sum(h["cost"] for h in hold.values())
         mv = sum(h["shares"] * mp(i, day) for i, h in hold.items())
         peakdep = max(peakdep, cost / (cost + cash) if (cost + cash) > 0 else 0.0)
@@ -241,11 +264,10 @@ def kpis_for(trades, label, sid=None, marks=None):
     resolved = [t for t in trades if t["resolved"]]
     opens = [t for t in trades if not t["resolved"]]
     win = sum(t["outcome"] == 1 for t in resolved) / len(resolved) if resolved else 0.0
-    # in-sample Kelly, shrunk toward 0 by sample size (full only at >=20 trades) so a
-    # 2-trade fluke can't recommend a huge stake
-    fk = round(kelly_fraction([t["outcome"] / t["entry"] - 1.0 for t in resolved])
-               * min(1.0, len(resolved) / 20.0), 4)
-    p = sim(trades, "pct", marks, frac=fk); f = sim(trades, "flat", marks)
+    # WALK-FORWARD Kelly: each trade sized only from edge known before it (no lookahead)
+    wf_fracs, cur_kelly = walkforward_kelly(trades)
+    p = sim(trades, "pct", marks, fracs=wf_fracs); f = sim(trades, "flat", marks)
+    fk = cur_kelly  # the rate the model recommends for the NEXT trade (all history)
     k = dict(label=label, n=len(resolved), open=len(opens), win=win, kelly=fk,
              fin10=p["fin"], ret10=p["ret"], dd10=p["dd"],
              finflat=f["fin"], retflat=f["ret"], dd_flat=f["dd"],
@@ -443,7 +465,7 @@ button:hover{{border-color:var(--acc)}}
   <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small {_sc(cm['mtm'])}">{signed(cm['mtm'])}</div></div>
   <div class="cell"><div class="l">Peak deployed <span class="tag">≤100% = no leverage</span></div><div class="v small">{cm['peakdep']*100:.0f}%</div></div>
 </div>
-<div class="note">Realistic daily, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); open positions are marked to their real daily price. <b>Kelly %</b> is the in-sample growth-optimal stake from each strategy's own track record (0 = negative edge → don't bet), capped at 50%.</div>
+<div class="note">Realistic daily, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); open positions are marked to their real daily price. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample): every trade is staked only from the edge known from trades settled <i>before</i> it — no bet until ≥10 prior settles, no lookahead. The % shown is the rate recommended now; 0 = no proven edge → don't bet (capped 50%).</div>
 
 <div class="section-h">Equity curve — $1,000 per strategy · combined = sum of sleeves</div>
 <div id="chartbtns">{btns}</div>
