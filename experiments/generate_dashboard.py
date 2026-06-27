@@ -147,12 +147,39 @@ def update_marks(token_resolved):
     return marks
 
 
-def sim(trades, mode, marks=None):
+def kelly_fraction(returns, cap=0.5):
+    """Growth-optimal (full Kelly) staking fraction from the realized per-trade
+    return distribution: argmax_f Σ log(1 + f·r_i). Solved by bisection on the
+    derivative Σ r/(1+f·r). 0 if no positive expectancy (Kelly says don't bet).
+    In-sample (fit on a strategy's own history) and capped at `cap` for sanity —
+    full Kelly on noisy binary samples is otherwise punishingly aggressive."""
+    rs = [float(r) for r in returns if r is not None]
+    if not rs or sum(rs) <= 0:
+        return 0.0
+
+    def g(f):
+        return sum(r / (1.0 + f * r) for r in rs)
+
+    lo, hi = 0.0, 0.999
+    if g(hi) > 0:
+        f = hi
+    else:
+        for _ in range(80):
+            mid = (lo + hi) / 2.0
+            if g(mid) > 0:
+                lo = mid
+            else:
+                hi = mid
+        f = (lo + hi) / 2.0
+    return round(min(f, cap), 4)
+
+
+def sim(trades, mode, marks=None, frac=STAKE_FRAC):
     """Realistic daily cash sim from $1,000 — NO LEVERAGE. A position ties up cash
     from entry to exit; new trades are sized min(target, cash) so overlapping
     positions can't be funded on margin. Each day, OPEN positions are marked to
     their real daily price (from the marks cache), giving a smooth equity curve
-    instead of cost-held steps. mode 'pct' = 10% of equity, 'flat' = $10."""
+    instead of cost-held steps. mode 'pct' = `frac` of equity (Kelly), 'flat'=$10."""
     marks = marks or {}
     if not trades:
         return dict(pts=[["", CAP0]], fin=CAP0, ret=0.0, dd=0.0, realized=0.0, unreal=0.0,
@@ -186,7 +213,7 @@ def sim(trades, mode, marks=None):
                 cash += proc; realized += proc - h["cost"]
         for idx in buys.get(day, []):
             eq = cash + sum(h["shares"] * mp(i, day) for i, h in hold.items())
-            target = STAKE_FRAC * eq if mode == "pct" else FLAT
+            target = frac * eq if mode == "pct" else FLAT
             stake = min(target, cash)
             if stake > 1e-6:
                 if stake < target - 1e-6:
@@ -214,8 +241,12 @@ def kpis_for(trades, label, sid=None, marks=None):
     resolved = [t for t in trades if t["resolved"]]
     opens = [t for t in trades if not t["resolved"]]
     win = sum(t["outcome"] == 1 for t in resolved) / len(resolved) if resolved else 0.0
-    p = sim(trades, "pct", marks); f = sim(trades, "flat", marks)
-    k = dict(label=label, n=len(resolved), open=len(opens), win=win,
+    # in-sample Kelly, shrunk toward 0 by sample size (full only at >=20 trades) so a
+    # 2-trade fluke can't recommend a huge stake
+    fk = round(kelly_fraction([t["outcome"] / t["entry"] - 1.0 for t in resolved])
+               * min(1.0, len(resolved) / 20.0), 4)
+    p = sim(trades, "pct", marks, frac=fk); f = sim(trades, "flat", marks)
+    k = dict(label=label, n=len(resolved), open=len(opens), win=win, kelly=fk,
              fin10=p["fin"], ret10=p["ret"], dd10=p["dd"],
              finflat=f["fin"], retflat=f["ret"], dd_flat=f["dd"],
              realized=f["realized"], unreal=f["unreal"], mtm=f["realized"] + f["unreal"],
@@ -223,6 +254,27 @@ def kpis_for(trades, label, sid=None, marks=None):
     if sid is not None:
         k["id"] = sid
     return k, {"label": label, "pts10": p["pts"], "ptsf": f["pts"]}
+
+
+def _sum_curves(sers, key, cap_each=CAP0):
+    """Sum independent per-sleeve daily equity curves on a common date grid (each
+    sleeve flat at its $1k before its first trade)."""
+    s_list = []
+    for ser in sers:
+        pts = ser[key]
+        if not pts or not pts[0][0]:
+            continue
+        s = pd.Series({d: e for d, e in pts})
+        s.index = pd.to_datetime(s.index)
+        s_list.append(s[~s.index.duplicated(keep="last")].sort_index())
+    if not s_list:
+        return [["", cap_each]]
+    idx = pd.DatetimeIndex(sorted(set().union(*[set(s.index) for s in s_list])))
+    total = None
+    for s in s_list:
+        a = s.reindex(idx).ffill().fillna(cap_each)
+        total = a if total is None else total + a
+    return [[d.strftime("%Y-%m-%d"), round(float(v), 2)] for d, v in total.items()]
 
 
 def build(fetch_marks=True):
@@ -239,17 +291,43 @@ def build(fetch_marks=True):
         token_resolved[t["token"]] = token_resolved.get(t["token"], True) and t["resolved"]
     marks = update_marks(token_resolved) if fetch_marks else load_marks()
 
-    strategies, series = [], {}
+    strategies, series, active_ser = [], {}, []
     for fname, label, trades in per_ledger:
         sid = fname.replace("_positions.csv", "")
         k, ser = kpis_for(trades, label, sid, marks)
         strategies.append(k)
         if k["n"] or k["open"]:
             series[sid] = ser
-    ck, cser = kpis_for(all_trades, "All combined", None, marks)
-    if ck["n"] or ck["open"]:
-        series = {"GLOBAL": cser, **series}
-    combined = {**ck, "label": "ALL COMBINED"}
+            active_ser.append((k, ser))
+
+    # COMBINED = SUM of independent $1k sleeves (each strategy its own bankroll)
+    act = [k for k, _ in active_ser]
+    nact = len(act)
+    cap = nact * CAP0
+    n_tot = sum(k["n"] for k in act)
+    g10 = _sum_curves([s for _, s in active_ser], "pts10")
+    gf = _sum_curves([s for _, s in active_ser], "ptsf")
+
+    def dd_of(pts):
+        peak = dd = 0.0
+        for _, e in pts:
+            peak = max(peak, e); dd = min(dd, e / peak - 1.0 if peak > 0 else 0.0)
+        return dd
+
+    fin10 = g10[-1][1] if g10 and g10[0][0] else cap
+    finflat = gf[-1][1] if gf and gf[0][0] else cap
+    combined = dict(
+        label="ALL COMBINED", n=n_tot, open=sum(k["open"] for k in act),
+        win=(sum(k["win"] * k["n"] for k in act) / n_tot) if n_tot else 0.0,
+        kelly=None, cap=cap, nsleeves=nact,
+        fin10=fin10, ret10=fin10 / cap - 1.0 if cap else 0.0, dd10=dd_of(g10),
+        finflat=finflat, retflat=finflat / cap - 1.0 if cap else 0.0,
+        realized=sum(k["realized"] for k in act), unreal=sum(k["unreal"] for k in act),
+        mtm=sum(k["mtm"] for k in act),
+        constrained=sum(k["constrained"] for k in act),
+        peakdep=max([k["peakdep"] for k in act], default=0.0))
+    if nact:
+        series = {"GLOBAL": {"label": "All combined (sum of sleeves)", "pts10": g10, "ptsf": gf}, **series}
     return combined, strategies, series
 
 
@@ -272,7 +350,7 @@ def kpi_card(s):
       <div class="card-h">{s['label']}</div>
       <div class="card-sub">{s['n']} trades · win {s['win']*100:.0f}% · open {s['open']}</div>
       <div class="kgrid">
-        <div class="k"><div class="kl">10% stake</div><div class="kv {c10}">{fmt_money(s['fin10'])}</div><div class="kd {c10}">{s['ret10']*100:+.1f}%</div></div>
+        <div class="k"><div class="kl">Kelly {s['kelly']*100:.0f}%</div><div class="kv {c10}">{fmt_money(s['fin10'])}</div><div class="kd {c10}">{s['ret10']*100:+.1f}%</div></div>
         <div class="k"><div class="kl">flat $10</div><div class="kv {cf}">{fmt_money(s['finflat'])}</div><div class="kd {cf}">{s['retflat']*100:+.1f}%</div></div>
       </div>
       <div class="pnl3">
@@ -358,23 +436,23 @@ button:hover{{border-color:var(--acc)}}
   <div class="cell"><div class="l">Combined trades</div><div class="v">{cm['n']}</div></div>
   <div class="cell"><div class="l">Win rate</div><div class="v">{cm['win']*100:.0f}%</div></div>
   <div class="cell"><div class="l">Open positions</div><div class="v">{cm['open']}</div></div>
-  <div class="cell"><div class="l">$1k @ 10% stake</div><div class="v {cret10}">{fmt_money(cm['fin10'])}</div><div class="kd {cret10}">{cm['ret10']*100:+.1f}%</div></div>
-  <div class="cell"><div class="l">$1k @ flat $10</div><div class="v small {cretf}">{fmt_money(cm['finflat'])}</div><div class="kd {cretf}">{cm['retflat']*100:+.1f}%</div></div>
+  <div class="cell"><div class="l">${cm['cap']//1000}k @ Kelly <span class="tag">per-strat</span></div><div class="v {cret10}">{fmt_money(cm['fin10'])}</div><div class="kd {cret10}">{cm['ret10']*100:+.1f}%</div></div>
+  <div class="cell"><div class="l">${cm['cap']//1000}k @ flat $10</div><div class="v small {cretf}">{fmt_money(cm['finflat'])}</div><div class="kd {cretf}">{cm['retflat']*100:+.1f}%</div></div>
   <div class="cell"><div class="l">Realized <span class="tag">flat $10</span></div><div class="v small {_sc(cm['realized'])}">{signed(cm['realized'])}</div></div>
   <div class="cell"><div class="l">Unrealized <span class="tag">open marks</span></div><div class="v small {_sc(cm['unreal'])}">{signed(cm['unreal'])}</div></div>
   <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small {_sc(cm['mtm'])}">{signed(cm['mtm'])}</div></div>
   <div class="cell"><div class="l">Peak deployed <span class="tag">≤100% = no leverage</span></div><div class="v small">{cm['peakdep']*100:.0f}%</div></div>
 </div>
-<div class="note">Realistic cash sim from <b>one $1,000</b> shared across all strategies — positions tie up cash from entry to exit, new trades are downsized/skipped when capital is committed (never funded on margin). {cm['constrained']} of {cm['taken']+cm['constrained']} combined entries were capital-capped (one $1k can't fund every overlapping position). Per-strategy cards below each assume a standalone $1,000.</div>
+<div class="note">Realistic daily, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); open positions are marked to their real daily price. <b>Kelly %</b> is the in-sample growth-optimal stake from each strategy's own track record (0 = negative edge → don't bet), capped at 50%.</div>
 
-<div class="section-h">Equity curve — $1,000 from start</div>
+<div class="section-h">Equity curve — $1,000 per strategy · combined = sum of sleeves</div>
 <div id="chartbtns">{btns}</div>
 <div class="chartwrap">
-  <div class="legend"><span><i style="background:#3b82f6"></i>10% stake (compounding)</span><span><i style="background:#e0a93b"></i>flat $10/trade</span></div>
+  <div class="legend"><span><i style="background:#3b82f6"></i>Kelly stake (per strategy)</span><span><i style="background:#e0a93b"></i>flat $10/trade</span></div>
   <svg id="chart" viewBox="0 0 960 340" width="100%" height="340" preserveAspectRatio="xMidYMid meet"></svg>
 </div>
 
-<div class="section-h">Per-strategy — $1,000 from start · 10% stake vs flat $10</div>
+<div class="section-h">Per-strategy — own $1,000 · Kelly stake vs flat $10</div>
 <div class="grid">{cards}</div>
 
 <script>
@@ -386,14 +464,15 @@ setInterval(tick,1000);tick();
 function draw(sid){{
   const s=SERIES[sid]; if(!s) return;
   const W=960,H=340,P=46,a=s.pts10,b=s.ptsf,n=a.length;
+  const base=a.length?a[0][1]:CAP0;            // starting capital ($1k/strategy, $Nk combined)
   const allY=a.map(p=>p[1]).concat(b.map(p=>p[1]));
-  const ymin=Math.min(...allY,CAP0),ymax=Math.max(...allY,CAP0);
+  const ymin=Math.min(...allY,base),ymax=Math.max(...allY,base);
   const X=i=>P+(W-2*P)*(n<=1?0.5:i/(n-1));
   const Y=v=>H-P-(H-2*P)*((v-ymin)/((ymax-ymin)||1));
   const line=pts=>pts.map((p,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
   let g='';
   for(let k=0;k<=4;k++){{const v=ymin+(ymax-ymin)*k/4,y=Y(v);g+=`<line x1="${{P}}" y1="${{y}}" x2="${{W-P}}" y2="${{y}}" stroke="#262d36"/><text x="${{P-8}}" y="${{y+4}}" fill="#8b97a5" font-size="11" text-anchor="end">$${{Math.round(v)}}</text>`;}}
-  const yb=Y(CAP0);g+=`<line x1="${{P}}" y1="${{yb}}" x2="${{W-P}}" y2="${{yb}}" stroke="#3a4453" stroke-dasharray="4 4"/>`;
+  const yb=Y(base);g+=`<line x1="${{P}}" y1="${{yb}}" x2="${{W-P}}" y2="${{yb}}" stroke="#3a4453" stroke-dasharray="4 4"/>`;
   [0,Math.floor((n-1)/2),n-1].forEach(i=>{{if(i>=0&&i<n)g+=`<text x="${{X(i)}}" y="${{H-14}}" fill="#8b97a5" font-size="11" text-anchor="middle">${{a[i][0]}}</text>`;}});
   g+=`<path d="${{line(b)}}" fill="none" stroke="#e0a93b" stroke-width="2"/>`;
   g+=`<path d="${{line(a)}}" fill="none" stroke="#3b82f6" stroke-width="2.4"/>`;
