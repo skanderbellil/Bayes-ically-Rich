@@ -51,84 +51,123 @@ def _num(s):
 
 
 def load_ledger(path: Path, entry_col: str):
-    """Return (resolved, opens). resolved: [{date, entry, ret}] in resolution
-    order; opens: [{entry, ret}] unrealized at current_price."""
+    """Return a list of trades with real entry/exit dates:
+    {ed, xd, entry, outcome, current, resolved}. Resolved trades have xd+outcome;
+    open trades have current (marked at current_price, held to the end)."""
     if not path.exists():
-        return [], []
+        return []
     df = pd.read_csv(path)
     if entry_col not in df.columns:
         entry_col = "entry_ask" if "entry_ask" in df.columns else ("entry_price" if "entry_price" in df.columns else None)
     if entry_col is None:
-        return [], []
+        return []
     df["_entry"] = _num(df[entry_col]).clip(lower=0.01, upper=0.99)
     df["_cur"] = _num(df.get("current_price"))
     df["_out"] = _num(df.get("outcome"))
     status = df.get("status", pd.Series(["" for _ in range(len(df))])).astype(str)
     out = df["_out"].where(df["_out"].notna(), status.str.lower().map({"won": 1.0, "lost": 0.0}))
 
-    resolved, opens = [], []
+    trades = []
     for i, r in df.iterrows():
         e = r["_entry"]
         if pd.isna(e):
             continue
         st = status.iloc[i].lower()
+        ed = str(r.get("entry_date"))[:10] if pd.notna(r.get("entry_date")) else None
         if st in ("won", "lost") or (pd.notna(out.iloc[i]) and st not in ("open", "watching")):
             o = out.iloc[i]
             if pd.isna(o):
                 continue
-            d = r.get("exit_date") if pd.notna(r.get("exit_date")) else r.get("entry_date")
-            resolved.append({"date": str(d)[:10], "entry": float(e), "ret": float(o) / float(e) - 1.0})
-        elif st == "open" and pd.notna(r["_cur"]):
-            opens.append({"entry": float(e), "ret": float(r["_cur"]) / float(e) - 1.0})
-    resolved.sort(key=lambda x: x["date"])
-    return resolved, opens
+            xd = str(r.get("exit_date"))[:10] if pd.notna(r.get("exit_date")) else ed
+            trades.append({"ed": ed or xd, "xd": xd or ed, "entry": float(e),
+                           "outcome": float(o), "current": None, "resolved": True})
+        elif st == "open":
+            cur = float(r["_cur"]) if pd.notna(r["_cur"]) else float(e)
+            trades.append({"ed": ed, "xd": None, "entry": float(e),
+                           "outcome": None, "current": cur, "resolved": False})
+    return [t for t in trades if t["ed"]]
 
 
-def equity_curves(resolved):
-    """Two equity series from CAP0: 10%-compounding and flat-$10."""
-    if not resolved:
-        return [], [], dict(n=0, win=0.0, fin10=CAP0, ret10=0.0, finflat=CAP0, retflat=0.0, dd10=0.0)
-    start = resolved[0]["date"]
-    eq10, eqf, peak, dd, wins = CAP0, CAP0, CAP0, 0.0, 0
-    pts10, ptsf = [[start, CAP0]], [[start, CAP0]]
-    for t in resolved:
-        r = t["ret"]
-        eq10 *= (1.0 + STAKE_FRAC * r)
-        eqf += FLAT * r
-        pts10.append([t["date"], round(eq10, 2)])
-        ptsf.append([t["date"], round(eqf, 2)])
-        peak = max(peak, eq10); dd = min(dd, eq10 / peak - 1.0); wins += (r > 0)
-    n = len(resolved)
-    return pts10, ptsf, dict(n=n, win=wins / n, fin10=eq10, ret10=eq10 / CAP0 - 1.0,
-                             finflat=eqf, retflat=eqf / CAP0 - 1.0, dd10=dd)
+def sim(trades, mode):
+    """Realistic event-driven cash sim from $1,000 — NO LEVERAGE. A position ties
+    up cash from entry to exit; each new trade is sized min(target, cash), so when
+    overlapping positions have tied up the bankroll, new entries are downsized or
+    skipped (never funded on margin). mode 'pct' = 10% of equity, 'flat' = $10.
+    Open positions are held to the end and marked at current_price."""
+    evs = []
+    for idx, t in enumerate(trades):
+        evs.append((t["ed"], 0, idx))                  # buy (0 sorts before sell same day)
+        if t["resolved"]:
+            evs.append((max(t["xd"], t["ed"]), 1, idx))  # sell, never before its own buy
+    evs.sort(key=lambda e: (e[0], e[1]))
+    cash, hold, pts = CAP0, {}, [[evs[0][0] if evs else "", CAP0]]
+    taken = constrained = maxconc = 0
+    realized = peakdep = 0.0
+    for date, kind, idx in evs:
+        if kind == 1:                                  # sell / settle
+            h = hold.pop(idx, None)
+            if h:
+                proc = h["shares"] * trades[idx]["outcome"]
+                cash += proc; realized += proc - h["cost"]
+        else:                                          # buy
+            eq = cash + sum(h["cost"] for h in hold.values())
+            target = STAKE_FRAC * eq if mode == "pct" else FLAT
+            stake = min(target, cash)
+            if stake > 1e-6:
+                if stake < target - 1e-6:
+                    constrained += 1                   # could only partially fund
+                hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
+                cash -= stake; taken += 1
+                maxconc = max(maxconc, len(hold))
+                deployed = sum(h["cost"] for h in hold.values())
+                peakdep = max(peakdep, deployed / (deployed + cash) if (deployed + cash) > 0 else 0)
+            else:
+                constrained += 1                       # no cash left to fund it at all
+        pts.append([date, round(cash + sum(h["cost"] for h in hold.values()), 2)])
+
+    def mark(i):
+        t = trades[i]
+        return t["current"] if t["current"] is not None else (t["outcome"] if t["outcome"] is not None else t["entry"])
+    unreal = sum(hold[i]["shares"] * mark(i) - hold[i]["cost"] for i in hold)
+    final = cash + sum(hold[i]["shares"] * mark(i) for i in hold)
+    if pts:
+        pts[-1] = [pts[-1][0], round(final, 2)]
+    peak, dd = CAP0, 0.0
+    for _, e in pts:
+        peak = max(peak, e); dd = min(dd, e / peak - 1.0 if peak > 0 else 0.0)
+    return dict(pts=pts, fin=final, ret=final / CAP0 - 1.0, dd=dd, realized=realized,
+                unreal=unreal, taken=taken, constrained=constrained, maxconc=maxconc, peakdep=peakdep)
 
 
-def pnl_fields(k, opens):
-    """Realized / unrealized / MTM in $ at the flat-$10 stake (additive).
-    realized = settled P&L (= finflat - CAP0); unrealized = open-position marks;
-    mtm = realized + unrealized."""
-    realized = k["finflat"] - CAP0
-    unreal = sum(FLAT * o["ret"] for o in opens)
-    return dict(realized=realized, unreal=unreal, mtm=realized + unreal)
+def kpis_for(trades, label, sid=None):
+    resolved = [t for t in trades if t["resolved"]]
+    opens = [t for t in trades if not t["resolved"]]
+    win = sum(t["outcome"] == 1 for t in resolved) / len(resolved) if resolved else 0.0
+    p = sim(trades, "pct"); f = sim(trades, "flat")
+    k = dict(label=label, n=len(resolved), open=len(opens), win=win,
+             fin10=p["fin"], ret10=p["ret"], dd10=p["dd"],
+             finflat=f["fin"], retflat=f["ret"], dd_flat=f["dd"],
+             realized=f["realized"], unreal=f["unreal"], mtm=f["realized"] + f["unreal"],
+             constrained=p["constrained"], taken=p["taken"], maxconc=p["maxconc"], peakdep=p["peakdep"])
+    if sid is not None:
+        k["id"] = sid
+    return k, {"label": label, "pts10": p["pts"], "ptsf": f["pts"]}
 
 
 def build():
-    strategies, series, all_resolved, all_opens = [], {}, [], []
+    strategies, series, all_trades = [], {}, []
     for fname, ecol, qcol, label in REGISTRY:
-        resolved, opens = load_ledger(DATA / fname, ecol)
-        all_resolved.extend(resolved); all_opens.extend(opens)
-        pts10, ptsf, k = equity_curves(resolved)
+        trades = load_ledger(DATA / fname, ecol)
+        all_trades.extend(trades)
         sid = fname.replace("_positions.csv", "")
-        strategies.append(dict(id=sid, label=label, open=len(opens),
-                               **pnl_fields(k, opens), **k))
-        if k["n"]:
-            series[sid] = {"label": label, "pts10": pts10, "ptsf": ptsf}
-    all_resolved.sort(key=lambda x: x["date"])
-    gp10, gpf, gk = equity_curves(all_resolved)
-    if gk["n"]:
-        series = {"GLOBAL": {"label": "All combined", "pts10": gp10, "ptsf": gpf}, **series}
-    combined = dict(label="ALL COMBINED", open=sum(s["open"] for s in strategies),
-                    **pnl_fields(gk, all_opens), **gk)
+        k, ser = kpis_for(trades, label, sid)
+        strategies.append(k)
+        if k["n"] or k["open"]:
+            series[sid] = ser
+    ck, cser = kpis_for(all_trades, "All combined")
+    if ck["n"] or ck["open"]:
+        series = {"GLOBAL": cser, **series}
+    combined = {**ck, "label": "ALL COMBINED"}
     return combined, strategies, series
 
 
@@ -159,8 +198,12 @@ def kpi_card(s):
         <div><span class="kl">Unrealized</span><span class="{_sc(s['unreal'])}">{signed(s['unreal'])}</span></div>
         <div><span class="kl">MTM</span><span class="{_sc(s['mtm'])}">{signed(s['mtm'])}</span></div>
       </div>
-      <div class="card-f">max DD {s['dd10']*100:.0f}% · P&amp;L shown at flat $10/trade</div>
+      <div class="card-f">max DD {s['dd10']*100:.0f}% · peak {s['peakdep']*100:.0f}% deployed · max {s['maxconc']} open{cap_note(s)}</div>
     </div>"""
+
+
+def cap_note(s):
+    return f" · {s['constrained']} entries capital-capped" if s.get("constrained") else ""
 
 
 def generate():
@@ -215,6 +258,7 @@ button:hover{{border-color:var(--acc)}}
 .pnl3 div{{background:#10151b;border:1px solid var(--line);border-radius:7px;padding:6px;display:flex;flex-direction:column;gap:2px}}
 .pnl3 span:last-child{{font-size:13px;font-weight:640}}
 .card-f{{font-size:11px;color:var(--mut);margin-top:8px}}.pos{{color:var(--pos)}}.neg{{color:var(--neg)}}
+.note{{font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:6px}}.note b{{color:var(--ink)}}
 @media(max-width:600px){{.wrap{{padding:12px}}.bar{{gap:8px}}h1{{font-size:16px;width:100%}}
   .runinfo{{width:100%;order:3}}.bar button{{flex:1}}.cell .v{{font-size:18px}}
   #chart{{height:260px}}.section-h{{margin:14px 0 6px}}}}
@@ -237,7 +281,9 @@ button:hover{{border-color:var(--acc)}}
   <div class="cell"><div class="l">Realized <span class="tag">flat $10</span></div><div class="v small {_sc(cm['realized'])}">{signed(cm['realized'])}</div></div>
   <div class="cell"><div class="l">Unrealized <span class="tag">open marks</span></div><div class="v small {_sc(cm['unreal'])}">{signed(cm['unreal'])}</div></div>
   <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small {_sc(cm['mtm'])}">{signed(cm['mtm'])}</div></div>
+  <div class="cell"><div class="l">Peak deployed <span class="tag">≤100% = no leverage</span></div><div class="v small">{cm['peakdep']*100:.0f}%</div></div>
 </div>
+<div class="note">Realistic cash sim from <b>one $1,000</b> shared across all strategies — positions tie up cash from entry to exit, new trades are downsized/skipped when capital is committed (never funded on margin). {cm['constrained']} of {cm['taken']+cm['constrained']} combined entries were capital-capped (one $1k can't fund every overlapping position). Per-strategy cards below each assume a standalone $1,000.</div>
 
 <div class="section-h">Equity curve — $1,000 from start</div>
 <div id="chartbtns">{btns}</div>
