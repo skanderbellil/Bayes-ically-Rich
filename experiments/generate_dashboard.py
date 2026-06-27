@@ -18,11 +18,14 @@ Output: data/paper_trade/dashboard.html
 """
 from __future__ import annotations
 import json
+import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:                 # so `posterioralpha` imports when run as a script
+    sys.path.insert(0, str(ROOT))
 DATA = ROOT / "data" / "paper_trade"
 OUT  = DATA / "dashboard.html"
 REPO = "skanderbellil/Bayes-ically-Rich"
@@ -66,6 +69,7 @@ def load_ledger(path: Path, entry_col: str):
     df["_out"] = _num(df.get("outcome"))
     status = df.get("status", pd.Series(["" for _ in range(len(df))])).astype(str)
     out = df["_out"].where(df["_out"].notna(), status.str.lower().map({"won": 1.0, "lost": 0.0}))
+    tokens = df.get("token", pd.Series(["" for _ in range(len(df))])).astype(str)
 
     trades = []
     for i, r in df.iterrows():
@@ -74,64 +78,131 @@ def load_ledger(path: Path, entry_col: str):
             continue
         st = status.iloc[i].lower()
         ed = str(r.get("entry_date"))[:10] if pd.notna(r.get("entry_date")) else None
+        tok = tokens.iloc[i]
         if st in ("won", "lost") or (pd.notna(out.iloc[i]) and st not in ("open", "watching")):
             o = out.iloc[i]
             if pd.isna(o):
                 continue
             xd = str(r.get("exit_date"))[:10] if pd.notna(r.get("exit_date")) else ed
-            trades.append({"ed": ed or xd, "xd": xd or ed, "entry": float(e),
+            trades.append({"token": tok, "ed": ed or xd, "xd": xd or ed, "entry": float(e),
                            "outcome": float(o), "current": None, "resolved": True})
         elif st == "open":
             cur = float(r["_cur"]) if pd.notna(r["_cur"]) else float(e)
-            trades.append({"ed": ed, "xd": None, "entry": float(e),
+            trades.append({"token": tok, "ed": ed, "xd": None, "entry": float(e),
                            "outcome": None, "current": cur, "resolved": False})
     return [t for t in trades if t["ed"]]
 
 
-def sim(trades, mode):
-    """Realistic event-driven cash sim from $1,000 — NO LEVERAGE. A position ties
-    up cash from entry to exit; each new trade is sized min(target, cash), so when
-    overlapping positions have tied up the bankroll, new entries are downsized or
-    skipped (never funded on margin). mode 'pct' = 10% of equity, 'flat' = $10.
-    Open positions are held to the end and marked at current_price."""
-    evs = []
+# --- daily price-mark cache (cache resolved markets once, refresh open ones) ----
+MARKS_PATH = DATA / "token_daily.csv.gz"
+
+
+def load_marks():
+    if not MARKS_PATH.exists():
+        return {}
+    try:
+        df = pd.read_csv(MARKS_PATH, dtype={"token": str})
+        df["date"] = pd.to_datetime(df["date"])
+        return {tok: g.set_index("date")["p"].sort_index() for tok, g in df.groupby("token")}
+    except Exception:
+        return {}
+
+
+def save_marks(marks):
+    rows = [(tok, d.strftime("%Y-%m-%d"), float(p)) for tok, s in marks.items() for d, p in s.items()]
+    pd.DataFrame(rows, columns=["token", "date", "p"]).to_csv(MARKS_PATH, index=False, compression="gzip")
+
+
+def fetch_daily(token):
+    """Daily Yes-price series for a token (lazy import; None on any failure)."""
+    try:
+        from posterioralpha.polymarket.fetch import fetch_token_history
+        s = fetch_token_history(str(token), fidelity_minutes=1440, use_cache=False)
+        if s is None or len(s) == 0:
+            return None
+        s.index = pd.to_datetime(s.index)
+        return s.sort_index()
+    except Exception:
+        return None
+
+
+def update_marks(token_resolved):
+    """token_resolved: {token: fully_resolved?}. Keep cached resolved tokens (static);
+    (re)fetch open or uncached ones. Degrades gracefully with no network/deps."""
+    marks = load_marks()
+    changed = False
+    for tok, resolved in token_resolved.items():
+        if not tok or tok in ("", "nan"):
+            continue
+        if tok in marks and resolved:
+            continue
+        s = fetch_daily(tok)
+        if s is not None and len(s):
+            marks[tok] = s; changed = True
+    if changed:
+        try:
+            save_marks(marks)
+        except Exception:
+            pass
+    return marks
+
+
+def sim(trades, mode, marks=None):
+    """Realistic daily cash sim from $1,000 — NO LEVERAGE. A position ties up cash
+    from entry to exit; new trades are sized min(target, cash) so overlapping
+    positions can't be funded on margin. Each day, OPEN positions are marked to
+    their real daily price (from the marks cache), giving a smooth equity curve
+    instead of cost-held steps. mode 'pct' = 10% of equity, 'flat' = $10."""
+    marks = marks or {}
+    if not trades:
+        return dict(pts=[["", CAP0]], fin=CAP0, ret=0.0, dd=0.0, realized=0.0, unreal=0.0,
+                    taken=0, constrained=0, maxconc=0, peakdep=0.0)
+    buys, sells = {}, {}
     for idx, t in enumerate(trades):
-        evs.append((t["ed"], 0, idx))                  # buy (0 sorts before sell same day)
+        buys.setdefault(t["ed"], []).append(idx)
         if t["resolved"]:
-            evs.append((max(t["xd"], t["ed"]), 1, idx))  # sell, never before its own buy
-    evs.sort(key=lambda e: (e[0], e[1]))
-    cash, hold, pts = CAP0, {}, [[evs[0][0] if evs else "", CAP0]]
+            sells.setdefault(max(t["xd"], t["ed"]), []).append(idx)
+    start = min(t["ed"] for t in trades)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    end = max([today] + [t["xd"] for t in trades if t["resolved"] and t["xd"]])
+    days = [d.strftime("%Y-%m-%d") for d in pd.date_range(start, end, freq="D")]
+
+    def mp(idx, day):
+        t = trades[idx]; s = marks.get(t["token"])
+        if s is not None:
+            v = s.asof(pd.Timestamp(day))
+            if pd.notna(v):
+                return float(v)
+        return t["current"] if t["current"] is not None else t["entry"]
+
+    cash, hold, pts = CAP0, {}, []
     taken = constrained = maxconc = 0
     realized = peakdep = 0.0
-    for date, kind, idx in evs:
-        if kind == 1:                                  # sell / settle
+    for day in days:
+        for idx in sells.get(day, []):
             h = hold.pop(idx, None)
             if h:
                 proc = h["shares"] * trades[idx]["outcome"]
                 cash += proc; realized += proc - h["cost"]
-        else:                                          # buy
-            eq = cash + sum(h["cost"] for h in hold.values())
+        for idx in buys.get(day, []):
+            eq = cash + sum(h["shares"] * mp(i, day) for i, h in hold.items())
             target = STAKE_FRAC * eq if mode == "pct" else FLAT
             stake = min(target, cash)
             if stake > 1e-6:
                 if stake < target - 1e-6:
-                    constrained += 1                   # could only partially fund
+                    constrained += 1
                 hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
                 cash -= stake; taken += 1
                 maxconc = max(maxconc, len(hold))
-                deployed = sum(h["cost"] for h in hold.values())
-                peakdep = max(peakdep, deployed / (deployed + cash) if (deployed + cash) > 0 else 0)
             else:
-                constrained += 1                       # no cash left to fund it at all
-        pts.append([date, round(cash + sum(h["cost"] for h in hold.values()), 2)])
+                constrained += 1
+        cost = sum(h["cost"] for h in hold.values())
+        mv = sum(h["shares"] * mp(i, day) for i, h in hold.items())
+        peakdep = max(peakdep, cost / (cost + cash) if (cost + cash) > 0 else 0.0)
+        pts.append([day, round(cash + mv, 2)])
 
-    def mark(i):
-        t = trades[i]
-        return t["current"] if t["current"] is not None else (t["outcome"] if t["outcome"] is not None else t["entry"])
-    unreal = sum(hold[i]["shares"] * mark(i) - hold[i]["cost"] for i in hold)
-    final = cash + sum(hold[i]["shares"] * mark(i) for i in hold)
-    if pts:
-        pts[-1] = [pts[-1][0], round(final, 2)]
+    final = pts[-1][1] if pts else CAP0
+    unreal = sum(hold[i]["shares"] * mp(i, days[-1]) - hold[i]["cost"] for i in hold)
     peak, dd = CAP0, 0.0
     for _, e in pts:
         peak = max(peak, e); dd = min(dd, e / peak - 1.0 if peak > 0 else 0.0)
@@ -139,11 +210,11 @@ def sim(trades, mode):
                 unreal=unreal, taken=taken, constrained=constrained, maxconc=maxconc, peakdep=peakdep)
 
 
-def kpis_for(trades, label, sid=None):
+def kpis_for(trades, label, sid=None, marks=None):
     resolved = [t for t in trades if t["resolved"]]
     opens = [t for t in trades if not t["resolved"]]
     win = sum(t["outcome"] == 1 for t in resolved) / len(resolved) if resolved else 0.0
-    p = sim(trades, "pct"); f = sim(trades, "flat")
+    p = sim(trades, "pct", marks); f = sim(trades, "flat", marks)
     k = dict(label=label, n=len(resolved), open=len(opens), win=win,
              fin10=p["fin"], ret10=p["ret"], dd10=p["dd"],
              finflat=f["fin"], retflat=f["ret"], dd_flat=f["dd"],
@@ -154,17 +225,28 @@ def kpis_for(trades, label, sid=None):
     return k, {"label": label, "pts10": p["pts"], "ptsf": f["pts"]}
 
 
-def build():
-    strategies, series, all_trades = [], {}, []
+def build(fetch_marks=True):
+    per_ledger = []
+    all_trades = []
     for fname, ecol, qcol, label in REGISTRY:
         trades = load_ledger(DATA / fname, ecol)
+        per_ledger.append((fname, label, trades))
         all_trades.extend(trades)
+
+    # cache-once + refresh-open: a token is static only if ALL its trades are resolved
+    token_resolved = {}
+    for t in all_trades:
+        token_resolved[t["token"]] = token_resolved.get(t["token"], True) and t["resolved"]
+    marks = update_marks(token_resolved) if fetch_marks else load_marks()
+
+    strategies, series = [], {}
+    for fname, label, trades in per_ledger:
         sid = fname.replace("_positions.csv", "")
-        k, ser = kpis_for(trades, label, sid)
+        k, ser = kpis_for(trades, label, sid, marks)
         strategies.append(k)
         if k["n"] or k["open"]:
             series[sid] = ser
-    ck, cser = kpis_for(all_trades, "All combined")
+    ck, cser = kpis_for(all_trades, "All combined", None, marks)
     if ck["n"] or ck["open"]:
         series = {"GLOBAL": cser, **series}
     combined = {**ck, "label": "ALL COMBINED"}
