@@ -30,6 +30,15 @@ from posterioralpha.research.intramonth import (
     wml_formation,
 )
 from posterioralpha.research.overlay import liquidity_vote, soft_sign
+from posterioralpha.research.breadth import (
+    average_pairwise_correlation,
+    cross_sectional_ic,
+    effective_breadth,
+    empirical_transfer_coefficient,
+    fundamental_law_sharpe,
+    participation_ratio,
+    transfer_coefficient,
+)
 from posterioralpha.research.gamma import (
     GammaSnapshot,
     bs_gamma,
@@ -72,6 +81,14 @@ __all__ = [
     # Macro risk overlay (liquidity × VIX-TS × credit vote)
     "liquidity_vote",
     "soft_sign",
+    # Fundamental-Law diagnostics (effective breadth, transfer coefficient)
+    "average_pairwise_correlation",
+    "effective_breadth",
+    "participation_ratio",
+    "transfer_coefficient",
+    "empirical_transfer_coefficient",
+    "fundamental_law_sharpe",
+    "cross_sectional_ic",
     # Dealer gamma exposure (GEX)
     "bs_gamma",
     "chain_gex",

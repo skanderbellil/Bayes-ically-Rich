@@ -118,6 +118,26 @@ The one real error to rule out: make sure a "%" Sharpe isn't a mislabeled raw
 **return** or an information **ratio** (IR) vs **coefficient** (IC) — *that*
 would be a genuine mistake, not just a convention slip.
 
+## Where this lives in the repo
+
+`posterioralpha/research/breadth.py` implements the diagnostics:
+
+- `effective_breadth(returns | n, avg_corr)` → `N / (1 + (N−1)·ρ̄)`
+- `average_pairwise_correlation`, `participation_ratio` (spectral alternative)
+- `transfer_coefficient(w_actual, w_ideal, cov)` — risk-adjusted weight
+  correlation (Clarke et al.); `empirical_transfer_coefficient(sr_c, sr_i)` —
+  Sharpe-ratio proxy (model-free but **unbounded — only trust it when the ideal
+  Sharpe is solidly positive**; prefer the weight-based TC otherwise)
+- `fundamental_law_sharpe(ic, breadth, periods_per_year, tc)`,
+  `cross_sectional_ic(forecast, realized)`
+
+Wired into `experiments/run_equity_cross_section.py` (a "Fundamental-Law
+diagnostics" block). **Empirical finding on the 500-name US universe (12-1
+momentum, decile L/S):** a 100-name book at ρ̄ ≈ 0.35 has an *effective breadth
+of ~2.8 — just 3% of nominal* (correlated names ≠ independent bets), while the
+decile truncation transfers TC ≈ 0.70 of the full-rank ideal. The breadth
+illusion, not the truncation, is the dominant leak here.
+
 ## TL;DR
 
 - Sharpe `= √(R²) · IC_ideal · √(breadth) · √(decisions/yr)` — four independent

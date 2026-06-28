@@ -10,6 +10,15 @@ Part 1: decompose the IC into the untradeable jump (ret_t1) vs the tradeable dri
 Part 2: the most efficient harvest of the weak drift — a rank-weighted full-universe
         factor portfolio beats crude quintile buckets, but the tiny IC caps the IR
         (Fundamental Law: IR ~ IC x sqrt(breadth)).
+Part 3: the ORACLE ceiling. ``sue`` is the *realized* earnings surprise — the
+        driver variable Z. Correlating realized SUE with the drift is therefore
+        the perfect-foresight (ρ₁ = 1) information coefficient, i.e. IC_ideal
+        from the Sharpe decomposition (docs/knowledge/sharpe-decomposition-levers.md):
+            Sharpe = √(R²) · IC_ideal · √(breadth) · √(decisions/yr)
+        So Part 3 turns IC_ideal into the BEST Sharpe any PEAD model could reach
+        even with a flawless surprise forecast, and contrasts the tradeable
+        drift window against the untradeable jump — where IC_ideal is large but
+        ρ₁ = 0 (you can't know the surprise before it is public).
 
 Mega+Large, net of Alpaca costs. Requires signal_panel.csv + data/raw/pead/.
 """
@@ -20,6 +29,7 @@ from scipy.stats import spearmanr
 
 import _bootstrap  # noqa: F401
 from posterioralpha.pead import paths
+from posterioralpha.research import fundamental_law_sharpe
 from experiments.pead_dynamic_exit import build_paths, _stats, COST
 
 
@@ -71,9 +81,54 @@ def part2():
     print("    → rank-weighting harvests the signal better, but the tiny IC caps the IR.")
 
 
+def part3_oracle():
+    """IC_ideal ceiling: best Sharpe achievable with a perfect surprise forecast.
+
+    SUE is the realized driver, so spearman(SUE, return) is the perfect-foresight
+    IC_ideal. The Fundamental Law turns it into a ceiling Sharpe:
+        SR_oracle = IC_ideal · √(bets/season · seasons/yr)      (TC = 1)
+    Bets/season is the cross-section size each earnings season (PEAD events are
+    largely idiosyncratic across names, so nominal ≈ effective breadth); there
+    are ~4 seasons/yr. We compute it on the TRADEABLE drift (t+1 → t+21) and on
+    the untradeable JUMP (ret_t1): the jump's IC_ideal is large but its ceiling
+    is *unreachable* — there ρ₁ = 0, you cannot know the surprise before it is
+    public. The tradeable-window IC_ideal is the binding lever.
+    """
+    p = pd.read_csv(paths.RESULTS_DIR / "signal_panel.csv")
+    p = p[p["market_cap"].isin(["Mega Cap", "Large Cap"])].dropna(subset=["sue", "ret_t1", "ret_t21"])
+    p["season"] = pd.to_datetime(p["announcement_date"], utc=True, errors="coerce").dt.to_period("Q")
+    p["drift"] = p["ret_t21"] - p["ret_t1"]
+    p["year"] = pd.to_datetime(p["announcement_date"], utc=True, errors="coerce").dt.year
+    SEASONS_PER_YR = 4.0
+    print("PART 3 — IC_ideal oracle ceiling (perfect-foresight SUE → Sharpe):")
+    for lbl, yrs in [("OOS≥2014", range(2014, 2027)), ("FULL 2001-26", range(2001, 2027))]:
+        ic_drift, ic_jump, sizes = [], [], []
+        for _, g in p[p["year"].isin(yrs)].groupby("season"):
+            if len(g) < 10:
+                continue
+            ic_drift.append(spearmanr(g["sue"], g["drift"]).correlation)
+            ic_jump.append(spearmanr(g["sue"], g["ret_t1"]).correlation)
+            sizes.append(len(g))
+        d = np.array(ic_drift); d = d[~np.isnan(d)]
+        j = np.array(ic_jump); j = j[~np.isnan(j)]
+        if len(d) == 0:
+            print(f"    [{lbl}] insufficient seasons"); continue
+        breadth = float(np.mean(sizes))                      # bets per season
+        ic_id = float(d.mean())
+        sr_oracle = fundamental_law_sharpe(ic_id, breadth, SEASONS_PER_YR, tc=1.0)
+        sr_jump = fundamental_law_sharpe(float(j.mean()), breadth, SEASONS_PER_YR, tc=1.0)
+        print(f"    [{lbl}] IC_ideal(drift) {ic_id:+.4f} | breadth ~{breadth:.0f}/season"
+              f" → ORACLE Sharpe ceiling {sr_oracle:+.2f}")
+        print(f"           jump IC_ideal {j.mean():+.4f} → ceiling {sr_jump:+.2f}, "
+              f"but UNREACHABLE (ρ₁=0 pre-announcement)")
+    print("    → the tradeable-window IC_ideal — not your forecasting model — is the\n"
+          "      binding lever; even a perfect SUE oracle caps the drift Sharpe low.")
+
+
 def main():
     part1()
     part2()
+    part3_oracle()
 
 
 if __name__ == "__main__":

@@ -33,7 +33,12 @@ from posterioralpha.data import (
     load_equity_universe_info,
     load_etf_universe_prices,
 )
-from posterioralpha.research import wml_formation
+from posterioralpha.research import (
+    wml_formation,
+    average_pairwise_correlation,
+    effective_breadth,
+    transfer_coefficient,
+)
 from posterioralpha.validation import compute_metrics
 
 logging.basicConfig(
@@ -59,6 +64,7 @@ def run_xs_momentum(rets: pd.DataFrame) -> pd.DataFrame:
 
     legs = {k: {} for k in ("long", "short", "wml", "universe")}
     turn = {}                         # |Δ holdings| at each rebalance (long+short books)
+    tc_reb = []                       # per-rebalance transfer coefficient (decile vs full rank)
     prev_long, prev_short = set(), set()
 
     for i, me in enumerate(month_ends[:-1]):
@@ -69,6 +75,20 @@ def run_xs_momentum(rets: pd.DataFrame) -> pd.DataFrame:
                                          lookback=LOOKBACK, skip=SKIP)
         if not winners or not losers:
             continue
+
+        # Transfer coefficient: the decile L/S book we actually trade vs the
+        # unconstrained-ideal that rank-weights the FULL cross-section. Both
+        # dollar-neutral and unit-gross, so TC = corr(w_actual, w_ideal) ∈ [-1,1].
+        score = (1.0 + hist.iloc[-(LOOKBACK + SKIP):-SKIP]).prod() - 1.0
+        score = score.dropna()
+        if len(score) >= 2 * k + 1:
+            ranks = score.rank()
+            w_ideal = ranks - ranks.mean()
+            w_ideal = w_ideal / w_ideal.abs().sum()           # dollar-neutral, unit gross
+            w_actual = pd.Series(0.0, index=score.index)
+            w_actual[winners] = 0.5 / k
+            w_actual[losers] = -0.5 / k                        # unit gross, dollar-neutral
+            tc_reb.append(transfer_coefficient(w_actual.to_numpy(), w_ideal.to_numpy()))
 
         nxt = month_ends[i + 1]
         hold = rets.index[(rets.index > me) & (rets.index <= nxt)]
@@ -91,6 +111,7 @@ def run_xs_momentum(rets: pd.DataFrame) -> pd.DataFrame:
 
     out = pd.DataFrame({k: pd.Series(v).sort_index() for k, v in legs.items()})
     out["turnover"] = pd.Series(turn).reindex(out.index).fillna(0.0)
+    out.attrs["tc_weight"] = float(np.nanmean(tc_reb)) if tc_reb else float("nan")
     return out
 
 
@@ -141,7 +162,29 @@ def main() -> None:
     print("=" * 74)
     print(tabulate(table, headers=["leg"] + keys, tablefmt="github"))
     print(f"\n  avg one-way turnover/reb: {bt['turnover'][bt['turnover']>0].mean():.0%}"
-          f"   (TC = {TC*1e4:.0f} bps)")
+          f"   (cost = {TC*1e4:.0f} bps)")
+
+    # ----------------------------------------------------------------------
+    # Fundamental-Law diagnostics: SR = TransferCoef · IC · √(effective breadth).
+    # Two terms that silently inflate apparent Sharpe — is the breadth real,
+    # and how much of the full ranking signal does the decile book transfer?
+    # ----------------------------------------------------------------------
+    n_uni = rets.shape[1]
+    k = max(1, int(round(n_uni * DECILE)))
+    nominal_book = 2 * k                                   # names in the L/S book
+    avg_corr = average_pairwise_correlation(rets)
+    _, br_eff, _ = effective_breadth(n=nominal_book, avg_corr=avg_corr)
+    tc = bt.attrs.get("tc_weight", float("nan"))           # decile book vs full-rank ideal
+
+    print("\n" + "=" * 74)
+    print("  FUNDAMENTAL-LAW DIAGNOSTICS")
+    print("=" * 74)
+    print(f"  nominal book size (2 × decile)       : {nominal_book} names")
+    print(f"  avg pairwise correlation (ρ̄)         : {avg_corr:+.3f}")
+    print(f"  EFFECTIVE breadth  N/(1+(N-1)ρ̄)      : {br_eff:.1f} independent bets"
+          f"   ({br_eff / nominal_book:.0%} of nominal)")
+    print(f"  TRANSFER coefficient (decile vs rank): {tc:+.2f}"
+          f"   (corr of traded weights vs full-rank ideal)")
 
     # Plot
     fig, ax = plt.subplots(figsize=(11, 6))
