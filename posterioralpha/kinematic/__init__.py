@@ -42,6 +42,12 @@ from posterioralpha.kinematic.backtest import (
     signature_trend_signal,
     walk_forward,
 )
+from posterioralpha.kinematic.ladder import (
+    RegimeRungSelector,
+    efficiency_ratio,
+    ladder_rungs,
+    leaky_integral,
+)
 from posterioralpha.kinematic import diagnostics
 
 __all__ = [
@@ -52,5 +58,6 @@ __all__ = [
     "VelocityRegimeHMM",
     "BacktestResult", "run_signal_backtest", "walk_forward",
     "ema_signal", "macd_signal", "signature_trend_signal",
+    "leaky_integral", "efficiency_ratio", "ladder_rungs", "RegimeRungSelector",
     "diagnostics",
 ]
