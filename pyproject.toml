@@ -41,4 +41,5 @@ packages = [
     "posterioralpha.council",
     "posterioralpha.mining",
     "posterioralpha.polymarket",
+    "posterioralpha.kinematic",
 ]

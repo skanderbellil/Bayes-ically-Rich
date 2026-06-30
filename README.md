@@ -31,7 +31,7 @@ posterioralpha/                # the framework package
 │   ├── macro.py               #   FRED (keyed, .env): net liquidity + curated macro panel
 │   ├── market.py              #   live download + S&P 500 universe (yfinance)
 │   ├── synthetic.py           #   factor-model synthetic universe expansion
-│   └── loaders.py             #   robust loaders for bundled datasets
+│   └── loaders.py             #   robust loaders for bundled datasets (incl. fresh_* single-name closes)
 ├── research/                  # ── Stage 2: STRATEGY RESEARCH ──
 │   ├── bayesian.py            #   moments, λ via Mahalanobis, posterior blend, optimisers
 │   ├── amr.py                 #   AMR/CVaR/HRP optimisers, Ω-ratio λ, vol-targeting overlay
@@ -60,10 +60,17 @@ posterioralpha/                # the framework package
     │                          #   block bootstrap, permutation test, Deflated SR
     ├── miner.py               #   evolutionary search loop + holdout leaderboard
     └── timing.py              #   timing-dial mining on one underlying (null = buy & hold)
+└── kinematic/                 # ── kinematic state-space signals from price alone (spans all stages) ──
+    ├── filter.py              #   KinematicKalman/LocalLevel/Pairs + RTS smoother + MLE (causal/diagnostic split)
+    ├── signals.py             #   causal velocity/accel (trend) + innovation (reversion) + Kalman hedge spread
+    ├── regime.py              #   2-state causal HMM on filtered velocity (hand-rolled forward pass)
+    ├── backtest.py            #   cost-aware walk-forward + EMA/MACD integral baselines + signature corner
+    └── diagnostics.py         #   noise-amplification study, IC/decay, PnL concentration, Q/R sweep
 
 experiments/                   # reproducible studies that wire the stages together
 datasets/                      # bundled price data (250-ETF + 500-equity liquid universes + info, 5 ETFs, ~100 S&P 500)
 docs/pead/                     # PEAD research write-ups & headline results
+docs/kinematic/                # kinematic state-space study: what's real signal vs noise-amplified garbage
 results/                       # generated plots & CSVs (gitignored)
 ```
 

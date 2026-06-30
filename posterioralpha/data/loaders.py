@@ -29,6 +29,35 @@ EQUITY_UNIVERSE_INFO_CSV = DATASETS_DIR / "equity_universe_info.csv"
 NET_LIQUIDITY_CSV        = DATASETS_DIR / "net_liquidity.csv"
 FRED_MACRO_CSV           = DATASETS_DIR / "fred_macro.csv"
 
+# Long single-name daily closes (Date,Close) — used by the kinematic
+# state-space study where a clean, long history of ONE instrument matters more
+# than cross-section. SPY (1993→), QQQ (1999→), GLD (2004→).
+FRESH_CSV = {
+    "SPY": DATASETS_DIR / "fresh_SPY.csv",
+    "QQQ": DATASETS_DIR / "fresh_QQQ.csv",
+    "GLD": DATASETS_DIR / "fresh_GLD.csv",
+}
+
+
+def load_fresh_prices(tickers=("SPY", "QQQ", "GLD")) -> pd.DataFrame:
+    """
+    Daily closes for the bundled long single-name series, aligned on a common
+    DatetimeIndex (one column per ticker).
+
+    Pass a single string for one name, or an iterable for several. Columns are
+    outer-joined on date; rows where every requested name is NaN are dropped,
+    so callers that need a fully overlapping window should ``.dropna()``.
+    """
+    if isinstance(tickers, str):
+        tickers = (tickers,)
+    cols = {}
+    for t in tickers:
+        if t not in FRESH_CSV:
+            raise KeyError(f"{t!r} not bundled; available: {sorted(FRESH_CSV)}")
+        s = pd.read_csv(FRESH_CSV[t], parse_dates=["Date"], index_col="Date")["Close"]
+        cols[t] = s.sort_index()
+    return pd.DataFrame(cols).dropna(how="all").sort_index()
+
 
 def load_portfolio_prices() -> pd.DataFrame:
     """Adjusted-close prices for the 5 real ETFs (SPY, TLT, GLD, EEM, VNQ)."""

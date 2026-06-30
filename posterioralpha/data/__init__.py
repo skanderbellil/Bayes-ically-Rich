@@ -1,5 +1,6 @@
 """Stage 1 — data access: live download, synthetic universe, bundled loaders."""
 from posterioralpha.data.loaders import (
+    load_fresh_prices,
     load_portfolio_prices,
     load_portfolio_returns,
     load_sp500_prices,
@@ -50,6 +51,7 @@ __all__ = [
     "get_sp500_tickers",
     "sample_tickers",
     "expand_universe",
+    "load_fresh_prices",
     "load_portfolio_prices",
     "load_portfolio_returns",
     "load_sp500_prices",
