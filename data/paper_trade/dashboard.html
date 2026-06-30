@@ -42,7 +42,7 @@ button:hover{border-color:var(--acc)}
 <div class="bar">
   <h1>📈 Paper-trade dashboard</h1>
   <div class="spacer"></div>
-  <div class="runinfo">last run <b>2026-06-30 05:44 UTC</b> · next <b>06:15</b> (<span id="cd"></span>)</div>
+  <div class="runinfo">last run <b>2026-06-30 07:40 UTC</b> · next <b>08:15</b> (<span id="cd"></span>)</div>
   <button onclick="location.reload(true)">↻ Refresh</button>
   <button class="btn-run" onclick="window.open('https://github.com/skanderbellil/Bayes-ically-Rich/actions/workflows/paper_trade.yml','_blank')">▶ Run now</button>
 </div>
@@ -51,11 +51,11 @@ button:hover{border-color:var(--acc)}
   <div class="cell"><div class="l">Combined trades</div><div class="v">605</div></div>
   <div class="cell"><div class="l">Win rate</div><div class="v">44%</div></div>
   <div class="cell"><div class="l">Open positions</div><div class="v">95</div></div>
-  <div class="cell"><div class="l">$9.0k @ Kelly <span class="tag">per-strat</span></div><div class="v pos">$9,622</div><div class="kd pos">+6.9%</div></div>
-  <div class="cell"><div class="l">$9.0k @ flat $10</div><div class="v small pos">$9,891</div><div class="kd pos">+9.9%</div></div>
+  <div class="cell"><div class="l">$9.0k @ Kelly <span class="tag">per-strat</span></div><div class="v pos">$9,619</div><div class="kd pos">+6.9%</div></div>
+  <div class="cell"><div class="l">$9.0k @ flat $10</div><div class="v small pos">$9,890</div><div class="kd pos">+9.9%</div></div>
   <div class="cell"><div class="l">Realized <span class="tag">flat $10</span></div><div class="v small pos">$+182</div></div>
-  <div class="cell"><div class="l">Unrealized <span class="tag">open marks</span></div><div class="v small pos">$+709</div></div>
-  <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small pos">$+891</div></div>
+  <div class="cell"><div class="l">Unrealized <span class="tag">open marks</span></div><div class="v small pos">$+708</div></div>
+  <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small pos">$+890</div></div>
   <div class="cell"><div class="l">Peak deployed <span class="tag">≤100% = no leverage</span></div><div class="v small">100%</div></div>
 </div>
 <div class="note">Realistic daily, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the 9 sleeves</b> ($9.0k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); open positions are marked to their real daily price. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample): every trade is staked only from the edge known from trades settled <i>before</i> it — no bet until ≥10 prior settles, no lookahead. The % shown is the rate recommended now; 0 = no proven edge → don't bet (capped 50%).</div>
@@ -74,12 +74,12 @@ button:hover{border-color:var(--acc)}
       <div class="card-sub">8 trades · win 0% · open 10</div>
       <div class="kgrid">
         <div class="k"><div class="kl">Kelly 0%</div><div class="kv pos">$1,000</div><div class="kd pos">+0.0%</div></div>
-        <div class="k"><div class="kl">flat $10</div><div class="kv neg">$898</div><div class="kd neg">-10.2%</div></div>
+        <div class="k"><div class="kl">flat $10</div><div class="kv neg">$899</div><div class="kd neg">-10.1%</div></div>
       </div>
       <div class="pnl3">
         <div><span class="kl">Realized</span><span class="neg">$-50</span></div>
-        <div><span class="kl">Unrealized</span><span class="neg">$-52</span></div>
-        <div><span class="kl">MTM</span><span class="neg">$-102</span></div>
+        <div><span class="kl">Unrealized</span><span class="neg">$-51</span></div>
+        <div><span class="kl">MTM</span><span class="neg">$-101</span></div>
       </div>
       <div class="card-f">max DD 0% · peak 0% deployed · max 0 open</div>
     </div>
@@ -104,12 +104,12 @@ button:hover{border-color:var(--acc)}
       <div class="card-sub">51 trades · win 39% · open 9</div>
       <div class="kgrid">
         <div class="k"><div class="kl">Kelly 0%</div><div class="kv pos">$1,013</div><div class="kd pos">+1.3%</div></div>
-        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,358</div><div class="kd pos">+35.8%</div></div>
+        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,359</div><div class="kd pos">+35.9%</div></div>
       </div>
       <div class="pnl3">
         <div><span class="kl">Realized</span><span class="neg">$-44</span></div>
         <div><span class="kl">Unrealized</span><span class="pos">$+403</span></div>
-        <div><span class="kl">MTM</span><span class="pos">$+358</span></div>
+        <div><span class="kl">MTM</span><span class="pos">$+359</span></div>
       </div>
       <div class="card-f">max DD 0% · peak 3% deployed · max 2 open</div>
     </div>
@@ -118,15 +118,15 @@ button:hover{border-color:var(--acc)}
       <div class="card-h">YES [10–50%]</div>
       <div class="card-sub">39 trades · win 31% · open 11</div>
       <div class="kgrid">
-        <div class="k"><div class="kl">Kelly 8%</div><div class="kv neg">$765</div><div class="kd neg">-23.5%</div></div>
-        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,174</div><div class="kd pos">+17.4%</div></div>
+        <div class="k"><div class="kl">Kelly 8%</div><div class="kv neg">$757</div><div class="kd neg">-24.3%</div></div>
+        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,175</div><div class="kd pos">+17.5%</div></div>
       </div>
       <div class="pnl3">
         <div><span class="kl">Realized</span><span class="pos">$+92</span></div>
-        <div><span class="kl">Unrealized</span><span class="pos">$+82</span></div>
-        <div><span class="kl">MTM</span><span class="pos">$+174</span></div>
+        <div><span class="kl">Unrealized</span><span class="pos">$+83</span></div>
+        <div><span class="kl">MTM</span><span class="pos">$+175</span></div>
       </div>
-      <div class="card-f">max DD -32% · peak 100% deployed · max 9 open · 1 entries capital-capped</div>
+      <div class="card-f">max DD -33% · peak 100% deployed · max 9 open · 1 entries capital-capped</div>
     </div>
 
     <div class="card">
@@ -134,12 +134,12 @@ button:hover{border-color:var(--acc)}
       <div class="card-sub">19 trades · win 26% · open 9</div>
       <div class="kgrid">
         <div class="k"><div class="kl">Kelly 9%</div><div class="kv pos">$1,684</div><div class="kd pos">+68.3%</div></div>
-        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,070</div><div class="kd pos">+7.0%</div></div>
+        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,069</div><div class="kd pos">+6.9%</div></div>
       </div>
       <div class="pnl3">
         <div><span class="kl">Realized</span><span class="pos">$+11</span></div>
-        <div><span class="kl">Unrealized</span><span class="pos">$+59</span></div>
-        <div><span class="kl">MTM</span><span class="pos">$+70</span></div>
+        <div><span class="kl">Unrealized</span><span class="pos">$+58</span></div>
+        <div><span class="kl">MTM</span><span class="pos">$+69</span></div>
       </div>
       <div class="card-f">max DD -0% · peak 89% deployed · max 6 open</div>
     </div>
@@ -164,12 +164,12 @@ button:hover{border-color:var(--acc)}
       <div class="card-sub">14 trades · win 14% · open 9</div>
       <div class="kgrid">
         <div class="k"><div class="kl">Kelly 2%</div><div class="kv pos">$1,174</div><div class="kd pos">+17.4%</div></div>
-        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,077</div><div class="kd pos">+7.7%</div></div>
+        <div class="k"><div class="kl">flat $10</div><div class="kv pos">$1,075</div><div class="kd pos">+7.5%</div></div>
       </div>
       <div class="pnl3">
         <div><span class="kl">Realized</span><span class="pos">$+21</span></div>
-        <div><span class="kl">Unrealized</span><span class="pos">$+56</span></div>
-        <div><span class="kl">MTM</span><span class="pos">$+77</span></div>
+        <div><span class="kl">Unrealized</span><span class="pos">$+54</span></div>
+        <div><span class="kl">MTM</span><span class="pos">$+75</span></div>
       </div>
       <div class="card-f">max DD -0% · peak 16% deployed · max 5 open</div>
     </div>
@@ -178,7 +178,7 @@ button:hover{border-color:var(--acc)}
       <div class="card-h">YES [20–40%]</div>
       <div class="card-sub">12 trades · win 33% · open 8</div>
       <div class="kgrid">
-        <div class="k"><div class="kl">Kelly 4%</div><div class="kv neg">$991</div><div class="kd neg">-0.9%</div></div>
+        <div class="k"><div class="kl">Kelly 4%</div><div class="kv neg">$996</div><div class="kd neg">-0.4%</div></div>
         <div class="k"><div class="kl">flat $10</div><div class="kv neg">$963</div><div class="kd neg">-3.7%</div></div>
       </div>
       <div class="pnl3">
@@ -205,9 +205,9 @@ button:hover{border-color:var(--acc)}
     </div></div>
 
 <script>
-const SERIES = {"GLOBAL": {"label": "All combined (sum of sleeves)", "pts10": [["2026-06-16", 9000.0], ["2026-06-17", 9000.0], ["2026-06-18", 9000.0], ["2026-06-19", 9000.0], ["2026-06-20", 9000.0], ["2026-06-21", 9000.0], ["2026-06-22", 9000.0], ["2026-06-23", 9000.0], ["2026-06-24", 9161.04], ["2026-06-25", 9298.91], ["2026-06-26", 9243.91], ["2026-06-27", 9061.17], ["2026-06-28", 8928.47], ["2026-06-29", 9691.21], ["2026-06-30", 9621.5]], "ptsf": [["2026-06-16", 8987.82], ["2026-06-17", 8965.1], ["2026-06-18", 8971.87], ["2026-06-19", 8969.75], ["2026-06-20", 9038.42], ["2026-06-21", 9225.89], ["2026-06-22", 9283.68], ["2026-06-23", 9220.31], ["2026-06-24", 9391.56], ["2026-06-25", 9938.46], ["2026-06-26", 9952.79], ["2026-06-27", 9816.76], ["2026-06-28", 9929.3], ["2026-06-29", 10063.26], ["2026-06-30", 9890.85]]}, "validated_regime": {"label": "Regime (geo-calm)", "pts10": [["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 1000.0], ["2026-06-29", 1000.0], ["2026-06-30", 1000.0]], "ptsf": [["2026-06-25", 977.12], ["2026-06-26", 986.6], ["2026-06-27", 954.79], ["2026-06-28", 925.82], ["2026-06-29", 903.82], ["2026-06-30", 898.11]]}, "midprice_yes": {"label": "YES [10\u201350%]", "pts10": [["2026-06-20", 1000.0], ["2026-06-21", 1000.0], ["2026-06-22", 1000.0], ["2026-06-23", 1000.0], ["2026-06-24", 1071.03], ["2026-06-25", 1083.39], ["2026-06-26", 1124.19], ["2026-06-27", 997.06], ["2026-06-28", 915.34], ["2026-06-29", 893.39], ["2026-06-30", 764.83]], "ptsf": [["2026-06-20", 1028.99], ["2026-06-21", 1043.33], ["2026-06-22", 1059.22], ["2026-06-23", 1005.24], ["2026-06-24", 1044.73], ["2026-06-25", 1188.5], ["2026-06-26", 1220.28], ["2026-06-27", 1188.19], ["2026-06-28", 1160.28], ["2026-06-29", 1208.42], ["2026-06-30", 1174.27]]}, "midprice_yes_10_20": {"label": "YES [10\u201320%]", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 1000.0], ["2026-06-29", 1175.5], ["2026-06-30", 1174.33]], "ptsf": [["2026-06-23", 1001.21], ["2026-06-24", 980.18], ["2026-06-25", 1088.73], ["2026-06-26", 1108.58], ["2026-06-27", 1085.78], ["2026-06-28", 1061.09], ["2026-06-29", 1113.71], ["2026-06-30", 1077.08]]}, "midprice_yes_10_30": {"label": "YES [10\u201330%]", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 997.45], ["2026-06-29", 1644.02], ["2026-06-30", 1683.5]], "ptsf": [["2026-06-23", 1002.27], ["2026-06-24", 990.36], ["2026-06-25", 1090.72], ["2026-06-26", 1097.07], ["2026-06-27", 1082.25], ["2026-06-28", 1049.3], ["2026-06-29", 1102.62], ["2026-06-30", 1069.9]]}, "midprice_yes_20_40": {"label": "YES [20\u201340%]", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 999.01], ["2026-06-29", 970.23], ["2026-06-30", 990.9]], "ptsf": [["2026-06-23", 997.86], ["2026-06-24", 1001.3], ["2026-06-25", 1039.35], ["2026-06-26", 1019.13], ["2026-06-27", 1007.4], ["2026-06-28", 990.03], ["2026-06-29", 986.58], ["2026-06-30", 962.61]]}, "smart_flow": {"label": "Smart Flow", "pts10": [["2026-06-16", 1000.0], ["2026-06-17", 1000.0], ["2026-06-18", 1000.0], ["2026-06-19", 1000.0], ["2026-06-20", 1000.0], ["2026-06-21", 1000.0], ["2026-06-22", 1000.0], ["2026-06-23", 1000.0], ["2026-06-24", 1090.01], ["2026-06-25", 1215.52], ["2026-06-26", 1119.72], ["2026-06-27", 1118.73], ["2026-06-28", 1117.6], ["2026-06-29", 1117.43], ["2026-06-30", 1117.3]], "ptsf": [["2026-06-16", 986.58], ["2026-06-17", 963.86], ["2026-06-18", 970.63], ["2026-06-19", 968.51], ["2026-06-20", 1008.19], ["2026-06-21", 1181.32], ["2026-06-22", 1223.22], ["2026-06-23", 1221.14], ["2026-06-24", 1395.29], ["2026-06-25", 1389.88], ["2026-06-26", 1378.05], ["2026-06-27", 1374.67], ["2026-06-28", 1374.51], ["2026-06-29", 1371.5], ["2026-06-30", 1371.67]]}, "smart_flow_roi": {"label": "Smart Flow (ROI)", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1012.76], ["2026-06-28", 1012.76], ["2026-06-29", 1012.76], ["2026-06-30", 1012.76]], "ptsf": [["2026-06-23", 998.66], ["2026-06-24", 995.48], ["2026-06-25", 1114.83], ["2026-06-26", 1099.42], ["2026-06-27", 1100.56], ["2026-06-28", 1363.73], ["2026-06-29", 1374.19], ["2026-06-30", 1358.06]]}, "macro": {"label": "Macro (Fed cuts)", "pts10": [["2026-06-16", 1000.0], ["2026-06-17", 1000.0], ["2026-06-18", 1000.0], ["2026-06-19", 1000.0], ["2026-06-20", 1000.0], ["2026-06-21", 1000.0], ["2026-06-22", 1000.0], ["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 1000.0], ["2026-06-29", 1000.0], ["2026-06-30", 1000.0]], "ptsf": [["2026-06-16", 1001.24], ["2026-06-17", 1001.24], ["2026-06-18", 1001.24], ["2026-06-19", 1001.24], ["2026-06-20", 1001.24], ["2026-06-21", 1001.24], ["2026-06-22", 1001.24], ["2026-06-23", 1001.24], ["2026-06-24", 1001.24], ["2026-06-25", 1001.24], ["2026-06-26", 1001.24], ["2026-06-27", 1001.24], ["2026-06-28", 1001.24], ["2026-06-29", 1001.24], ["2026-06-30", 1001.24]]}, "dip_confirm": {"label": "Dip-Confirm YES", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 932.62], ["2026-06-28", 886.31], ["2026-06-29", 877.88], ["2026-06-30", 877.88]], "ptsf": [["2026-06-23", 992.69], ["2026-06-24", 982.98], ["2026-06-25", 1048.09], ["2026-06-26", 1042.42], ["2026-06-27", 1021.88], ["2026-06-28", 1003.3], ["2026-06-29", 1001.18], ["2026-06-30", 977.91]]}};
+const SERIES = {"GLOBAL": {"label": "All combined (sum of sleeves)", "pts10": [["2026-06-16", 9000.0], ["2026-06-17", 9000.0], ["2026-06-18", 9000.0], ["2026-06-19", 9000.0], ["2026-06-20", 9000.0], ["2026-06-21", 9000.0], ["2026-06-22", 9000.0], ["2026-06-23", 9000.0], ["2026-06-24", 9161.04], ["2026-06-25", 9298.91], ["2026-06-26", 9243.91], ["2026-06-27", 9061.17], ["2026-06-28", 8928.47], ["2026-06-29", 9691.21], ["2026-06-30", 9619.16]], "ptsf": [["2026-06-16", 8987.8], ["2026-06-17", 8965.08], ["2026-06-18", 8971.85], ["2026-06-19", 8969.73], ["2026-06-20", 9038.4], ["2026-06-21", 9225.87], ["2026-06-22", 9283.66], ["2026-06-23", 9220.29], ["2026-06-24", 9391.54], ["2026-06-25", 9938.44], ["2026-06-26", 9952.77], ["2026-06-27", 9816.74], ["2026-06-28", 9929.28], ["2026-06-29", 10063.24], ["2026-06-30", 9889.8]]}, "validated_regime": {"label": "Regime (geo-calm)", "pts10": [["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 1000.0], ["2026-06-29", 1000.0], ["2026-06-30", 1000.0]], "ptsf": [["2026-06-25", 977.12], ["2026-06-26", 986.6], ["2026-06-27", 954.79], ["2026-06-28", 925.82], ["2026-06-29", 903.82], ["2026-06-30", 898.94]]}, "midprice_yes": {"label": "YES [10\u201350%]", "pts10": [["2026-06-20", 1000.0], ["2026-06-21", 1000.0], ["2026-06-22", 1000.0], ["2026-06-23", 1000.0], ["2026-06-24", 1071.03], ["2026-06-25", 1083.39], ["2026-06-26", 1124.19], ["2026-06-27", 997.06], ["2026-06-28", 915.34], ["2026-06-29", 893.39], ["2026-06-30", 757.38]], "ptsf": [["2026-06-20", 1028.99], ["2026-06-21", 1043.33], ["2026-06-22", 1059.22], ["2026-06-23", 1005.24], ["2026-06-24", 1044.73], ["2026-06-25", 1188.5], ["2026-06-26", 1220.28], ["2026-06-27", 1188.19], ["2026-06-28", 1160.28], ["2026-06-29", 1208.42], ["2026-06-30", 1175.11]]}, "midprice_yes_10_20": {"label": "YES [10\u201320%]", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 1000.0], ["2026-06-29", 1175.5], ["2026-06-30", 1174.33]], "ptsf": [["2026-06-23", 1001.21], ["2026-06-24", 980.18], ["2026-06-25", 1088.73], ["2026-06-26", 1108.58], ["2026-06-27", 1085.78], ["2026-06-28", 1061.09], ["2026-06-29", 1113.71], ["2026-06-30", 1075.37]]}, "midprice_yes_10_30": {"label": "YES [10\u201330%]", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 997.45], ["2026-06-29", 1644.02], ["2026-06-30", 1683.5]], "ptsf": [["2026-06-23", 1002.27], ["2026-06-24", 990.36], ["2026-06-25", 1090.72], ["2026-06-26", 1097.07], ["2026-06-27", 1082.25], ["2026-06-28", 1049.3], ["2026-06-29", 1102.62], ["2026-06-30", 1068.53]]}, "midprice_yes_20_40": {"label": "YES [20\u201340%]", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 999.01], ["2026-06-29", 970.23], ["2026-06-30", 996.06]], "ptsf": [["2026-06-23", 997.86], ["2026-06-24", 1001.3], ["2026-06-25", 1039.35], ["2026-06-26", 1019.13], ["2026-06-27", 1007.4], ["2026-06-28", 990.03], ["2026-06-29", 986.58], ["2026-06-30", 962.62]]}, "smart_flow": {"label": "Smart Flow", "pts10": [["2026-06-16", 1000.0], ["2026-06-17", 1000.0], ["2026-06-18", 1000.0], ["2026-06-19", 1000.0], ["2026-06-20", 1000.0], ["2026-06-21", 1000.0], ["2026-06-22", 1000.0], ["2026-06-23", 1000.0], ["2026-06-24", 1090.01], ["2026-06-25", 1215.52], ["2026-06-26", 1119.72], ["2026-06-27", 1118.73], ["2026-06-28", 1117.6], ["2026-06-29", 1117.43], ["2026-06-30", 1117.25]], "ptsf": [["2026-06-16", 986.58], ["2026-06-17", 963.86], ["2026-06-18", 970.63], ["2026-06-19", 968.51], ["2026-06-20", 1008.19], ["2026-06-21", 1181.32], ["2026-06-22", 1223.22], ["2026-06-23", 1221.14], ["2026-06-24", 1395.29], ["2026-06-25", 1389.88], ["2026-06-26", 1378.05], ["2026-06-27", 1374.67], ["2026-06-28", 1374.51], ["2026-06-29", 1371.5], ["2026-06-30", 1371.55]]}, "smart_flow_roi": {"label": "Smart Flow (ROI)", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1012.76], ["2026-06-28", 1012.76], ["2026-06-29", 1012.76], ["2026-06-30", 1012.76]], "ptsf": [["2026-06-23", 998.66], ["2026-06-24", 995.48], ["2026-06-25", 1114.83], ["2026-06-26", 1099.42], ["2026-06-27", 1100.56], ["2026-06-28", 1363.73], ["2026-06-29", 1374.19], ["2026-06-30", 1358.63]]}, "macro": {"label": "Macro (Fed cuts)", "pts10": [["2026-06-16", 1000.0], ["2026-06-17", 1000.0], ["2026-06-18", 1000.0], ["2026-06-19", 1000.0], ["2026-06-20", 1000.0], ["2026-06-21", 1000.0], ["2026-06-22", 1000.0], ["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 1000.0], ["2026-06-28", 1000.0], ["2026-06-29", 1000.0], ["2026-06-30", 1000.0]], "ptsf": [["2026-06-16", 1001.22], ["2026-06-17", 1001.22], ["2026-06-18", 1001.22], ["2026-06-19", 1001.22], ["2026-06-20", 1001.22], ["2026-06-21", 1001.22], ["2026-06-22", 1001.22], ["2026-06-23", 1001.22], ["2026-06-24", 1001.22], ["2026-06-25", 1001.22], ["2026-06-26", 1001.22], ["2026-06-27", 1001.22], ["2026-06-28", 1001.22], ["2026-06-29", 1001.22], ["2026-06-30", 1001.22]]}, "dip_confirm": {"label": "Dip-Confirm YES", "pts10": [["2026-06-23", 1000.0], ["2026-06-24", 1000.0], ["2026-06-25", 1000.0], ["2026-06-26", 1000.0], ["2026-06-27", 932.62], ["2026-06-28", 886.31], ["2026-06-29", 877.88], ["2026-06-30", 877.88]], "ptsf": [["2026-06-23", 992.69], ["2026-06-24", 982.98], ["2026-06-25", 1048.09], ["2026-06-26", 1042.42], ["2026-06-27", 1021.88], ["2026-06-28", 1003.3], ["2026-06-29", 1001.18], ["2026-06-30", 977.83]]}};
 const CAP0 = 1000.0;
-const nextTs = new Date("2026-06-30T06:15:00+00:00").getTime();
+const nextTs = new Date("2026-06-30T08:15:00+00:00").getTime();
 function tick(){const d=Math.max(0,nextTs-Date.now());const m=Math.floor(d/60000),s=Math.floor(d%60000/1000);const el=document.getElementById('cd');if(el)el.textContent='in '+m+'m '+String(s).padStart(2,'0')+'s';}
 setInterval(tick,1000);tick();
 function draw(sid){
