@@ -18,9 +18,11 @@ Output: data/paper_trade/dashboard.html
 """
 from __future__ import annotations
 import json
+import math
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,8 +102,8 @@ def load_ledger(path: Path, entry_col: str, q_col: str | None = None):
     return [t for t in trades if t["ed"]]
 
 
-# --- daily price-mark cache (cache resolved markets once, refresh open ones) ----
-MARKS_PATH = DATA / "token_daily.csv.gz"
+# --- hourly (intraday) price-mark cache (cache resolved markets once, refresh open ones) ---
+MARKS_PATH = DATA / "token_intraday.csv.gz"
 
 
 def load_marks():
@@ -109,25 +111,25 @@ def load_marks():
         return {}
     try:
         df = pd.read_csv(MARKS_PATH, dtype={"token": str})
-        df["date"] = pd.to_datetime(df["date"])
-        return {tok: g.set_index("date")["p"].sort_index() for tok, g in df.groupby("token")}
+        df["ts"] = pd.to_datetime(df["ts"])
+        return {tok: g.set_index("ts")["p"].sort_index() for tok, g in df.groupby("token")}
     except Exception:
         return {}
 
 
 def save_marks(marks):
-    rows = [(tok, d.strftime("%Y-%m-%d"), float(p)) for tok, s in marks.items() for d, p in s.items()]
-    pd.DataFrame(rows, columns=["token", "date", "p"]).to_csv(MARKS_PATH, index=False, compression="gzip")
+    rows = [(tok, ts.isoformat(), float(p)) for tok, s in marks.items() for ts, p in s.items()]
+    pd.DataFrame(rows, columns=["token", "ts", "p"]).to_csv(MARKS_PATH, index=False, compression="gzip")
 
 
-def fetch_daily(token):
-    """Daily Yes-price series for a token (lazy import; None on any failure)."""
+def fetch_intraday(token):
+    """Hourly Yes-price series for a token (lazy import; None on any failure)."""
     try:
-        from posterioralpha.polymarket.fetch import fetch_token_history
-        s = fetch_token_history(str(token), fidelity_minutes=1440, use_cache=False)
+        from posterioralpha.polymarket.fetch import fetch_token_history_raw
+        s = fetch_token_history_raw(str(token), fidelity_minutes=60, use_cache=False)
         if s is None or len(s) == 0:
             return None
-        s.index = pd.to_datetime(s.index)
+        s.index = pd.to_datetime(s.index).tz_localize(None)
         return s.sort_index()
     except Exception:
         return None
@@ -143,7 +145,7 @@ def update_marks(token_resolved):
             continue
         if tok in marks and resolved:
             continue
-        s = fetch_daily(tok)
+        s = fetch_intraday(tok)
         if s is not None and len(s):
             marks[tok] = s; changed = True
     if changed:
@@ -204,11 +206,13 @@ def walkforward_kelly(trades, min_hist=10, cap=0.5):
 
 
 def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
-    """Realistic daily cash sim from $1,000 — NO LEVERAGE. A position ties up cash
-    from entry to exit; new trades are sized min(target, cash) so overlapping
-    positions can't be funded on margin. Each day, OPEN positions are marked to
-    their real daily price (from the marks cache), giving a smooth equity curve
-    instead of cost-held steps. mode 'pct' = `frac` of equity (Kelly), 'flat'=$10."""
+    """Realistic cash sim from $1,000 — NO LEVERAGE. A position ties up cash from
+    entry to exit; new trades are sized min(target, cash) so overlapping positions
+    can't be funded on margin. Buy/sell DECISIONS execute at the start of their
+    recorded date (the ledger only records entry/exit at daily granularity), but
+    between decisions OPEN positions are marked HOURLY to their real intraday price
+    (from the marks cache) — an actually-intraday equity curve, not a daily
+    staircase. mode 'pct' = `frac` of equity (Kelly), 'flat'=$10."""
     marks = marks or {}
     if not trades:
         return dict(pts=[["", CAP0]], fin=CAP0, ret=0.0, dd=0.0, realized=0.0, unreal=0.0,
@@ -219,14 +223,18 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
         if t["resolved"]:
             sells.setdefault(max(t["xd"], t["ed"]), []).append(idx)
     start = min(t["ed"] for t in trades)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    today = now.strftime("%Y-%m-%d")
     end = max([today] + [t["xd"] for t in trades if t["resolved"] and t["xd"]])
-    days = [d.strftime("%Y-%m-%d") for d in pd.date_range(start, end, freq="D")]
+    end_ts = min(now, pd.Timestamp(end) + pd.Timedelta(days=1))
+    hours = pd.date_range(pd.Timestamp(start), end_ts, freq="h")
+    if len(hours) == 0:
+        hours = pd.DatetimeIndex([pd.Timestamp(start)])
 
-    def mp(idx, day):
+    def mp(idx, ts):
         t = trades[idx]; s = marks.get(t["token"])
-        if s is not None:
-            v = s.asof(pd.Timestamp(day))
+        if s is not None and len(s):
+            v = s.asof(ts)
             if pd.notna(v):
                 return float(v)
         return t["current"] if t["current"] is not None else t["entry"]
@@ -234,32 +242,36 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
     cash, hold, pts = CAP0, {}, []
     taken = constrained = maxconc = 0
     realized = peakdep = 0.0
-    for day in days:
-        for idx in sells.get(day, []):
-            h = hold.pop(idx, None)
-            if h:
-                proc = h["shares"] * trades[idx]["outcome"]
-                cash += proc; realized += proc - h["cost"]
-        for idx in buys.get(day, []):
-            eq = cash + sum(h["shares"] * mp(i, day) for i, h in hold.items())
-            fr = (fracs.get(idx, 0.0) if fracs is not None else frac)
-            target = fr * eq if mode == "pct" else FLAT
-            if target <= 1e-9:
-                continue                               # Kelly says don't bet (no edge / no history yet)
-            stake = min(target, cash)
-            if stake > 1e-6:
-                if stake < target - 1e-6:
-                    constrained += 1                   # capital-limited (real margin constraint)
-                hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
-                cash -= stake; taken += 1
-                maxconc = max(maxconc, len(hold))
+    cur_day = None
+    for ts in hours:
+        day = ts.strftime("%Y-%m-%d")
+        if day != cur_day:
+            cur_day = day
+            for idx in sells.get(day, []):
+                h = hold.pop(idx, None)
+                if h:
+                    proc = h["shares"] * trades[idx]["outcome"]
+                    cash += proc; realized += proc - h["cost"]
+            for idx in buys.get(day, []):
+                eq = cash + sum(h["shares"] * mp(i, ts) for i, h in hold.items())
+                fr = (fracs.get(idx, 0.0) if fracs is not None else frac)
+                target = fr * eq if mode == "pct" else FLAT
+                if target <= 1e-9:
+                    continue                           # Kelly says don't bet (no edge / no history yet)
+                stake = min(target, cash)
+                if stake > 1e-6:
+                    if stake < target - 1e-6:
+                        constrained += 1                # capital-limited (real margin constraint)
+                    hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
+                    cash -= stake; taken += 1
+                    maxconc = max(maxconc, len(hold))
         cost = sum(h["cost"] for h in hold.values())
-        mv = sum(h["shares"] * mp(i, day) for i, h in hold.items())
+        mv = sum(h["shares"] * mp(i, ts) for i, h in hold.items())
         peakdep = max(peakdep, cost / (cost + cash) if (cost + cash) > 0 else 0.0)
-        pts.append([day, round(cash + mv, 2)])
+        pts.append([ts.isoformat(), round(cash + mv, 2)])
 
     final = pts[-1][1] if pts else CAP0
-    unreal = sum(hold[i]["shares"] * mp(i, days[-1]) - hold[i]["cost"] for i in hold)
+    unreal = sum(hold[i]["shares"] * mp(i, hours[-1]) - hold[i]["cost"] for i in hold)
     peak, dd = CAP0, 0.0
     for _, e in pts:
         peak = max(peak, e); dd = min(dd, e / peak - 1.0 if peak > 0 else 0.0)
@@ -309,6 +321,91 @@ def build_positions(trades):
     return rows
 
 
+def _streak(resolved_sorted):
+    """Current win/loss streak (e.g. 'W3', 'L2') from chronologically-sorted
+    resolved trades. '—' if there's no resolved history."""
+    if not resolved_sorted:
+        return "—"
+    last_won = resolved_sorted[-1]["outcome"] >= 0.5
+    n = 0
+    for t in reversed(resolved_sorted):
+        if (t["outcome"] >= 0.5) != last_won:
+            break
+        n += 1
+    return f"{'W' if last_won else 'L'}{n}"
+
+
+def assess_strategy(trades, label):
+    """Deep-dive diagnostics for the strategy-detail tab, organized around the
+    Fundamental-Law decomposition (docs/knowledge/sharpe-decomposition-levers.md):
+    Sharpe ~ edge x sqrt(independent breadth x cadence). Two t-stats are reported
+    for the same edge — a NAIVE one (treats every trade as independent) and an
+    EVENT-CLUSTERED one (groups trades resolving the same day, since same-event
+    markets move together) — the gap between them is exactly the "effective
+    breadth" lesson: nominal trade count overstates independent bets when many
+    positions resolve off the same real-world event.
+    """
+    resolved = sorted([t for t in trades if t["resolved"]], key=lambda t: t["xd"] or t["ed"] or "")
+    opens = [t for t in trades if not t["resolved"]]
+    n = len(resolved)
+    if n == 0:
+        return dict(label=label, n=0, open=len(opens))
+
+    edges = np.array([t["outcome"] - t["entry"] for t in resolved])
+    rets = np.array([t["outcome"] / t["entry"] - 1.0 for t in resolved])
+    pnl10 = 10.0 * rets
+    wins = pnl10[pnl10 > 0]
+    losses = pnl10[pnl10 < 0]
+
+    edge_mean = float(edges.mean())
+    edge_se = float(edges.std(ddof=1) / math.sqrt(n)) if n > 1 else float("nan")
+    edge_t = edge_mean / edge_se if edge_se else float("nan")
+
+    by_event: dict[str, list] = {}
+    for t, e in zip(resolved, edges):
+        by_event.setdefault(t["xd"] or t["ed"], []).append(e)
+    event_means = np.array([float(np.mean(v)) for v in by_event.values()])
+    n_events = len(event_means)
+    if n_events > 1 and event_means.std(ddof=1) > 0:
+        event_t = float(event_means.mean() / (event_means.std(ddof=1) / math.sqrt(n_events)))
+    else:
+        event_t = float("nan")
+
+    gross_win = float(wins.sum())
+    gross_loss = float(-losses.sum())
+    if gross_loss > 0:
+        profit_factor = gross_win / gross_loss
+    else:
+        profit_factor = float("inf") if gross_win > 0 else float("nan")
+
+    r_mean, r_std = float(rets.mean()), (float(rets.std(ddof=1)) if n > 1 else float("nan"))
+    sharpe_trade = (r_mean / r_std) if r_std else float("nan")
+
+    span_days = max(1, (pd.to_datetime(resolved[-1]["xd"] or resolved[-1]["ed"])
+                         - pd.to_datetime(resolved[0]["ed"])).days)
+    trades_per_year = n / span_days * 365.25
+    sharpe_ann = sharpe_trade * math.sqrt(trades_per_year) if sharpe_trade == sharpe_trade else float("nan")
+
+    hold_days = [(pd.to_datetime(t["xd"]) - pd.to_datetime(t["ed"])).days
+                 for t in resolved if t["xd"] and t["ed"]]
+
+    return dict(
+        label=label, n=n, open=len(opens),
+        win_rate=float((rets >= 0).mean()),
+        avg_entry=float(np.mean([t["entry"] for t in resolved])),
+        avg_hold=float(np.mean(hold_days)) if hold_days else float("nan"),
+        trades_per_week=n / span_days * 7,
+        edge_mean=edge_mean, edge_t=edge_t,
+        n_events=n_events, breadth_pct=(n_events / n if n else 0.0), event_t=event_t,
+        expectancy10=float(pnl10.mean()), profit_factor=profit_factor,
+        avg_win10=float(wins.mean()) if len(wins) else 0.0,
+        avg_loss10=float(losses.mean()) if len(losses) else 0.0,
+        best10=float(pnl10.max()), worst10=float(pnl10.min()),
+        streak=_streak(resolved),
+        sharpe_trade=sharpe_trade, sharpe_ann=sharpe_ann, trades_per_year=trades_per_year,
+    )
+
+
 def _sum_curves(sers, key, cap_each=CAP0):
     """Sum independent per-sleeve daily equity curves on a common date grid (each
     sleeve flat at its $1k before its first trade)."""
@@ -351,6 +448,7 @@ def build(fetch_marks=True):
         strategies.append(k)
         if k["n"] or k["open"]:
             ser["positions"] = build_positions(trades)
+            ser["assess"] = assess_strategy(trades, label)
             series[sid] = ser
             active_ser.append((k, ser))
 
@@ -420,6 +518,60 @@ def cap_note(s):
     return f" · {s['constrained']} entries capital-capped" if s.get("constrained") else ""
 
 
+def fnum(v, suf="", dp=2, sign=False):
+    if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+        return "+∞" if (isinstance(v, float) and math.isinf(v) and v > 0) else "—"
+    return f"{v:+.{dp}f}{suf}" if sign else f"{v:.{dp}f}{suf}"
+
+
+def assess_card(a):
+    """Deep-dive stat grid for the strategy-detail tab: sample/calibration, edge
+    significance (naive vs event-clustered — the effective-breadth lesson),
+    PnL quality, and risk-adjusted return. See assess_strategy() for the math."""
+    if not a or not a.get("n"):
+        return '<div class="note">No resolved trades yet for this strategy — stats need at least one settled position.</div>'
+    return f"""
+    <div class="astats">
+      <div class="asec">
+        <div class="asec-h">Sample &amp; calibration</div>
+        <div class="agrid">
+          <div class="a"><div class="al">Resolved / open</div><div class="av">{a['n']} / {a['open']}</div></div>
+          <div class="a"><div class="al">Win rate</div><div class="av">{a['win_rate']*100:.0f}%</div></div>
+          <div class="a"><div class="al">Avg entry price</div><div class="av">{a['avg_entry']*100:.1f}¢</div></div>
+          <div class="a"><div class="al">Avg hold</div><div class="av">{fnum(a['avg_hold'], ' d', 1)}</div></div>
+          <div class="a"><div class="al">Cadence</div><div class="av">{a['trades_per_week']:.1f}<span class="asub">/wk</span></div></div>
+        </div>
+      </div>
+      <div class="asec">
+        <div class="asec-h">Edge &amp; significance <span class="asub">Sharpe ≈ edge × √(breadth × cadence)</span></div>
+        <div class="agrid">
+          <div class="a"><div class="al">Mean edge</div><div class="av {_sc(a['edge_mean'])}">{a['edge_mean']*100:+.1f}¢</div></div>
+          <div class="a"><div class="al">Edge t-stat (naive)</div><div class="av {_sc(a['edge_t'])}">{fnum(a['edge_t'], '', 2, True)}</div></div>
+          <div class="a"><div class="al">Independent events</div><div class="av">{a['n_events']}<span class="asub"> ({a['breadth_pct']*100:.0f}% of n)</span></div></div>
+          <div class="a"><div class="al">Edge t-stat (clustered)</div><div class="av {_sc(a['event_t'])}">{fnum(a['event_t'], '', 2, True)}</div></div>
+        </div>
+      </div>
+      <div class="asec">
+        <div class="asec-h">PnL quality <span class="asub">flat $10 stake</span></div>
+        <div class="agrid">
+          <div class="a"><div class="al">Expectancy/trade</div><div class="av {_sc(a['expectancy10'])}">{signed(a['expectancy10'])}</div></div>
+          <div class="a"><div class="al">Profit factor</div><div class="av">{fnum(a['profit_factor'])}</div></div>
+          <div class="a"><div class="al">Avg win / avg loss</div><div class="av">{signed(a['avg_win10'])} / {signed(a['avg_loss10'])}</div></div>
+          <div class="a"><div class="al">Best / worst trade</div><div class="av">{signed(a['best10'])} / {signed(a['worst10'])}</div></div>
+          <div class="a"><div class="al">Current streak</div><div class="av">{a['streak']}</div></div>
+        </div>
+      </div>
+      <div class="asec">
+        <div class="asec-h">Risk-adjusted <span class="asub">per-trade cadence, not calendar time</span></div>
+        <div class="agrid">
+          <div class="a"><div class="al">Sharpe (per-trade)</div><div class="av {_sc(a['sharpe_trade'])}">{fnum(a['sharpe_trade'], '', 2, True)}</div></div>
+          <div class="a"><div class="al">Sharpe (annualized)</div><div class="av {_sc(a['sharpe_ann'])}">{fnum(a['sharpe_ann'], '', 2, True)}</div></div>
+          <div class="a"><div class="al">Trades / yr (cadence)</div><div class="av">{a['trades_per_year']:.0f}</div></div>
+        </div>
+      </div>
+    </div>"""
+
+
 def generate():
     combined, strategies, series = build()
     now = datetime.now(timezone.utc)
@@ -441,6 +593,7 @@ def generate():
     strat_options = "".join(
         f'<option value="{sid}">{series[sid]["label"]}</option>' for sid in detail_sids)
     cards_map = {s["id"]: kpi_card(s) for s in strategies if s.get("id") in detail_sids}
+    assess_cards = {sid: assess_card(series[sid].get("assess")) for sid in detail_sids}
     cm = combined
     cret10 = "pos" if cm["ret10"] >= 0 else "neg"
     cretf = "pos" if cm["retflat"] >= 0 else "neg"
@@ -491,6 +644,15 @@ table.postable{{width:100%;border-collapse:collapse;font-size:12px;white-space:n
 table.postable th{{position:sticky;top:0;background:var(--panel);text-align:left;color:var(--mut);text-transform:uppercase;font-size:10px;letter-spacing:.04em;padding:8px 10px;border-bottom:1px solid var(--line)}}
 table.postable td{{padding:7px 10px;border-bottom:1px solid #1c222a;white-space:normal}}
 table.postable td:nth-child(2){{min-width:220px;color:var(--ink)}}
+.astats{{display:flex;flex-direction:column;gap:10px}}
+.asec{{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}}
+.asec-h{{font-size:12px;font-weight:650;margin-bottom:10px}}
+.asec-h .asub{{font-weight:400;color:var(--mut);font-size:11px;margin-left:6px;text-transform:none;letter-spacing:0}}
+.agrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}}
+.agrid .a{{background:#10151b;border:1px solid var(--line);border-radius:8px;padding:8px}}
+.agrid .al{{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em}}
+.agrid .av{{font-size:16px;font-weight:660;margin-top:2px}}
+.agrid .av .asub{{font-size:10px;color:var(--mut);font-weight:400}}
 @media(max-width:600px){{.wrap{{padding:12px}}.bar{{gap:8px}}h1{{font-size:16px;width:100%}}
   .runinfo{{width:100%;order:3}}.bar button{{flex:1}}.cell .v{{font-size:18px}}
   #chart,#chart2{{height:260px}}.section-h{{margin:14px 0 6px}}}}
@@ -522,9 +684,9 @@ table.postable td:nth-child(2){{min-width:220px;color:var(--ink)}}
   <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small {_sc(cm['mtm'])}">{signed(cm['mtm'])}</div></div>
   <div class="cell"><div class="l">Peak deployed <span class="tag">≤100% = no leverage</span></div><div class="v small">{cm['peakdep']*100:.0f}%</div></div>
 </div>
-<div class="note">Realistic daily, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); open positions are marked to their real daily price. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample): every trade is staked only from the edge known from trades settled <i>before</i> it — no bet until ≥10 prior settles, no lookahead. The % shown is the rate recommended now; 0 = no proven edge → don't bet (capped 50%).</div>
+<div class="note">Realistic <b>hourly-marked</b>, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); entries/exits execute on their recorded date, but open positions are marked to their real <b>intraday</b> price between decisions for a smooth curve. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample): every trade is staked only from the edge known from trades settled <i>before</i> it — no bet until ≥10 prior settles, no lookahead. The % shown is the rate recommended now; 0 = no proven edge → don't bet (capped 50%).</div>
 
-<div class="section-h">Equity curve — $1,000 per strategy · combined = sum of sleeves</div>
+<div class="section-h">Equity curve — $1,000 per strategy · combined = sum of sleeves · hourly marks</div>
 <div id="chartbtns">{btns}</div>
 <div class="chartwrap">
   <div class="legend"><span><i style="background:#3b82f6"></i>Kelly stake (per strategy)</span><span><i style="background:#e0a93b"></i>flat $10/trade</span></div>
@@ -542,7 +704,10 @@ table.postable td:nth-child(2){{min-width:220px;color:var(--ink)}}
   </div>
   <div id="stratCards" class="grid" style="margin-bottom:16px"></div>
 
-  <div class="section-h">Equity curve — $1,000 bankroll</div>
+  <div class="section-h">Deep dive</div>
+  <div id="stratAssess" style="margin-bottom:18px"></div>
+
+  <div class="section-h">Equity curve — $1,000 bankroll · hourly marks</div>
   <div class="chartwrap" style="margin-bottom:18px">
     <div class="legend"><span><i style="background:#3b82f6"></i>Kelly stake</span><span><i style="background:#e0a93b"></i>flat $10/trade</span></div>
     <svg id="chart2" viewBox="0 0 960 340" width="100%" height="340" preserveAspectRatio="xMidYMid meet"></svg>
@@ -560,10 +725,16 @@ table.postable td:nth-child(2){{min-width:220px;color:var(--ink)}}
 <script>
 const SERIES = {json.dumps(series)};
 const CARDS = {json.dumps(cards_map)};
+const ASSESS = {json.dumps(assess_cards)};
 const CAP0 = {CAP0};
 const nextTs = new Date("{nxt.isoformat()}").getTime();
 function tick(){{const d=Math.max(0,nextTs-Date.now());const m=Math.floor(d/60000),s=Math.floor(d%60000/1000);const el=document.getElementById('cd');if(el)el.textContent='in '+m+'m '+String(s).padStart(2,'0')+'s';}}
 setInterval(tick,1000);tick();
+function fmtTick(iso){{
+  const d=new Date(iso); if(isNaN(d)) return iso;
+  const mm=String(d.getUTCMonth()+1).padStart(2,'0'),dd=String(d.getUTCDate()).padStart(2,'0'),hh=String(d.getUTCHours()).padStart(2,'0');
+  return `${{mm}}-${{dd}} ${{hh}}:00`;
+}}
 function drawTo(sid, elId){{
   const s=SERIES[sid]; if(!s) return;
   const W=960,H=340,P=46,a=s.pts10,b=s.ptsf,n=a.length;
@@ -576,7 +747,7 @@ function drawTo(sid, elId){{
   let g='';
   for(let k=0;k<=4;k++){{const v=ymin+(ymax-ymin)*k/4,y=Y(v);g+=`<line x1="${{P}}" y1="${{y}}" x2="${{W-P}}" y2="${{y}}" stroke="#262d36"/><text x="${{P-8}}" y="${{y+4}}" fill="#8b97a5" font-size="11" text-anchor="end">$${{Math.round(v)}}</text>`;}}
   const yb=Y(base);g+=`<line x1="${{P}}" y1="${{yb}}" x2="${{W-P}}" y2="${{yb}}" stroke="#3a4453" stroke-dasharray="4 4"/>`;
-  [0,Math.floor((n-1)/2),n-1].forEach(i=>{{if(i>=0&&i<n)g+=`<text x="${{X(i)}}" y="${{H-14}}" fill="#8b97a5" font-size="11" text-anchor="middle">${{a[i][0]}}</text>`;}});
+  [0,Math.floor((n-1)/2),n-1].forEach(i=>{{if(i>=0&&i<n)g+=`<text x="${{X(i)}}" y="${{H-14}}" fill="#8b97a5" font-size="11" text-anchor="middle">${{fmtTick(a[i][0])}}</text>`;}});
   g+=`<path d="${{line(b)}}" fill="none" stroke="#e0a93b" stroke-width="2"/>`;
   g+=`<path d="${{line(a)}}" fill="none" stroke="#3b82f6" stroke-width="2.4"/>`;
   document.getElementById(elId).innerHTML=g;
@@ -593,6 +764,7 @@ function escapeHtml(s){{return (s||'').replace(/[&<>"]/g,c=>({{'&':'&amp;','<':'
 function renderStrategy(sid){{
   const s=SERIES[sid]; if(!s) return;
   document.getElementById('stratCards').innerHTML = CARDS[sid] || '';
+  document.getElementById('stratAssess').innerHTML = ASSESS[sid] || '';
   drawTo(sid, 'chart2');
   const tbody=document.querySelector('#posTable tbody');
   const rows=s.positions||[];
