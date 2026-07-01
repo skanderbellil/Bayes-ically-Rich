@@ -6,6 +6,10 @@ on:
     - cron: "15 * * * *"
   workflow_dispatch:       # run manually from the Actions tab any time
 
+concurrency:
+  group: paper-trade-ledgers
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -41,13 +45,19 @@ jobs:
         run: python experiments/run_paper_trade_update.py --fraction 0.10
 
       - name: Regime-calm disruptive-tail (forward ledger)
-        run: python experiments/run_regime_paper_update.py || true
+        id: regime_paper
+        continue-on-error: true
+        run: python experiments/run_regime_paper_update.py
 
       - name: Regime per-domain validation (refresh validated set)
-        run: python experiments/run_regime_domain_validation.py || true
+        id: regime_domain_validation
+        continue-on-error: true
+        run: python experiments/run_regime_domain_validation.py
 
       - name: Validated regime strategy (geo-calm forward ledger)
-        run: python experiments/run_validated_regime_paper_update.py || true
+        id: validated_regime_paper
+        continue-on-error: true
+        run: python experiments/run_validated_regime_paper_update.py
 
       - name: Bankroll simulation (real $1k returns)
         run: python experiments/run_bankroll_sim.py --capital 1000 --stake 0.10
@@ -76,7 +86,20 @@ jobs:
             data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then
             git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
+            git pull --rebase origin ${GITHUB_REF_NAME}
             git push
           else
             echo "No ledger changes — nothing to commit."
           fi
+
+      - name: Fail job if any regime step failed
+        if: >
+          steps.regime_paper.outcome == 'failure' ||
+          steps.regime_domain_validation.outcome == 'failure' ||
+          steps.validated_regime_paper.outcome == 'failure'
+        run: |
+          echo "One or more regime steps failed:"
+          echo "  regime_paper:              ${{ steps.regime_paper.outcome }}"
+          echo "  regime_domain_validation:  ${{ steps.regime_domain_validation.outcome }}"
+          echo "  validated_regime_paper:    ${{ steps.validated_regime_paper.outcome }}"
+          exit 1

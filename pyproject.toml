@@ -29,6 +29,10 @@ dependencies = [
 dfl = ["torch>=2.0", "cvxpy>=1.4", "cvxpylayers>=0.1.6"]
 # Only needed to build the Google-Drive-hosted Open Source Asset Pricing dataset
 data = ["gdown>=5.0"]
+# Only needed for the council --llm mode
+llm = ["anthropic>=0.40.0"]
+# Development / test tooling
+dev = ["pytest>=8.0"]
 
 [tool.setuptools]
 packages = [

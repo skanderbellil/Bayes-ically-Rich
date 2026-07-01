@@ -394,6 +394,10 @@ pay-up book works — informed wallets do lead moves repeatably — rather than 
   backward pass); moments and signals at date *t* use data up to *t*.
 - **Warm-up.** Engines reserve an initial history window before the first rebalance so
   priors are meaningful from day one.
-- **Costs.** Transaction costs are charged on effective (post-leverage) turnover.
+- **Costs.** Both engines charge transaction costs on turnover, deducted on the first
+  day of each holding period — the AMR engine on effective (post-leverage) turnover, the
+  Bayesian engine on plain L1 weight turnover. The Bayesian engine previously reported
+  gross returns (`tc` acted only as an optimizer penalty); it now deducts realized costs
+  for all strategies, with `charge_costs=False` recovering the old gross behaviour.
 
 See `experiments/README.md` for the index of studies.

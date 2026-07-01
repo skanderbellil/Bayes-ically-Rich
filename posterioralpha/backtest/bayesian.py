@@ -15,6 +15,11 @@ Refined  (implementing all extensions from the original idea)
                     posterior regime probability + uncertainty penalisation
   bayesian_full   — everything: EWMA prior + HMM regime blend +
                     uncertainty penalisation + TC penalty
+
+Reported returns are net of transaction costs: at each rebalance a cost of
+``tc × turnover`` (L1 weight change; full buy-in at the first rebalance) is
+deducted from the first day of the holding period for every strategy,
+matching the AMR engine.  Pass ``charge_costs=False`` for gross returns.
 """
 import logging
 from dataclasses import dataclass
@@ -171,15 +176,29 @@ def run_backtest(
     sensitivity: float = 1.5,
     max_weight: float = 0.20,
     tc: float = 0.001,
+    charge_costs: bool = True,
 ) -> BacktestResult:
     """
     Monthly-rebalanced backtest for any supported strategy.
+
+    Returned daily returns are **net of transaction costs**: at every
+    rebalance, ``tc × turnover`` (turnover = Σ|w_new − w_prev|, with the
+    first rebalance charged on the full buy-in Σ|w|) is deducted from the
+    first day of the holding period — for all strategies, so baselines and
+    Bayesian variants are compared apples-to-apples.  The same ``tc`` rate
+    is additionally used as an optimiser turnover penalty for the
+    ``use_tc`` strategies (bayesian_ewma / bayesian_hmm / bayesian_full),
+    as before.
 
     Parameters
     ----------
     recent_window : look-back for the hard-window Bayesian strategies
     ewma_halflife : half-life (days) for EWMA-based strategies
-    tc            : one-way transaction cost rate (e.g. 0.001 = 10 bps)
+    tc            : one-way transaction cost rate (e.g. 0.001 = 10 bps),
+                    used both for the realized cost deduction and as the
+                    optimiser penalty in TC-aware strategies
+    charge_costs  : if False, skip the realized cost deduction and return
+                    gross returns (pre-fix behaviour)
     """
     if strategy not in STRATEGIES:
         raise ValueError(f"Unknown strategy '{strategy}'. Choose from {STRATEGIES}.")
@@ -308,6 +327,15 @@ def run_backtest(
             continue
 
         pf_rets = period.values @ weights
+
+        # ── Realized transaction costs (all strategies) ────────────────────
+        if charge_costs:
+            if prev_weights is None:
+                turnover = float(np.sum(np.abs(weights)))              # initial buy-in
+            else:
+                turnover = float(np.sum(np.abs(weights - prev_weights)))
+            pf_rets = pf_rets.copy()
+            pf_rets[0] -= tc * turnover      # deduct TC on first day of period
 
         port_rets.extend(pf_rets.tolist())
         ret_dates.extend(period.index.tolist())
