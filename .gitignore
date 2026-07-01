@@ -56,3 +56,6 @@ results/
 
 # Polymarket/PEAD runtime fetch caches (created on demand)
 data/raw/
+
+# Graphify knowledge-graph build cache
+graphify-out/cache/
