@@ -321,3 +321,117 @@ sample, statistically distinguishable from luck after deflation.
 4. **Don't gate on the wrong axis.** A regime layer has to separate states by the
    thing you're switching between (momentum vs reversion *profitability*), not by
    a convenient observable (velocity magnitude).
+
+---
+
+# Follow-up: the integral ladder (going UP instead of DOWN)
+
+The study above climbs the ladder the intuitive way — differentiate price into
+velocity, acceleration — and hits a wall: **differencing manufactures noise**, so
+acceleration is garbage and even velocity-momentum loses. The natural next
+question: what about going the *other* way — **integrate** price instead?
+
+> Reproduce: `python experiments/run_ladder_cross_section.py`
+> (single-asset dead-end: `python experiments/run_ladder_regime.py`)
+> Code: `posterioralpha/kinematic/ladder.py` · Figures: `data/kinematic/integral_ladder.png`, `ladder_xsec.png`
+
+## The asymmetry (one picture)
+
+Take the same SPY price and walk both directions of the ladder, measuring the
+lag-1 autocorrelation of each rung (≈0/negative = noisy, ≈1 = smooth):
+
+| rung | acceleration (d²) | velocity (d¹) | price dev. (0) | **absement (∫¹)** | absity (∫²) |
+|------|------------------:|--------------:|---------------:|------------------:|------------:|
+| lag-1 autocorr | −0.50 | −0.07 | +0.99 | **+1.00** | +1.00 |
+
+**Differentiation amplifies noise; integration cancels it.** Each step *down* the
+ladder looks more like white noise; each step *up* looks smoother. The
+time-integral of displacement has a name in physics — **absement** (then absity,
+abseleration…). We implement it as a **leaky** integral (`I_t = λ·I_{t-1} + x_t`);
+a pure cumsum is non-stationary (control theory's "integral windup"), so the
+decay is the integral-ladder analogue of the filter's process-noise regulariser.
+
+## Rungs as a PID controller
+
+Steering price toward fair value is a PID problem, and the ladder rungs *are* the
+three terms:
+
+- **P** — deviation `p − baseline` (mean-reversion)
+- **I** — absement, the leaky integral of the deviation (the unexplored rung)
+- **D** — velocity `Δp` (momentum)
+
+Single-asset SPY, OOS, net: the integral rung as a trend signal returns **+0.23**
+Sharpe at **3× turnover** (nearly cost-free), where the derivative rung (velocity)
+returns **−1.04** at 199×. Going *up* the ladder beat going *down* — on edge and
+on cost — the first time in the project that happened.
+
+## Does "which rung matters" change over time?
+
+Yes — but it is a **cross-sectional** effect, not a single-asset timing one. On
+one SPY history the flip is visible OOS yet does **not** survive the train/test
+boundary: a train-fit selector finds reversion best in *every* regime and
+collapses to it (`run_ladder_regime.py`, net −0.05, losing to the fixed integral
+rung). One asset has too few regime episodes to learn the map.
+
+With breadth (S&P top-100, 2016–2026, ~94 names, monthly), the flip **replicates**
+and is stable — cross-sectional IC (t-stat):
+
+| rung | overall | CHOP market | TREND market |
+|------|--------:|------------:|-------------:|
+| absement-trend (∫) | +0.006 (0.4) | **+0.033 (1.4)** | −0.006 |
+| deviation-reversion (P) | −0.000 | −0.021 | **+0.023 (0.8)** |
+| velocity-trend (D) | **−0.034 (−2.2)** | −0.030 | −0.029 |
+
+The integral rung leads in **chop**, reversion leads in **trends**, and the
+derivative rung is **significantly negative in every regime** — up-the-ladder
+confirmed a third time (regime split via the Kaufman efficiency ratio of the EW
+index).
+
+## How to *combine* the rungs — the real lesson
+
+Cross-sectional long-short, net @5bp:
+
+| factor | net@5bp | net@10bp | t |
+|--------|--------:|---------:|--:|
+| velocity (derivative) fixed | −0.75 | −0.90 | −2.3 |
+| absement (best fixed rung) | +0.17 | +0.13 | +0.5 |
+| equal-weight combo (P+I+D) | −0.13 | −0.23 | −0.4 |
+| **adaptive: weight by recent IC** | **−0.50** | −0.60 | −1.6 |
+| **regime-gated: weight by market state (1−ER)** | **+0.28** | +0.24 | +0.9 |
+| 12-1 momentum (benchmark) | +0.40 | +0.36 | +1.2 |
+
+Two combinations lose and one wins, and the contrast *is* the finding:
+
+- **Equal-weighting** all rungs loses — it drags in the reliably-dead velocity rung.
+- **Adaptive weighting by trailing IC loses badly** — rung ICs mean-revert
+  month-to-month, so loading into whatever worked last year buys the top. The
+  weights thrash (see `ladder_xsec.png`) and the curve bleeds.
+- **Regime-gating wins** — weighting by a *stable, structural, contemporaneous*
+  state (trend vs chop) beats every fixed rung, and it needs **no fitting**.
+
+**Combining derivations helps only when the blend tracks a stable structural
+regime; weighting by recent performance actively hurts. Conditioning beats
+chasing.**
+
+## Honest ceiling
+
+The gated factor is **weak**: t ≈ +0.9 over 10 years (not significant standalone),
+below plain 12-1 momentum (+0.40), and though only ~0.45-correlated with it, a
+50/50 blend is a wash (+0.40 either way). The universe is **survivorship-biased**
+(current S&P membership), so read the *regime contrast* and the *velocity sign*
+(both bias-robust), not the absolute Sharpes.
+
+## What to take forward (integral ladder)
+
+1. **Up beats down, robustly.** The integral rung is weakly positive; the
+   derivative rung is significantly negative on a single asset *and*
+   cross-sectionally (t −2.2). If a price-kinematic feature is going to work, it
+   is an integral, not a derivative.
+2. **The rung flip is real but needs breadth.** It is a cross-sectional
+   regime effect; do not expect to time it on one instrument.
+3. **Gate, don't chase.** The only combination that worked conditioned on a
+   structural market state. Adaptive performance-weighting is a documented dead
+   end here — do not re-run it.
+4. **It is a diversifier at best.** Worth carrying as a small, orthogonal tilt
+   alongside momentum; not a standalone alpha on this sample. Next test: the full
+   500-name and a survivorship-clean universe.

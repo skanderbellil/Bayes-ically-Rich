@@ -44,9 +44,14 @@ from posterioralpha.kinematic.backtest import (
 )
 from posterioralpha.kinematic.ladder import (
     RegimeRungSelector,
+    cross_sectional_ic,
+    cross_sectional_ls,
     efficiency_ratio,
     ladder_rungs,
     leaky_integral,
+    month_ends,
+    per_name_rungs,
+    regime_gated_blend,
 )
 from posterioralpha.kinematic import diagnostics
 
@@ -59,5 +64,7 @@ __all__ = [
     "BacktestResult", "run_signal_backtest", "walk_forward",
     "ema_signal", "macd_signal", "signature_trend_signal",
     "leaky_integral", "efficiency_ratio", "ladder_rungs", "RegimeRungSelector",
+    "per_name_rungs", "month_ends", "cross_sectional_ls", "cross_sectional_ic",
+    "regime_gated_blend",
     "diagnostics",
 ]
