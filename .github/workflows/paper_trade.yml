@@ -96,7 +96,7 @@ jobs:
             data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then
             git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
-            git pull --rebase origin ${GITHUB_REF_NAME}
+            git pull --rebase --autostash origin ${GITHUB_REF_NAME}
             git push
           else
             echo "No ledger changes — nothing to commit."

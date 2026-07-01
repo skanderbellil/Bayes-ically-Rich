@@ -61,7 +61,7 @@ jobs:
           git add data/paper_trade/
           if ! git diff --cached --quiet; then
             git commit -m "close position: $QUESTION"
-            git pull --rebase origin ${GITHUB_REF_NAME}
+            git pull --rebase --autostash origin ${GITHUB_REF_NAME}
             git push
           else
             echo "No changes to commit."
