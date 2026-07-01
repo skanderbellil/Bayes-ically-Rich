@@ -42,10 +42,10 @@ import pandas as pd
 
 from .categorize import market_category
 from .fetch import (
+    fetch_market_resolution,
     fetch_order_book,
     fetch_token_history_raw,
     order_book_features,
-    token_resolution,
 )
 from .traders import fetch_leaderboard, fetch_trader_trades
 
@@ -400,7 +400,15 @@ def update_ledger(
         # per-token winner). This catches settled markets whose order book is gone
         # and whose fallback last-trade price never reaches the 0/1 threshold —
         # the cause of resolved positions getting stuck "open".
-        outcome = token_resolution(row.get("condition_id", ""), row["token"])
+        res = fetch_market_resolution(row.get("condition_id", ""))
+        market_closed = bool(res and res["closed"])
+        outcome = None
+        if market_closed:
+            toks = res["tokens"]
+            finalised = any(t["winner"] or t["price"] >= 0.99 for t in toks.values())
+            t = toks.get(str(row["token"]))
+            if finalised and t is not None:
+                outcome = 1.0 if (t["winner"] or t["price"] >= 0.99) else 0.0
 
         mid, _ = _price(row["token"])
         if mid is not None:
@@ -408,8 +416,10 @@ def update_ledger(
         if outcome is None and mid is None:
             continue  # neither resolution nor a fresh mark — leave untouched this run
 
-        # price-heuristic fallback only if the API didn't confirm resolution
-        if outcome is None and mid is not None:
+        # price-heuristic fallback only when the API confirms the market is
+        # closed but couldn't produce a clean per-token label — never resolve
+        # on price alone while the market is still reported open
+        if outcome is None and market_closed and mid is not None:
             outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
             pnl = (outcome / entry_ask - 1.0) * frac
