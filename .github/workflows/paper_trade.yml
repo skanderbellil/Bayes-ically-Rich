@@ -65,6 +65,9 @@ jobs:
       - name: Generate dashboard
         run: python experiments/generate_dashboard.py
 
+      - name: Order-book snapshots
+        run: python experiments/run_book_snapshot.py
+
       - name: Commit ledgers if changed
         run: |
           git config user.name  "paper-trade-bot"
@@ -83,6 +86,7 @@ jobs:
             data/paper_trade/validated_regime_positions.csv \
             data/polymarket_calibration_snapshot/validated_domains.json \
             data/paper_trade/bankroll_summary.csv \
+            data/paper_trade/book_snapshots.csv.gz \
             data/paper_trade/dashboard.html || true
           if ! git diff --cached --quiet; then
             git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
