@@ -183,25 +183,53 @@ def kelly_fraction(returns, cap=0.5):
     return round(min(f, cap), 4)
 
 
-def walkforward_kelly(trades, min_hist=10, cap=0.5):
+def walkforward_kelly(trades, min_hist=5, cap=0.5):
     """Per-trade WALK-FORWARD Kelly (no lookahead): trade t is sized from the Kelly
-    of only the trades that had SETTLED before t was entered (exit_date <= t entry).
-    No bet until `min_hist` prior settles. Returns (fracs[idx], current_rate) where
-    current_rate is the all-history estimate (the stake you'd use on the next trade)."""
+    fit on the EVENT-CLUSTERED returns of trades that had settled before t was
+    entered (settlement date <= t's entry date).
+
+    Clustering = one observation per settlement date (mean return across same-day
+    trades), not one per trade. Without this, correlated same-event trades (e.g.
+    several props on one match, all settling together) get counted as independent
+    evidence and inflate Kelly's apparent edge/confidence — exactly the
+    nominal-vs-effective-breadth gap documented in
+    docs/knowledge/sharpe-decomposition-levers.md. `min_hist` is independent
+    EVENTS, not raw trade count: no bet until `min_hist` prior events have
+    settled, even if hundreds of (correlated) trades have.
+
+    `min_hist=5` (not the pre-clustering 10) because event-clustered samples are
+    already lower-noise per observation (each is a mean over several correlated
+    trades) — but Kelly needs both a mean AND a variance estimate, so this isn't
+    lowered further just because a smaller strategy would otherwise show 0%
+    (that would be tuning the threshold to the output, the exact p-hacking this
+    whole diagnostic exists to catch). A strategy with < 5 independent
+    settlement days genuinely has no statistically defensible size yet — 0% is
+    the correct answer, not a bug. Returns (fracs[idx], current_rate) where
+    current_rate is the all-history estimate (the stake you'd use on the next
+    trade)."""
     settled = sorted(((t["xd"], t["outcome"] / t["entry"] - 1.0)
                       for t in trades if t["resolved"] and t["xd"]), key=lambda x: x[0])
     sx = [d for d, _ in settled]
     sr = [r for _, r in settled]
+
+    def event_means(k):
+        by_event: dict[str, list] = {}
+        for d, r in zip(sx[:k], sr[:k]):
+            by_event.setdefault(d, []).append(r)
+        return [float(np.mean(v)) for v in by_event.values()]
+
     import bisect
     fracs = {}
     for idx, t in enumerate(trades):
         k = bisect.bisect_right(sx, t["ed"])            # how many had settled by entry
-        prior = sr[:k]
-        if len(prior) < min_hist:
+        sample = event_means(k)
+        if len(sample) < min_hist:
             fracs[idx] = 0.0
         else:
-            fracs[idx] = round(kelly_fraction(prior, cap=cap) * min(1.0, len(prior) / 20.0), 4)
-    cur = round(kelly_fraction(sr, cap=cap) * min(1.0, len(sr) / 20.0), 4) if len(sr) >= min_hist else 0.0
+            fracs[idx] = round(kelly_fraction(sample, cap=cap) * min(1.0, len(sample) / 20.0), 4)
+    final_sample = event_means(len(sx))
+    cur = (round(kelly_fraction(final_sample, cap=cap) * min(1.0, len(final_sample) / 20.0), 4)
+           if len(final_sample) >= min_hist else 0.0)
     return fracs, cur
 
 
@@ -216,7 +244,7 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
     marks = marks or {}
     if not trades:
         return dict(pts=[["", CAP0]], fin=CAP0, ret=0.0, dd=0.0, realized=0.0, unreal=0.0,
-                    taken=0, constrained=0, maxconc=0, peakdep=0.0)
+                    taken=0, constrained=0, maxconc=0, peakdep=0.0, stakes={})
     buys, sells = {}, {}
     for idx, t in enumerate(trades):
         buys.setdefault(t["ed"], []).append(idx)
@@ -242,6 +270,7 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
     cash, hold, pts = CAP0, {}, []
     taken = constrained = maxconc = 0
     realized = peakdep = 0.0
+    stakes = {}                            # idx -> {"frac": fraction used, "stake": $ at entry}
     cur_day = None
     for ts in hours:
         day = ts.strftime("%Y-%m-%d")
@@ -265,6 +294,8 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
                     hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
                     cash -= stake; taken += 1
                     maxconc = max(maxconc, len(hold))
+                    if mode == "pct":
+                        stakes[idx] = {"frac": fr, "stake": round(stake, 2)}
         cost = sum(h["cost"] for h in hold.values())
         mv = sum(h["shares"] * mp(i, ts) for i, h in hold.items())
         peakdep = max(peakdep, cost / (cost + cash) if (cost + cash) > 0 else 0.0)
@@ -276,7 +307,8 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
     for _, e in pts:
         peak = max(peak, e); dd = min(dd, e / peak - 1.0 if peak > 0 else 0.0)
     return dict(pts=pts, fin=final, ret=final / CAP0 - 1.0, dd=dd, realized=realized,
-                unreal=unreal, taken=taken, constrained=constrained, maxconc=maxconc, peakdep=peakdep)
+                unreal=unreal, taken=taken, constrained=constrained, maxconc=maxconc,
+                peakdep=peakdep, stakes=stakes)
 
 
 def kpis_for(trades, label, sid=None, marks=None):
@@ -294,16 +326,19 @@ def kpis_for(trades, label, sid=None, marks=None):
              constrained=p["constrained"], taken=p["taken"], maxconc=p["maxconc"], peakdep=p["peakdep"])
     if sid is not None:
         k["id"] = sid
-    return k, {"label": label, "pts10": p["pts"], "ptsf": f["pts"]}
+    return k, {"label": label, "pts10": p["pts"], "ptsf": f["pts"], "kelly_stakes": p["stakes"]}
 
 
-def build_positions(trades):
+def build_positions(trades, kelly_stakes=None):
     """Per-position table rows for the strategy-detail drill-down: one row per
-    trade with entry/exit price, status, and PnL at both % and a flat-$10 stake
-    (resolved trades use the realized outcome; open trades mark-to-current).
-    Sorted most-recent first."""
+    trade with entry/exit price, status, PnL at a flat-$10 stake AND at the
+    walk-forward Kelly stake actually chosen for that trade (the dollar amount
+    it was entered with, and the resulting PnL; 0 if Kelly said don't bet — no
+    edge proven yet or capital-constrained). Resolved trades use the realized
+    outcome; open trades mark-to-current. Sorted most-recent first."""
+    kelly_stakes = kelly_stakes or {}
     rows = []
-    for t in trades:
+    for idx, t in enumerate(trades):
         entry = t["entry"]
         if t["resolved"]:
             exitp = t["outcome"]
@@ -312,10 +347,15 @@ def build_positions(trades):
             exitp = t["current"] if t["current"] is not None else entry
             status = "OPEN"
         pnl_pct = exitp / entry - 1.0
+        ks = kelly_stakes.get(idx)
+        kfrac = ks["frac"] if ks else 0.0
+        kstake = ks["stake"] if ks else 0.0
         rows.append({
             "q": t.get("q", ""), "ed": t["ed"], "xd": t["xd"],
             "entry": round(entry, 3), "exit": round(exitp, 3), "status": status,
             "pnl_pct": round(pnl_pct * 100, 1), "pnl10": round(10 * pnl_pct, 2),
+            "kfrac": round(kfrac * 100, 1), "kstake": round(kstake, 2),
+            "kpnl": round(kstake * pnl_pct, 2),
         })
     rows.sort(key=lambda r: r["xd"] or r["ed"] or "", reverse=True)
     return rows
@@ -447,7 +487,7 @@ def build(fetch_marks=True):
         k, ser = kpis_for(trades, label, sid, marks)
         strategies.append(k)
         if k["n"] or k["open"]:
-            ser["positions"] = build_positions(trades)
+            ser["positions"] = build_positions(trades, ser.pop("kelly_stakes", {}))
             ser["assess"] = assess_strategy(trades, label)
             series[sid] = ser
             active_ser.append((k, ser))
@@ -684,7 +724,7 @@ table.postable td:nth-child(2){{min-width:220px;color:var(--ink)}}
   <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small {_sc(cm['mtm'])}">{signed(cm['mtm'])}</div></div>
   <div class="cell"><div class="l">Peak deployed <span class="tag">≤100% = no leverage</span></div><div class="v small">{cm['peakdep']*100:.0f}%</div></div>
 </div>
-<div class="note">Realistic <b>hourly-marked</b>, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); entries/exits execute on their recorded date, but open positions are marked to their real <b>intraday</b> price between decisions for a smooth curve. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample): every trade is staked only from the edge known from trades settled <i>before</i> it — no bet until ≥10 prior settles, no lookahead. The % shown is the rate recommended now; 0 = no proven edge → don't bet (capped 50%).</div>
+<div class="note">Realistic <b>hourly-marked</b>, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); entries/exits execute on their recorded date, but open positions are marked to their real <b>intraday</b> price between decisions for a smooth curve. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample) and <b>event-clustered</b>: every trade is staked from the edge known from trades settled <i>before</i> it, averaged one observation per independent settlement day — not per trade, so correlated same-event trades (e.g. several props on one match) can't masquerade as independent evidence. No bet until ≥5 prior independent event-days, no lookahead. The % shown is the rate recommended now; 0 = no proven edge yet → don't bet (capped 50%).</div>
 
 <div class="section-h">Equity curve — $1,000 per strategy · combined = sum of sleeves · hourly marks</div>
 <div id="chartbtns">{btns}</div>
@@ -713,10 +753,10 @@ table.postable td:nth-child(2){{min-width:220px;color:var(--ink)}}
     <svg id="chart2" viewBox="0 0 960 340" width="100%" height="340" preserveAspectRatio="xMidYMid meet"></svg>
   </div>
 
-  <div class="section-h">Positions — per-trade PnL</div>
+  <div class="section-h">Positions — per-trade PnL, flat $10 vs the walk-forward Kelly stake actually chosen</div>
   <div class="postable-wrap">
     <table class="postable" id="posTable">
-      <thead><tr><th>Date</th><th>Question</th><th>Entry</th><th>Exit</th><th>Status</th><th>PnL %</th><th>PnL ($10 stake)</th></tr></thead>
+      <thead><tr><th>Date</th><th>Question</th><th>Entry</th><th>Exit</th><th>Status</th><th>PnL %</th><th>Flat $10 PnL</th><th>Kelly %</th><th>Kelly stake</th><th>Kelly PnL</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -771,12 +811,17 @@ function renderStrategy(sid){{
   tbody.innerHTML = rows.length ? rows.map(p=>{{
     const scls = p.status==='WON'?'pos':(p.status==='LOST'?'neg':'');
     const pcls = p.pnl_pct>=0?'pos':'neg';
+    const kbet = p.kstake>0;
+    const kcls = kbet ? (p.kpnl>=0?'pos':'neg') : '';
     return `<tr><td>${{p.xd||p.ed||''}}</td><td>${{escapeHtml(p.q)}}</td>`+
       `<td>${{(p.entry*100).toFixed(1)}}¢</td><td>${{(p.exit*100).toFixed(1)}}¢</td>`+
       `<td class="${{scls}}">${{p.status}}</td>`+
       `<td class="${{pcls}}">${{p.pnl_pct>=0?'+':''}}${{p.pnl_pct}}%</td>`+
-      `<td class="${{pcls}}">${{p.pnl10>=0?'+':''}}$${{p.pnl10.toFixed(2)}}</td></tr>`;
-  }}).join('') : '<tr><td colspan="7" style="color:var(--mut)">No positions</td></tr>';
+      `<td class="${{pcls}}">${{p.pnl10>=0?'+':''}}$${{p.pnl10.toFixed(2)}}</td>`+
+      `<td>${{kbet?p.kfrac.toFixed(1)+'%':'—'}}</td>`+
+      `<td>${{kbet?'$'+p.kstake.toFixed(2):'—'}}</td>`+
+      `<td class="${{kcls}}">${{kbet?(p.kpnl>=0?'+':'')+'$'+p.kpnl.toFixed(2):'—'}}</td></tr>`;
+  }}).join('') : '<tr><td colspan="10" style="color:var(--mut)">No positions</td></tr>';
 }}
 const stratSelect=document.getElementById('stratSelect');
 if(stratSelect){{
