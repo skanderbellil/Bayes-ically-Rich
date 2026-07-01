@@ -4,7 +4,7 @@ Maintains a CSV ledger at ``data/paper_trade/macro_positions.csv``. Each row
 is one macro multi-outcome field: the identified leader, its entry price when
 first observed, current price, and resolution outcome once settled.
 
-The tracker is designed to run as a **daily cron** (GitHub Actions) — it is
+The tracker is designed to run as an **hourly cron** (GitHub Actions) — it is
 purely additive/idempotent: new open fields are appended, resolved fields are
 marked closed, nothing is ever deleted.
 
@@ -16,7 +16,7 @@ leader_market  : market id of the field leader (highest mean price when entered)
 leader_question: the question text
 entry_date     : date the position was first logged (YYYY-MM-DD)
 entry_price    : implied probability of the leader at entry
-current_price  : latest mid-price (updated each daily run)
+current_price  : latest mid-price (updated each hourly run)
 status         : open | won | lost
 exit_date      : date of resolution (blank while open)
 outcome        : 1.0 won / 0.0 lost / blank while open
@@ -220,7 +220,7 @@ def save_ledger(df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 def update_ledger(bet_fraction: float = 0.10) -> pd.DataFrame:
-    """Run one daily update cycle: find new positions, refresh prices, mark resolutions.
+    """Run one hourly update cycle: find new positions, refresh prices, mark resolutions.
 
     Returns the updated ledger DataFrame.
     """

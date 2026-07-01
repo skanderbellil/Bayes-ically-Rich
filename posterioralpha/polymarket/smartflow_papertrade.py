@@ -2,17 +2,17 @@
 
 The live, out-of-sample analog of the `ORDER_FLOW` / `PAYUP_FOLLOW` studies, and
 the honest test of their one open question — *does the gross edge survive real
-spread?* Each day it asks: which **currently-open** outcome tokens have several
+spread?* Each run it asks: which **currently-open** outcome tokens have several
 **non-market-maker leaderboard wallets** recently buying them (consensus
 breadth)? Those become new paper longs — and crucially each position is entered
 at the **live CLOB ask**, not the mid, so the bid-ask spread the backtest could
 only proxy is captured for real. Positions are held to resolution and marked
-daily.
+hourly.
 
 It mirrors ``papertrade.py`` (macro buy-leader): one idempotent CSV ledger at
 ``data/paper_trade/smart_flow_positions.csv``, additive — new consensus tokens are
-appended, resolved ones marked closed, nothing deleted — designed to run as a
-daily GitHub Actions cron.
+appended, resolved ones marked closed, nothing deleted — designed to run as an
+hourly GitHub Actions cron.
 
 State columns
 -------------
@@ -322,7 +322,7 @@ def update_ledger(
     top_n: int = 10,
     state_file: Path = STATE_FILE,
 ) -> pd.DataFrame:
-    """One daily cycle: append new consensus longs, refresh prices, mark resolutions.
+    """One hourly cycle: append new consensus longs, refresh prices, mark resolutions.
 
     Parameters
     ----------

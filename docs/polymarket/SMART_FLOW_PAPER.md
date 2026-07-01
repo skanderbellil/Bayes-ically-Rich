@@ -27,7 +27,7 @@ python experiments/run_smart_flow_paper_update.py --dry-run  # scan only, no wri
 
 Idempotent on the token id (like the macro tracker): new consensus tokens are
 appended, resolved ones marked closed, nothing deleted. Runs as a daily GitHub
-Actions cron (`.github/workflows/smart_flow_paper.yml`), committing the ledger
+Actions cron (`.github/workflows/paper_trade.yml`), committing the ledger
 back to `data/paper_trade/smart_flow_positions.csv`.
 
 ## Why this is the right forward test

@@ -31,39 +31,57 @@ posterioralpha/                # the framework package
 │   ├── macro.py               #   FRED (keyed, .env): net liquidity + curated macro panel
 │   ├── market.py              #   live download + S&P 500 universe (yfinance)
 │   ├── synthetic.py           #   factor-model synthetic universe expansion
+│   ├── factors.py             #   free factor datasets: Fama-French, JKP, OpenAP (Chen-Zimmermann) builders
 │   └── loaders.py             #   robust loaders for bundled datasets
 ├── research/                  # ── Stage 2: STRATEGY RESEARCH ──
 │   ├── bayesian.py            #   moments, λ via Mahalanobis, posterior blend, optimisers
 │   ├── amr.py                 #   AMR/CVaR/HRP optimisers, Ω-ratio λ, vol-targeting overlay
 │   ├── gamma.py               #   dealer gamma exposure (GEX): CBOE/yfinance chains, zero-gamma flip, GEX series
-│   └── regimes.py             #   RegimeHMM (2-state), BOCPD, HMM3 (3-state)
+│   ├── regimes.py             #   RegimeHMM (2-state), BOCPD, HMM3 (3-state)
+│   ├── hurst.py               #   Hurst exponent (R/S) trend-persistence primitives
+│   ├── intramonth.py          #   Nathan-Suominen-Tasa intramonth momentum window primitives
+│   ├── overlay.py             #   liquidity × VIX-TS × credit fit-free macro risk-overlay vote
+│   └── breadth.py             #   Fundamental Law of Active Management (SR = IC·√breadth) diagnostics
 ├── backtest/                  # ── Stage 3: BACKTEST ENGINES ──
 │   ├── bayesian.py            #   monthly-rebalanced engine + BacktestResult
-│   └── amr.py                 #   weekly-rebalanced engine + AMRResult + sensitivity sweep
+│   ├── amr.py                 #   weekly-rebalanced engine + AMRResult + sensitivity sweep
+│   ├── market_neutral.py      #   beta-hedged residual mean-reversion (pure-alpha sleeve)
+│   └── alpaca_costs.py        #   Alpaca retail-broker cost model for deployability stress-tests
 ├── validation/                # ── Stage 4: VALIDATION ──
 │   ├── metrics.py             #   CAGR, Sharpe, Sortino, Max DD, Calmar, α/β/IR
-│   └── plots.py               #   dashboards, multi-seed bars, λ heatmap
+│   ├── plots.py               #   dashboards, multi-seed bars, λ heatmap
+│   └── robustness.py          #   rebalance-timing-luck dispersion + other beyond-point-metric checks
 ├── pead/                      # ── PEAD strategy module (spans all 4 stages) ──
-│   ├── universe.py·fetch.py   #   data:     equity universe + earnings/price fetch
+│   ├── universe.py·fetch.py·paths.py         #   data: equity universe + earnings/price fetch + repo paths
 │   ├── signals.py·momentum.py·bayesvol.py   # research: SUE, momentum, Bayes vol
 │   ├── walk_forward.py·backtest.py·corrected.py·costs.py  # backtest engines
 │   └── fama_macbeth.py·research_utils.py     # validation: IC tests + metrics/plots
+├── polymarket/                # ── Polymarket prediction-market module (spans all 4 stages) ──
+│   ├── fetch.py·paths.py·categorize.py       #   data: Gamma+CLOB live access, topic tagging, repo paths
+│   ├── signals.py·volatility.py·behavior.py·traders.py     # research: log-odds signals, smart-money primitives
+│   ├── backtest.py·events.py·trades.py·flow.py·tradequality.py·smartmoney.py·fieldshape.py·crossoutcome.py·efficiency.py·weather.py  # backtest engines per study
+│   └── papertrade.py·smartflow_papertrade.py·dip_confirm_yes.py·midprice_yes.py·booklog.py  # forward paper-trade ledgers (hourly Actions cron)
 ├── council/                   # ── blinded period-council backtest (spans stages 2–4) ──
 │   ├── blinding.py            #   no-dates/no-tickers/no-levels period contexts + mirror copies
 │   ├── specialists.py         #   domain analysts (rates/credit/vol/dollar/liquidity/trend)
 │   ├── llm.py                 #   Claude-backed specialists (structured outputs + Batches API)
-│   └── council.py             #   walk-forward engine + solo attribution + mirror leakage audit
+│   ├── council.py             #   walk-forward engine + solo attribution + mirror leakage audit
+│   ├── multiasset.py          #   council risk dial allocated across an ETF basket
+│   └── oracle.py              #   OracleSpecialists — simulated lookahead for auditing the mirror audit
 └── mining/                    # ── automated alpha mining (spans stages 2–4) ──
     ├── signals.py             #   cross-sectional alpha families (incl. BOCPD/macro-gated)
+    ├── ic.py                  #   pre-backtest IC lab (Grinold & Kahn) — does a score contain information at all
     ├── evaluation.py          #   lagged, cost-aware dollar-neutral L/S construction
     ├── validation.py          #   randomized gauntlet: random purged windows,
     │                          #   block bootstrap, permutation test, Deflated SR
     ├── miner.py               #   evolutionary search loop + holdout leaderboard
+    ├── pod.py                 #   walk-forward quant-pod simulator — hire/fire sleeves with a live book
     └── timing.py              #   timing-dial mining on one underlying (null = buy & hold)
 
 experiments/                   # reproducible studies that wire the stages together
 datasets/                      # bundled price data (250-ETF + 500-equity liquid universes + info, 5 ETFs, ~100 S&P 500)
 docs/pead/                     # PEAD research write-ups & headline results
+docs/polymarket/               # Polymarket research write-ups & headline results
 results/                       # generated plots & CSVs (gitignored)
 ```
 
@@ -374,7 +392,7 @@ edge survives only at sub-1¢ execution, i.e. a liquidity-restricted book on hea
 every open outcome token several non-MM leaderboard wallets have recently bought (consensus breadth),
 **entering at the live CLOB ask** so the real spread — the thing that made the backtest
 execution-bound — is captured, not assumed. Hold-to-resolution, idempotent CSV at
-`data/paper_trade/smart_flow_positions.csv`, daily GitHub-Actions cron. The honest, survivorship-free
+`data/paper_trade/smart_flow_positions.csv`, hourly GitHub-Actions cron. The honest, survivorship-free
 test of whether consensus buys actually resolve right and whether the gross edge clears real
 execution cost (`docs/polymarket/SMART_FLOW_PAPER.md`).
 
