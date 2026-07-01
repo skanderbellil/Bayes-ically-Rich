@@ -222,7 +222,8 @@ def main():
         except Exception:
             outcome, mid = None, None
         if mid is not None:
-            ledger.at[i, "current_price"] = round(mid, 4)
+            # ledger is read with dtype=str — pandas 3 str columns reject floats
+            ledger.at[i, "current_price"] = str(round(mid, 4))
         if outcome is None and mid is not None:
             outcome = 1.0 if mid >= 0.99 else (0.0 if mid <= 0.01 else None)
         if outcome is not None:
@@ -233,8 +234,8 @@ def main():
                 row_frac = args.fraction
             ledger.at[i, "status"] = "won" if outcome == 1.0 else "lost"
             ledger.at[i, "exit_date"] = today
-            ledger.at[i, "outcome"] = outcome
-            ledger.at[i, "pnl"] = round((outcome / entry - 1.0) * row_frac, 4)
+            ledger.at[i, "outcome"] = str(outcome)
+            ledger.at[i, "pnl"] = str(round((outcome / entry - 1.0) * row_frac, 4))
             resolved += 1
 
     done = ledger[ledger["status"].isin(["won", "lost"])].copy()
