@@ -62,6 +62,11 @@ jobs:
       - name: Bankroll simulation (real $1k returns)
         run: python experiments/run_bankroll_sim.py --capital 1000 --stake 0.10
 
+      - name: Champion stack (equity forward ledger)
+        run: python experiments/run_champion_paper_update.py
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+
       - name: Generate dashboard
         run: python experiments/generate_dashboard.py
 
@@ -84,6 +89,7 @@ jobs:
             data/paper_trade/macro_positions.csv \
             data/paper_trade/regime_positions.csv \
             data/paper_trade/validated_regime_positions.csv \
+            data/paper_trade/champion_positions.csv \
             data/polymarket_calibration_snapshot/validated_domains.json \
             data/paper_trade/bankroll_summary.csv \
             data/paper_trade/book_snapshots.csv.gz \

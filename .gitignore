@@ -15,6 +15,7 @@ results/
 !data/polymarket_calibration_snapshot/*.csv
 !data/polymarket_calibration_snapshot/*.png
 # Paper-trade ledgers are tracked (the forward out-of-sample record)
+!data/paper_trade/champion_positions.csv
 !data/paper_trade/macro_positions.csv
 !data/paper_trade/regime_positions.csv
 !data/paper_trade/validated_regime_positions.csv
