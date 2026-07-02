@@ -66,6 +66,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-5s  %(
 logger = logging.getLogger(__name__)
 
 RESULTS = _bootstrap.ROOT / "results" / "polymarket"
+# committed snapshot (cf. data/polymarket_smart_money_snapshot): the per-obs
+# signal panel + summary survive fresh clones, unlike results/ and data/raw/
+SNAPSHOT = _bootstrap.ROOT / "data" / "polymarket_combo_snapshot"
 
 BANDS = [(0.10, 0.90), (0.10, 0.30), (0.30, 0.70), (0.70, 0.90)]
 
@@ -314,6 +317,9 @@ def main() -> None:
 
     out_csv = RESULTS / "midprice_smartflow_combo.csv"
     res.to_csv(out_csv, index=False)
+    SNAPSHOT.mkdir(parents=True, exist_ok=True)
+    res.to_csv(SNAPSHOT / "combo_summary.csv", index=False)
+    kept.to_csv(SNAPSHOT / "combo_obs_panel.csv", index=False)   # per-obs signal panel
 
     # equity curves (additive $1-per-trade PnL, time-ordered by resolution)
     fig, ax = plt.subplots(figsize=(11, 5.5))
@@ -328,7 +334,9 @@ def main() -> None:
     fig.autofmt_xdate(); fig.tight_layout()
     out_png = RESULTS / "midprice_smartflow_combo.png"
     fig.savefig(out_png, dpi=110)
-    print(f"\n  results → {out_csv}\n  plot    → {out_png}")
+    fig.savefig(SNAPSHOT / "combo_equity.png", dpi=110)
+    print(f"\n  results  → {out_csv}\n  plot     → {out_png}"
+          f"\n  snapshot → {SNAPSHOT} (committed)")
 
 
 if __name__ == "__main__":
