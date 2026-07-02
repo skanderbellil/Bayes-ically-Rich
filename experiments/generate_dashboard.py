@@ -479,10 +479,23 @@ def _combo_band(df):
     return (mid >= 0.30) & (mid < 0.70)
 
 
+def _combo_cell(df):
+    """The full pre-registered cell (band AND <=3 days to resolution at entry).
+    Requires the end_date column the tracker records from 2026-07-02 — legacy
+    rows without it are excluded, so this view is a clean forward score."""
+    band = _combo_band(df)
+    end = pd.to_datetime(df.get("end_date"), errors="coerce")
+    ent = pd.to_datetime(df.get("entry_date"), errors="coerce")
+    dtr = (end - ent).dt.days
+    return band & dtr.notna() & (dtr <= 3)
+
+
 # Derived filter views: (source file, dashboard id, label, row filter)
 DERIVED = [
     ("smart_flow_positions.csv", "smart_flow_combo",
      "Smart Flow ∩ band .30–.70", _combo_band),
+    ("smart_flow_positions.csv", "smart_flow_combo3d",
+     "Combo cell (band ∩ ≤3d)", _combo_cell),
 ]
 
 

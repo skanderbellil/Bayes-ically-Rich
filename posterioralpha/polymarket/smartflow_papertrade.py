@@ -42,6 +42,8 @@ import pandas as pd
 
 from .categorize import market_category
 from .fetch import (
+    GAMMA_URL,
+    _get,
     fetch_market_resolution,
     fetch_order_book,
     fetch_token_history_raw,
@@ -72,7 +74,7 @@ def kelly_fraction(
     raw = base_fraction * (n_smart_buyers / ref_buyers)
     return round(min(raw, base_fraction * cap_multiple), 6)
 
-_COLS = ["token", "condition_id", "question", "domain", "entry_date",
+_COLS = ["token", "condition_id", "question", "domain", "end_date", "entry_date",
          "n_smart_buyers", "bet_fraction",
          "entry_mid", "entry_ask", "spread", "current_price",
          "status", "exit_date", "outcome", "pnl"]
@@ -225,11 +227,18 @@ def scan_smart_flow_entries(
         mid, ask = feat["mid"], feat["best_ask"]
         if not (min_price <= mid <= max_price):
             continue
+        # market end date (Gamma) — lets the dashboard score horizon-conditioned
+        # views of this forward record (e.g. the pre-registered <=3d combo cell)
+        end_date = ""
+        m = _get(GAMMA_URL, {"clob_token_ids": tok})
+        if isinstance(m, list) and m:
+            end_date = str(m[0].get("endDate") or "")[:10]
         candidates.append({
             "token": tok,
             "condition_id": e["condition_id"],
             "question": e["question"],
             "domain": market_category(e["question"] or ""),
+            "end_date": end_date,
             "n_smart_buyers": n,
             "entry_mid": round(mid, 4),
             "entry_ask": round(ask, 4),
@@ -382,7 +391,8 @@ def update_ledger(
                     (c["question"] or "")[:40], n, c["entry_mid"], c["entry_ask"], frac)
         new_rows.append({
             "token": c["token"], "condition_id": c["condition_id"],
-            "question": c["question"], "domain": c["domain"], "entry_date": today,
+            "question": c["question"], "domain": c["domain"],
+            "end_date": c.get("end_date", ""), "entry_date": today,
             "n_smart_buyers": str(n), "bet_fraction": str(frac),
             "entry_mid": str(c["entry_mid"]), "entry_ask": str(c["entry_ask"]),
             "spread": str(c["spread"]), "current_price": str(c["entry_mid"]),

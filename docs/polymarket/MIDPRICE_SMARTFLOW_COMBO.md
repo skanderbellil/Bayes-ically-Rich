@@ -61,24 +61,29 @@ smart bulls), `flow_only` (consensus outside the band).
 * One 90-day regime; entries at daily close + 2¢ assumed spread (the
   `book_snapshots.csv.gz` accumulation will make this measurable).
 
-## Bankroll terms (10% of equity per trade, the dashboard convention)
+## Bankroll terms (the dashboard's exact convention)
 
-Daily bankroll series over the 83-day sample (2026-04-11 → 2026-07-02),
-trades settled on resolution date, Sharpe annualised √365 on daily returns
-including flat days. **CAGR is NOT annualised** — extrapolating 83 days is
-meaningless; total return over the sample is the honest number.
+$1,000 start, **no leverage**: a position ties up cash entry → resolution,
+stake = min(10%·equity, cash), skipped when fully committed — the same cash
+sim the dashboard runs (positions marked at cost between entry and
+resolution here; the dashboard marks hourly). Daily-series Sharpe annualised
+√365. 83-day sample (2026-04-11 → 2026-07-02). **CAGR is NOT annualised** —
+extrapolating 83 days is meaningless; total return is the honest number.
 
-| book (3d horizon, band [0.30,0.70)) | n | win | total ret | ann. Sharpe | maxDD |
-|---|---|---|---|---|---|
-| midprice (all in-band)   | 105 | 53% | **−37%** | +0.02 | −69% |
-| **combo ≥1 bull**        | 35  | 69% | **+88%** | **+2.97** | −33% |
-| anti (0 bulls)           | 59  | 47% | **−48%** | −1.05 | −70% |
-| 7d wide-band midprice (context) | 125 | 55% | +466% | +3.43 | −53% |
+| book (3d horizon, band [0.30,0.70)) | n | win | total ret | ann. Sharpe | maxDD | flat-$10 |
+|---|---|---|---|---|---|---|
+| midprice (all in-band)   | 105 | 53% | **−34%** | +0.05 | −71% | +0.3% |
+| **combo ≥1 bull**        | 35  | 69% | **+74%** | **+3.60** | −36% | +7.7% |
+| anti (0 bulls)           | 59  | 47% | **−45%** | −0.76 | −71% | −3.5% |
+| 7d wide-band midprice (context) | 125 | 55% | +47% | +1.88 | −66% | — |
 
-The wide-band 7d row's huge total is the cheap-band lottery winners at
-compounding stakes — its per-trade clustered CI spans zero; treat the Sharpe
-as variance-hidden, not harvestable. The combo row is the claim under test:
-consensus turned a −37% baseline into +88% at less than half the drawdown.
+The flat-$10 column (fixed $10/trade, no compounding or sizing) is the raw
+per-trade edge — the same statistic the dashboard's "flat" mode reports.
+Note the accounting lesson: an unconstrained 10%/trade sim (allowed to hold
+unlimited concurrent positions — implicit leverage) showed the wide-band
+book at +466%; the honest no-leverage sim cuts it to +47% at −66% DD. The
+combo book barely moves under the constraint (35 short-hold trades rarely
+overlap), which is itself evidence its result is not a sizing artifact.
 Same trials caveat as above — the forward test decides.
 
 The live dashboard now carries a derived **"Smart Flow ∩ band .30–.70"**
