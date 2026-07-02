@@ -28,10 +28,13 @@ Honesty
   exist*) — but every fill is timestamped, so signal timing at each entry is
   causal given the pool. Same caveat as ORDER_FLOW/SPECIALISTS; the paper
   tracker is the survivorship-free version.
-* The trades API returns each wallet's most recent `--max-trades` fills, so
-  pool coverage decays going back in time. Entries are dropped unless at
-  least `--min-coverage` of the pool has fill history spanning the entry
-  (per-month coverage is printed).
+* The trades API caps offset-paging at 3,000 fills (a hyper-active wallet's
+  offset window can span less than a DAY), so fills are fetched by walking
+  BACK IN TIME with the `end` parameter under a per-wallet request budget
+  (`--max-requests`), and the study restricts itself to markets resolved in
+  the last `--days-back` days. Entries are dropped unless >= `--min-visible`
+  pool wallets have fill history spanning the trailing window (per-month
+  visibility is printed).
 * Entry at daily-close price + `--haircut` (no historical book; the new
   `book_snapshots.csv.gz` accumulation will eventually replace the guess).
 * Bootstrap CIs cluster by resolution DATE (same-day resolutions are one
@@ -53,9 +56,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from posterioralpha.polymarket.fetch import fetch_markets, fetch_token_history
+from posterioralpha.polymarket.fetch import _get, fetch_markets, fetch_token_history
+from posterioralpha.polymarket.paths import RAW_DIR
 from posterioralpha.polymarket.smartflow_papertrade import smart_pool
-from posterioralpha.polymarket.traders import fetch_trader_trades
+from posterioralpha.polymarket.traders import ACTIVITY_URL
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-5s  %(message)s",
                     datefmt="%H:%M:%S")
@@ -71,16 +75,63 @@ def price_at(series: pd.Series, when: pd.Timestamp) -> float | None:
     return float(s.iloc[-1]) if not s.empty else None
 
 
-def pool_fills(pool: list[str], max_trades: int, sleep: float) -> pd.DataFrame:
-    """Concatenated timestamped fills of every pool wallet (cached per wallet)."""
+def fetch_wallet_fills_window(wallet: str, start: pd.Timestamp,
+                              max_requests: int = 60, page: int = 500,
+                              sleep: float = 0.12) -> pd.DataFrame:
+    """TRADE fills for one wallet back to `start`, paging by TIME, not offset.
+
+    The data-api hard-caps `offset` at 3000 (hyper-active wallets' offset
+    window can span less than a day), but accepts an `end` timestamp — so we
+    walk backwards: each request asks for the `page` fills before the oldest
+    timestamp seen so far, until we reach `start` or the request budget.
+    Cached per (wallet, start-date) under data/raw/polymarket/traders_window/.
+    """
+    cache_dir = RAW_DIR / "traders_window"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache = cache_dir / f"{wallet.lower()}_{start.date()}.csv"
+    if cache.exists():
+        return pd.read_csv(cache, parse_dates=["timestamp"],
+                           dtype={"asset": str, "conditionId": str, "side": str})
+
+    rows, end_ts = [], None
+    for _ in range(max_requests):
+        params = {"user": wallet.lower(), "type": "TRADE", "limit": page}
+        if end_ts is not None:
+            params["end"] = end_ts
+        batch = _get(ACTIVITY_URL, params)
+        if not isinstance(batch, list) or not batch:
+            break
+        for r in batch:
+            rows.append({"timestamp": int(r.get("timestamp") or 0),
+                         "conditionId": str(r.get("conditionId") or ""),
+                         "asset": str(r.get("asset") or ""),
+                         "side": r.get("side") or "",
+                         "usdcSize": float(r.get("usdcSize") or 0.0)})
+        oldest = min(r["timestamp"] for r in rows)
+        if oldest <= start.timestamp() or len(batch) < page:
+            break
+        end_ts = oldest - 1
+        if sleep:
+            time.sleep(sleep)
+
+    df = pd.DataFrame(rows).drop_duplicates()
+    if not df.empty:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True).dt.tz_localize(None)
+        df = df.sort_values("timestamp").reset_index(drop=True)
+    df.to_csv(cache, index=False)
+    return df
+
+
+def pool_fills(pool: list[str], start: pd.Timestamp, max_requests: int,
+               sleep: float) -> pd.DataFrame:
+    """Concatenated windowed fills of every pool wallet (cached per wallet)."""
     frames = []
     for i, w in enumerate(pool, 1):
-        df = fetch_trader_trades(w, max_trades=max_trades, sleep=sleep)
+        df = fetch_wallet_fills_window(w, start, max_requests=max_requests, sleep=sleep)
         if not df.empty:
-            df = df[["timestamp", "conditionId", "asset", "side", "usdcSize"]].copy()
             df["wallet"] = w
             frames.append(df)
-        if i % 20 == 0:
+        if i % 10 == 0:
             logger.info("  pool fills %d/%d wallets", i, len(pool))
     fills = pd.concat(frames, ignore_index=True)
     fills["signed"] = np.where(fills["side"].str.upper() == "BUY",
@@ -137,15 +188,19 @@ def book_stats(sel: pd.DataFrame, label: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--n-markets", type=int, default=250)
-    ap.add_argument("--min-volume", type=float, default=30_000.0)
+    ap.add_argument("--n-markets", type=int, default=1200,
+                    help="markets scanned by volume; filtered to recent resolutions")
+    ap.add_argument("--min-volume", type=float, default=10_000.0)
+    ap.add_argument("--days-back", type=int, default=90,
+                    help="only markets RESOLVED within the last N days (fill-history reach)")
     ap.add_argument("--horizon", type=int, nargs="+", default=[7, 3])
     ap.add_argument("--window", type=int, default=7, help="trailing flow window (days)")
     ap.add_argument("--min-buyers", type=int, nargs="+", default=[1, 2, 3])
     ap.add_argument("--haircut", type=float, default=0.02)
-    ap.add_argument("--max-trades", type=int, default=4000, help="fills fetched per wallet")
-    ap.add_argument("--min-coverage", type=float, default=0.5,
-                    help="min fraction of pool with fill history spanning an entry")
+    ap.add_argument("--max-requests", type=int, default=60,
+                    help="fill-history request budget per wallet (500 fills each)")
+    ap.add_argument("--min-visible", type=int, default=15,
+                    help="min pool wallets with history spanning an entry")
     ap.add_argument("--sleep", type=float, default=0.1)
     args = ap.parse_args()
 
@@ -156,10 +211,14 @@ def main() -> None:
 ║  does smart net flow rank the mid-price band?                   ║
 ╚════════════════════════════════════════════════════════════════╝""")
 
-    # ── 1. resolved-market universe + price observations ──────────────────
+    # ── 1. recently-resolved universe + price observations ────────────────
+    cutoff = pd.Timestamp.utcnow().tz_localize(None) - pd.Timedelta(days=args.days_back)
     markets = fetch_markets(n_markets=args.n_markets, min_volume=args.min_volume, closed=True)
-    markets = markets[markets["outcome"].isin([0.0, 1.0])].reset_index(drop=True)
-    print(f"  {len(markets)} resolved markets with clean 0/1 outcome")
+    markets = markets[markets["outcome"].isin([0.0, 1.0])].copy()
+    t_close = pd.to_datetime(markets["closed_time"].fillna(markets["end_date"]),
+                             errors="coerce", utc=True, format="mixed").dt.tz_localize(None)
+    markets = markets[t_close >= cutoff].reset_index(drop=True)
+    print(f"  {len(markets)} markets with clean 0/1 outcome resolved since {cutoff.date()}")
 
     recs = []
     for i, m in enumerate(markets.itertuples(index=False), 1):
@@ -182,20 +241,27 @@ def main() -> None:
     obs = pd.DataFrame(recs)
     print(f"  {len(obs)} (market × horizon) observations")
 
-    # ── 2. smart pool + historical fills ──────────────────────────────────
-    pool = smart_pool()
-    fills = pool_fills(pool, args.max_trades, args.sleep)
+    if obs.empty:
+        print("No observations — aborting."); return
 
-    # coverage: a wallet can only signal at t if its (truncated) history spans t
+    # ── 2. smart pool + windowed historical fills ─────────────────────────
+    pool = smart_pool()
+    fills_start = cutoff - pd.Timedelta(days=max(args.horizon) + args.window + 2)
+    fills = pool_fills(pool, fills_start, args.max_requests, args.sleep)
+
+    # visibility: a wallet can signal at t only if its fetched history spans
+    # the whole trailing window (budget-capped wallets fade out going back)
     first_ts = fills.groupby("wallet")["timestamp"].min()
-    def coverage(t: pd.Timestamp) -> float:
-        return float((first_ts <= t - pd.Timedelta(days=args.window)).mean())
-    obs["coverage"] = obs["t_entry"].map(coverage)
-    cov_month = obs.groupby(obs["t_entry"].dt.to_period("M"))["coverage"].mean()
-    print("\n  pool fill-history coverage by entry month (fraction of pool visible):")
-    print("  " + "  ".join(f"{m}:{c:.2f}" for m, c in cov_month.items()))
-    kept = obs[obs["coverage"] >= args.min_coverage].copy()
-    print(f"  {len(kept)}/{len(obs)} observations kept at coverage ≥ {args.min_coverage:.0%}\n")
+    def n_visible(t: pd.Timestamp) -> int:
+        return int((first_ts <= t - pd.Timedelta(days=args.window)).sum())
+    obs["n_visible"] = obs["t_entry"].map(n_visible)
+    cov_month = obs.groupby(obs["t_entry"].dt.to_period("M"))["n_visible"].mean()
+    print("\n  mean pool wallets visible, by entry month:")
+    print("  " + "  ".join(f"{m}:{c:.0f}" for m, c in cov_month.items()))
+    kept = obs[obs["n_visible"] >= args.min_visible].copy()
+    print(f"  {len(kept)}/{len(obs)} observations kept at ≥{args.min_visible} visible wallets\n")
+    if kept.empty:
+        print("No observations survive the visibility gate — aborting."); return
 
     # ── 3. flow signal at each entry ──────────────────────────────────────
     bulls, bears = [], []
@@ -233,6 +299,8 @@ def main() -> None:
                     curves[f"{d}d combo≥{nb}"] = combo
 
     res = pd.DataFrame(all_rows)
+    if res.empty:
+        print("No books had any trades — aborting."); return
     res = res[res["n"] > 0]
     for d in args.horizon:
         print(f"\n{'═'*100}\n  horizon = {d}d before resolution   "
