@@ -577,10 +577,12 @@ def _sc(v):
 
 def kpi_card(s):
     c10, cf = _sc(s["ret10"]), _sc(s["retflat"])
+    derived_tag = (" · <b>filter view — not counted in COMBINED</b>"
+                   if s.get("derived") else "")
     return f"""
     <div class="card">
       <div class="card-h">{s['label']}</div>
-      <div class="card-sub">{s['n']} trades · win {s['win']*100:.0f}% · open {s['open']}</div>
+      <div class="card-sub">{s['n']} trades · win {s['win']*100:.0f}% · open {s['open']}{derived_tag}</div>
       <div class="kgrid">
         <div class="k"><div class="kl">Kelly {s['kelly']*100:.0f}%</div><div class="kv {c10}">{fmt_money(s['fin10'])}</div><div class="kd {c10}">{s['ret10']*100:+.1f}%</div></div>
         <div class="k"><div class="kl">flat $10</div><div class="kv {cf}">{fmt_money(s['finflat'])}</div><div class="kd {cf}">{s['retflat']*100:+.1f}%</div></div>
@@ -590,8 +592,21 @@ def kpi_card(s):
         <div><span class="kl">Unrealized</span><span class="{_sc(s['unreal'])}">{signed(s['unreal'])}</span></div>
         <div><span class="kl">MTM</span><span class="{_sc(s['mtm'])}">{signed(s['mtm'])}</span></div>
       </div>
-      <div class="card-f">max DD {s['dd10']*100:.0f}% · peak {s['peakdep']*100:.0f}% deployed · max {s['maxconc']} open{cap_note(s)}</div>
+      <div class="card-f">{deploy_note(s)}</div>
     </div>"""
+
+
+def deploy_note(s):
+    """Footer line for the Kelly (10%-of-equity) sim. When walk-forward Kelly
+    staked $0 on every trade (no proven edge, or not enough independent
+    settled events yet), say so — 'max DD 0% · peak 0% deployed' reads like a
+    rendering bug otherwise."""
+    if s.get("n") and not s.get("maxconc"):
+        return ("Kelly never deployed — walk-forward edge ≤ 0 or &lt; 5 independent "
+                "settled events, so the correct stake was $0 on every trade "
+                "(flat $10 column shows the raw edge)")
+    return (f"max DD {s['dd10']*100:.0f}% · peak {s['peakdep']*100:.0f}% deployed "
+            f"· max {s['maxconc']} open{cap_note(s)}")
 
 
 def cap_note(s):
@@ -764,7 +779,7 @@ table.postable td:nth-child(2){{min-width:220px;color:var(--ink)}}
   <div class="cell"><div class="l">MTM <span class="tag">real+unreal</span></div><div class="v small {_sc(cm['mtm'])}">{signed(cm['mtm'])}</div></div>
   <div class="cell"><div class="l">Peak deployed <span class="tag">≤100% = no leverage</span></div><div class="v small">{cm['peakdep']*100:.0f}%</div></div>
 </div>
-<div class="note">Realistic <b>hourly-marked</b>, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} sleeves</b> (${cm['cap']//1000}k total). Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); entries/exits execute on their recorded date, but open positions are marked to their real <b>intraday</b> price between decisions for a smooth curve. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample) and <b>event-clustered</b>: every trade is staked from the edge known from trades settled <i>before</i> it, averaged one observation per independent settlement day — not per trade, so correlated same-event trades (e.g. several props on one match) can't masquerade as independent evidence. No bet until ≥5 prior independent event-days, no lookahead. The % shown is the rate recommended now; 0 = no proven edge yet → don't bet (capped 50%).</div>
+<div class="note">Realistic <b>hourly-marked</b>, <b>no-leverage</b> cash sim: each strategy trades its <b>own $1,000</b> and the combined is the <b>sum of the {cm['nsleeves']} base sleeves</b> (${cm['cap']//1000}k total) — <b>filter views</b> (e.g. Smart Flow ∩ band) re-slice a ledger already counted and are <b>excluded</b>, so cards don't sum to the total. Positions tie up cash entry→exit (downsized/skipped when committed, never on margin); entries/exits execute on their recorded date, but open positions are marked to their real <b>intraday</b> price between decisions for a smooth curve. <b>Kelly %</b> is <b>walk-forward</b> (out-of-sample) and <b>event-clustered</b>: every trade is staked from the edge known from trades settled <i>before</i> it, averaged one observation per independent settlement day — not per trade, so correlated same-event trades (e.g. several props on one match) can't masquerade as independent evidence. No bet until ≥5 prior independent event-days, no lookahead. The % shown is the rate recommended now; 0 = no proven edge yet → don't bet (capped 50%).</div>
 
 <div class="section-h">Equity curve — $1,000 per strategy · combined = sum of sleeves · hourly marks</div>
 <div id="chartbtns">{btns}</div>
