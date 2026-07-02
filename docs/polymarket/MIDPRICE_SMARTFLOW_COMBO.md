@@ -61,6 +61,33 @@ smart bulls), `flow_only` (consensus outside the band).
 * One 90-day regime; entries at daily close + 2¢ assumed spread (the
   `book_snapshots.csv.gz` accumulation will make this measurable).
 
+## Bankroll terms (10% of equity per trade, the dashboard convention)
+
+Daily bankroll series over the 83-day sample (2026-04-11 → 2026-07-02),
+trades settled on resolution date, Sharpe annualised √365 on daily returns
+including flat days. **CAGR is NOT annualised** — extrapolating 83 days is
+meaningless; total return over the sample is the honest number.
+
+| book (3d horizon, band [0.30,0.70)) | n | win | total ret | ann. Sharpe | maxDD |
+|---|---|---|---|---|---|
+| midprice (all in-band)   | 105 | 53% | **−37%** | +0.02 | −69% |
+| **combo ≥1 bull**        | 35  | 69% | **+88%** | **+2.97** | −33% |
+| anti (0 bulls)           | 59  | 47% | **−48%** | −1.05 | −70% |
+| 7d wide-band midprice (context) | 125 | 55% | +466% | +3.43 | −53% |
+
+The wide-band 7d row's huge total is the cheap-band lottery winners at
+compounding stakes — its per-trade clustered CI spans zero; treat the Sharpe
+as variance-hidden, not harvestable. The combo row is the claim under test:
+consensus turned a −37% baseline into +88% at less than half the drawdown.
+Same trials caveat as above — the forward test decides.
+
+The live dashboard now carries a derived **"Smart Flow ∩ band .30–.70"**
+sleeve (filter view of the smart-flow ledger — band + tail-price exclusion;
+not added to COMBINED, which would double-count). Its forward KPIs score the
+pre-registered criterion below; the ≤3-days-to-resolution leg isn't
+recoverable for the ledger's open rows (no end_date column), so the sleeve is
+band-only — strictly more conservative than the backtested cell.
+
 ## Pre-registered confirmation (do not tune)
 
 Forward criterion, decided 2026-07-02 before any new data: on markets

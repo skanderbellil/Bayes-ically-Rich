@@ -55,14 +55,18 @@ def _num(s):
     return pd.to_numeric(s, errors="coerce")
 
 
-def load_ledger(path: Path, entry_col: str, q_col: str | None = None):
+def load_ledger(path: Path, entry_col: str, q_col: str | None = None, row_filter=None):
     """Return a list of trades with real entry/exit dates:
     {ed, xd, entry, outcome, current, resolved, q}. Resolved trades have xd+outcome;
     open trades have current (marked at current_price, held to the end). `q` is the
-    market question, truncated, for the per-position detail table."""
+    market question, truncated, for the per-position detail table.
+    `row_filter(df) -> bool mask` optionally restricts the ledger rows (used for
+    derived filter views, e.g. the combo band on the smart-flow book)."""
     if not path.exists():
         return []
     df = pd.read_csv(path)
+    if row_filter is not None:
+        df = df[row_filter(df)].reset_index(drop=True)
     if entry_col not in df.columns:
         entry_col = "entry_ask" if "entry_ask" in df.columns else ("entry_price" if "entry_price" in df.columns else None)
     if entry_col is None:
@@ -467,6 +471,21 @@ def _sum_curves(sers, key, cap_each=CAP0):
     return [[d.strftime("%Y-%m-%d"), round(float(v), 2)] for d, v in total.items()]
 
 
+def _combo_band(df):
+    """The combo-backtest filter (MIDPRICE_SMARTFLOW_COMBO.md): entry mid in the
+    [0.30, 0.70) band — which also excludes the tail prices (<0.10 / >=0.90)
+    where smart-pool consensus backtested strongly NEGATIVE."""
+    mid = _num(df.get("entry_mid", df.get("entry_ask")))
+    return (mid >= 0.30) & (mid < 0.70)
+
+
+# Derived filter views: (source file, dashboard id, label, row filter)
+DERIVED = [
+    ("smart_flow_positions.csv", "smart_flow_combo",
+     "Smart Flow ∩ band .30–.70", _combo_band),
+]
+
+
 def build(fetch_marks=True):
     per_ledger = []
     all_trades = []
@@ -474,6 +493,11 @@ def build(fetch_marks=True):
         trades = load_ledger(DATA / fname, ecol, qcol)
         per_ledger.append((fname, label, trades))
         all_trades.extend(trades)
+    # derived views re-slice an existing ledger — their trades are NOT added to
+    # all_trades/COMBINED (that would double-count the underlying positions)
+    for fname, sid, label, filt in DERIVED:
+        trades = load_ledger(DATA / fname, "entry_ask", "question", row_filter=filt)
+        per_ledger.append((f"{sid}_positions.csv", label, trades))
 
     # cache-once + refresh-open: a token is static only if ALL its trades are resolved
     token_resolved = {}
@@ -481,16 +505,19 @@ def build(fetch_marks=True):
         token_resolved[t["token"]] = token_resolved.get(t["token"], True) and t["resolved"]
     marks = update_marks(token_resolved) if fetch_marks else load_marks()
 
+    derived_ids = {sid for _, sid, _, _ in DERIVED}
     strategies, series, active_ser = [], {}, []
     for fname, label, trades in per_ledger:
         sid = fname.replace("_positions.csv", "")
         k, ser = kpis_for(trades, label, sid, marks)
+        k["derived"] = sid in derived_ids
         strategies.append(k)
         if k["n"] or k["open"]:
             ser["positions"] = build_positions(trades, ser.pop("kelly_stakes", {}))
             ser["assess"] = assess_strategy(trades, label)
             series[sid] = ser
-            active_ser.append((k, ser))
+            if not k["derived"]:      # filter views re-slice a ledger already
+                active_ser.append((k, ser))   # counted — keep them out of COMBINED
 
     # COMBINED = SUM of independent $1k sleeves (each strategy its own bankroll)
     act = [k for k, _ in active_ser]
