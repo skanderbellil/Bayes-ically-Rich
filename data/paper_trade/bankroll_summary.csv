@@ -1,7 +1,7 @@
 strategy,file,capital,stake_frac,final_equity,total_return,realized,unrealized,max_dd,trades_taken,trades_skipped,still_open,edge_tstat,n_resolved
-Smart Flow,smart_flow_positions.csv,1000.0,0.1,475.36,-0.5246,-250.74,-273.9,-0.4057,23,768,9,0.0937,729
-Smart Flow (ROI),smart_flow_roi_positions.csv,1000.0,0.1,876.45,-0.1236,-269.97,146.42,-0.27,18,106,8,-0.2738,113
-Mid-priced YES,midprice_yes_positions.csv,1000.0,0.1,1158.8,0.1588,-75.06,233.86,-0.5108,20,89,6,0.4952,100
+Smart Flow,smart_flow_positions.csv,1000.0,0.1,475.36,-0.5246,-250.74,-273.9,-0.4057,23,769,9,0.0294,730
+Smart Flow (ROI),smart_flow_roi_positions.csv,1000.0,0.1,875.94,-0.1241,-269.97,145.92,-0.27,18,108,8,-0.2738,113
+Mid-priced YES,midprice_yes_positions.csv,1000.0,0.1,1158.8,0.1588,-75.06,233.86,-0.5108,20,90,6,0.4648,101
 Dip-Confirm YES,dip_confirm_positions.csv,1000.0,0.1,2058.86,1.0589,5.32,1053.55,-0.4195,18,39,9,0.6057,50
 Macro (Fed cuts),macro_positions.csv,1000.0,0.1,1012.79,0.0128,0.0,12.79,0.0,1,0,1,,0
-GLOBAL (equal-weight),,5000.0,0.1,5582.26,0.1165,-590.45,1172.71,,,,,,
+GLOBAL (equal-weight),,5000.0,0.1,5581.76,0.1164,-590.45,1172.21,,,,,,
