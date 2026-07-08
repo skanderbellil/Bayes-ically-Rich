@@ -22,6 +22,10 @@ question       : market question text
 domain         : coarse topic (politics/macro/sports/...)
 entry_date     : date first logged
 n_smart_buyers : distinct non-MM leaderboard wallets that bought it in the window
+buyers         : pipe-separated, sorted list of the buyer wallet addresses at entry
+                 (recorded once at entry, never updated -- lets later analyses
+                 recompute independence-style features under different thresholds
+                 without re-fetching trade history)
 bet_fraction   : position size fraction actually used (after Kelly scaling)
 entry_mid      : CLOB mid at entry
 entry_ask      : CLOB best-ask at entry (what we actually "pay" -- captures spread)
@@ -75,7 +79,7 @@ def kelly_fraction(
     return round(min(raw, base_fraction * cap_multiple), 6)
 
 _COLS = ["token", "condition_id", "question", "domain", "end_date", "entry_date",
-         "n_smart_buyers", "bet_fraction",
+         "n_smart_buyers", "buyers", "bet_fraction",
          "entry_mid", "entry_ask", "spread", "current_price",
          "status", "exit_date", "outcome", "pnl"]
 
@@ -240,6 +244,7 @@ def scan_smart_flow_entries(
             "domain": market_category(e["question"] or ""),
             "end_date": end_date,
             "n_smart_buyers": n,
+            "buyers": "|".join(sorted(e["buyers"])),
             "entry_mid": round(mid, 4),
             "entry_ask": round(ask, 4),
             "spread": round(ask - mid, 4),
@@ -285,6 +290,10 @@ def load_ledger(state_file: Path = STATE_FILE) -> pd.DataFrame:
     if "bet_fraction" not in df.columns:
         # Migrate legacy CSVs: assign flat-10% default so historical PnL is unchanged.
         df.insert(df.columns.get_loc("n_smart_buyers") + 1, "bet_fraction", "0.1")
+    if "buyers" not in df.columns:
+        # Migrate legacy CSVs: buyer identity was never recorded for these rows --
+        # backfill empty rather than guessing (no data was ever fetched for them).
+        df.insert(df.columns.get_loc("n_smart_buyers") + 1, "buyers", "")
     for col in _COLS:
         if col not in df.columns:
             df[col] = ""
@@ -393,7 +402,8 @@ def update_ledger(
             "token": c["token"], "condition_id": c["condition_id"],
             "question": c["question"], "domain": c["domain"],
             "end_date": c.get("end_date", ""), "entry_date": today,
-            "n_smart_buyers": str(n), "bet_fraction": str(frac),
+            "n_smart_buyers": str(n), "buyers": c.get("buyers", ""),
+            "bet_fraction": str(frac),
             "entry_mid": str(c["entry_mid"]), "entry_ask": str(c["entry_ask"]),
             "spread": str(c["spread"]), "current_price": str(c["entry_mid"]),
             "status": "open", "exit_date": "", "outcome": "", "pnl": "",
