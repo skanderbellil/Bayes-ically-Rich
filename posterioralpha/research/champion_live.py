@@ -109,33 +109,66 @@ def _download_prices(period: str = HISTORY_PERIOD) -> pd.DataFrame:
     UUP, QLD (all Close except QQQ_Open), reindexed to the intersection of
     dates where every column has a value (matches the dropna-intersection
     approach in experiments/run_champion_stack.py).
+
+    Yahoo Finance (via yfinance) occasionally rejects or truncates requests
+    from cloud/CI IPs (SSL errors, rate limiting, partial downloads). Those
+    are transient, not config problems, so this retries up to 3 times with
+    exponential backoff (20s, 40s) before giving up, re-raising the final
+    attempt's error.
     """
+    import time
+
     import yfinance as yf
 
-    raw = yf.download(TICKERS, period=period, interval="1d", auto_adjust=False,
-                       progress=False, group_by="ticker", threads=False,
-                       session=_yf_session())
-    if raw is None or raw.empty:
-        raise RuntimeError(f"yfinance returned no data for {TICKERS}")
-    have = set(raw.columns.get_level_values(0))
-    missing = [t for t in TICKERS if t not in have]
-    if missing:
-        raise RuntimeError(f"yfinance download missing tickers: {missing}")
+    min_rows = HMM_WIN + 252
+    attempts = 3
+    backoffs = [20, 40]
 
-    price = pd.DataFrame({
-        "QQQ":      raw["QQQ"]["Close"],
-        "QQQ_Open": raw["QQQ"]["Open"],
-        "VIX":      raw["^VIX"]["Close"],
-        "VIX3M":    raw["^VIX3M"]["Close"],
-        "HYG":      raw["HYG"]["Close"],
-        "IEF":      raw["IEF"]["Close"],
-        "UUP":      raw["UUP"]["Close"],
-        "QLD":      raw["QLD"]["Close"],
-    })
-    idx = price.dropna().index
-    if idx.empty:
-        raise RuntimeError("no dates with complete data across all 7 tickers")
-    return price.reindex(idx)
+    for attempt in range(attempts):
+        last_attempt = attempt == attempts - 1
+        try:
+            raw = yf.download(TICKERS, period=period, interval="1d", auto_adjust=False,
+                               progress=False, group_by="ticker", threads=False,
+                               session=_yf_session())
+            if raw is None or raw.empty:
+                raise RuntimeError(f"yfinance returned no data for {TICKERS}")
+            have = set(raw.columns.get_level_values(0))
+            missing = [t for t in TICKERS if t not in have]
+            if missing:
+                raise RuntimeError(f"yfinance download missing tickers: {missing}")
+
+            price = pd.DataFrame({
+                "QQQ":      raw["QQQ"]["Close"],
+                "QQQ_Open": raw["QQQ"]["Open"],
+                "VIX":      raw["^VIX"]["Close"],
+                "VIX3M":    raw["^VIX3M"]["Close"],
+                "HYG":      raw["HYG"]["Close"],
+                "IEF":      raw["IEF"]["Close"],
+                "UUP":      raw["UUP"]["Close"],
+                "QLD":      raw["QLD"]["Close"],
+            })
+            idx = price.dropna().index
+            if idx.empty:
+                raise RuntimeError("no dates with complete data across all 7 tickers")
+            if len(idx) < min_rows:
+                # A partial download (e.g. 1 trading day back from a rate-limited
+                # or truncated response) — treat it as a failed attempt and retry
+                # rather than letting it surface downstream as a confusing
+                # "insufficient warm-up history" error from compute_current_weights.
+                raise RuntimeError(
+                    f"partial yfinance download: got {len(idx)} complete-data "
+                    f"trading days, need >= {min_rows} for warm-up")
+            return price.reindex(idx)
+        except Exception as exc:
+            if last_attempt:
+                raise
+            backoff = backoffs[attempt]
+            logger.warning(
+                "yfinance download attempt %d/%d failed (%s: %s); retrying in %ds",
+                attempt + 1, attempts, type(exc).__name__, exc, backoff)
+            time.sleep(backoff)
+
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _load_liquidity(asof: pd.Timestamp) -> tuple[pd.Series, bool, int]:
