@@ -46,6 +46,7 @@ REGISTRY = [
     ("midprice_yes_20_40_positions.csv","entry_ask",   "question",        "YES [20–40%]"),
     ("smart_flow_positions.csv",        "entry_ask",   "question",        "Smart Flow"),
     ("smart_flow_roi_positions.csv",    "entry_ask",   "question",        "Smart Flow (ROI)"),
+    ("smart_flow_indep_positions.csv",  "entry_ask",   "question",        "Smart Flow (indep exp)"),
     ("macro_positions.csv",             "entry_price", "leader_question", "Macro (Fed cuts)"),
     ("dip_confirm_positions.csv",       "entry_ask",   "question",        "Dip-Confirm YES"),
 ]
@@ -490,12 +491,28 @@ def _combo_cell(df):
     return band & dtr.notna() & (dtr <= 3)
 
 
+def _indep_class_filter(cls: str):
+    """Row filter factory: keep only rows whose `indep_class` column equals
+    ``cls`` (the pre-registered independent/cascade split from the
+    smart-flow-independence experiment; see SMART_FLOW_INDEPENDENCE.md).
+    Missing column -> empty mask (handled gracefully like an absent ledger)."""
+    def _f(df):
+        if "indep_class" not in df.columns:
+            return pd.Series(False, index=df.index)
+        return df["indep_class"].astype(str) == cls
+    return _f
+
+
 # Derived filter views: (source file, dashboard id, label, row filter)
 DERIVED = [
     ("smart_flow_positions.csv", "smart_flow_combo",
      "Smart Flow ∩ band .30–.70", _combo_band),
     ("smart_flow_positions.csv", "smart_flow_combo3d",
      "Combo cell (band ∩ ≤3d)", _combo_cell),
+    ("smart_flow_indep_positions.csv", "smart_flow_indep_independent",
+     "SF independent", _indep_class_filter("independent")),
+    ("smart_flow_indep_positions.csv", "smart_flow_indep_cascade",
+     "SF cascade", _indep_class_filter("cascade")),
 ]
 
 

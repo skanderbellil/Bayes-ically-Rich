@@ -49,6 +49,11 @@ jobs:
         continue-on-error: true
         run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --selector roi_topn --top-n 10 --min-buyers 2 --consensus-exit --flip-threshold 1
 
+      - name: Smart-flow independence (pre-registered forward test)
+        id: smart_flow_indep
+        continue-on-error: true
+        run: python experiments/run_smart_flow_indep_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
+
       - name: Macro
         id: macro
         continue-on-error: true
@@ -102,6 +107,7 @@ jobs:
             data/paper_trade/dip_confirm_positions.csv \
             data/paper_trade/smart_flow_positions.csv \
             data/paper_trade/smart_flow_roi_positions.csv \
+            data/paper_trade/smart_flow_indep_positions.csv \
             data/paper_trade/macro_positions.csv \
             data/paper_trade/regime_positions.csv \
             data/paper_trade/validated_regime_positions.csv \
@@ -124,6 +130,7 @@ jobs:
           steps.dip_confirm.outcome == 'failure' ||
           steps.smart_flow.outcome == 'failure' ||
           steps.smart_flow_roi.outcome == 'failure' ||
+          steps.smart_flow_indep.outcome == 'failure' ||
           steps.macro.outcome == 'failure' ||
           steps.regime_paper.outcome == 'failure' ||
           steps.regime_domain_validation.outcome == 'failure' ||
@@ -137,6 +144,7 @@ jobs:
           echo "  dip_confirm:               ${{ steps.dip_confirm.outcome }}"
           echo "  smart_flow:                ${{ steps.smart_flow.outcome }}"
           echo "  smart_flow_roi:            ${{ steps.smart_flow_roi.outcome }}"
+          echo "  smart_flow_indep:          ${{ steps.smart_flow_indep.outcome }}"
           echo "  macro:                     ${{ steps.macro.outcome }}"
           echo "  regime_paper:              ${{ steps.regime_paper.outcome }}"
           echo "  regime_domain_validation:  ${{ steps.regime_domain_validation.outcome }}"
