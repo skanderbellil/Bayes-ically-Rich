@@ -30,18 +30,28 @@ jobs:
         run: pip install -e ".[dev]" 2>/dev/null || pip install pandas numpy scipy requests tabulate scikit-learn matplotlib seaborn tqdm
 
       - name: Mid-priced-YES — all bands (single scan)
+        id: midprice_yes
+        continue-on-error: true
         run: python experiments/run_all_midprice_yes_update.py --fraction 0.10
 
       - name: Dip-confirm YES
+        id: dip_confirm
+        continue-on-error: true
         run: python experiments/run_dip_confirm_paper_update.py --fraction 0.10
 
       - name: Smart-flow consensus
+        id: smart_flow
+        continue-on-error: true
         run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
 
       - name: Smart-flow consensus (ROI-selected, forward test)
+        id: smart_flow_roi
+        continue-on-error: true
         run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --selector roi_topn --top-n 10 --min-buyers 2 --consensus-exit --flip-threshold 1
 
       - name: Macro
+        id: macro
+        continue-on-error: true
         run: python experiments/run_paper_trade_update.py --fraction 0.10
 
       - name: Regime-calm disruptive-tail (forward ledger)
@@ -60,9 +70,13 @@ jobs:
         run: python experiments/run_validated_regime_paper_update.py
 
       - name: Bankroll simulation (real $1k returns)
+        id: bankroll_sim
+        continue-on-error: true
         run: python experiments/run_bankroll_sim.py --capital 1000 --stake 0.10
 
       - name: Champion stack (equity forward ledger)
+        id: champion_paper
+        continue-on-error: true
         run: python experiments/run_champion_paper_update.py
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
@@ -71,6 +85,8 @@ jobs:
         run: python experiments/generate_dashboard.py
 
       - name: Order-book snapshots
+        id: book_snapshot
+        continue-on-error: true
         run: python experiments/run_book_snapshot.py
 
       - name: Commit ledgers if changed
@@ -102,14 +118,30 @@ jobs:
             echo "No ledger changes — nothing to commit."
           fi
 
-      - name: Fail job if any regime step failed
+      - name: Fail job if any strategy step failed
         if: >
+          steps.midprice_yes.outcome == 'failure' ||
+          steps.dip_confirm.outcome == 'failure' ||
+          steps.smart_flow.outcome == 'failure' ||
+          steps.smart_flow_roi.outcome == 'failure' ||
+          steps.macro.outcome == 'failure' ||
           steps.regime_paper.outcome == 'failure' ||
           steps.regime_domain_validation.outcome == 'failure' ||
-          steps.validated_regime_paper.outcome == 'failure'
+          steps.validated_regime_paper.outcome == 'failure' ||
+          steps.bankroll_sim.outcome == 'failure' ||
+          steps.champion_paper.outcome == 'failure' ||
+          steps.book_snapshot.outcome == 'failure'
         run: |
-          echo "One or more regime steps failed:"
+          echo "One or more strategy steps failed:"
+          echo "  midprice_yes:              ${{ steps.midprice_yes.outcome }}"
+          echo "  dip_confirm:               ${{ steps.dip_confirm.outcome }}"
+          echo "  smart_flow:                ${{ steps.smart_flow.outcome }}"
+          echo "  smart_flow_roi:            ${{ steps.smart_flow_roi.outcome }}"
+          echo "  macro:                     ${{ steps.macro.outcome }}"
           echo "  regime_paper:              ${{ steps.regime_paper.outcome }}"
           echo "  regime_domain_validation:  ${{ steps.regime_domain_validation.outcome }}"
           echo "  validated_regime_paper:    ${{ steps.validated_regime_paper.outcome }}"
+          echo "  bankroll_sim:              ${{ steps.bankroll_sim.outcome }}"
+          echo "  champion_paper:            ${{ steps.champion_paper.outcome }}"
+          echo "  book_snapshot:             ${{ steps.book_snapshot.outcome }}"
           exit 1
