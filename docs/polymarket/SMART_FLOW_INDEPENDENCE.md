@@ -124,3 +124,84 @@ also carries three views: the full ledger ("Smart Flow (indep exp)") and two
 filtered views ("SF independent" / "SF cascade") re-slicing the same ledger by
 `indep_class`, consistent with the existing `Smart Flow ∩ band` derived-view
 pattern (`MIDPRICE_SMARTFLOW_COMBO.md`).
+
+## Retrospective replay (exploratory — 2026-06-23 cache)
+
+**Run 2026-07-08.** Before the forward ledger above has a single resolved
+position, `experiments/run_smartflow_indep_backtest.py` replays the same
+consensus + classification mechanics offline against the frozen wallet-fill
+cache (`data/polymarket_smart_money_snapshot/raw_cache_2026-06-23.tar.gz`: 126
+wallets, 224,927 fills, right-truncated at 2026-06-23). It walks day by day,
+fires one consensus event per token the first day >= 3 *eligible* wallets
+(cached history starting before `t - 7d`, to avoid left-truncation faking a
+"late arrival") have bought it in the trailing 7-day window, classifies each
+event by calling the shipped `independence_features` / `classify_independence`
+verbatim (no reimplementation; a wallet's frame is filtered to `timestamp <=
+t` before the call, so there is no look-ahead), and resolves outcomes via
+`fetch_market_resolution` with the same 0.05–0.90 entry-price band the live
+scanner uses. Full script + method notes: `experiments/run_smartflow_indep_backtest.py`.
+
+Event-level output: `data/polymarket_smart_money_snapshot/smartflow_indep_backtest_events.csv`.
+Resolution cache: `data/polymarket_smart_money_snapshot/smartflow_indep_resolution_cache.csv`.
+
+**Headline numbers** — 102 consensus events fired (95 within the 0.05–0.90
+entry-price band, 7 excluded); 89 of the in-band events resolved, 6
+unresolved/unfetchable (attrition, mostly still-open Iran-deal and World Cup
+markets as of the 2026-06-23 cache cutoff):
+
+| class | n resolved | win rate | mean pnl | std pnl |
+|---|---|---|---|---|
+| independent | 73 | 60.3% | +0.6301 | 2.0838 |
+| cascade | 16 | 50.0% | -0.0843 | 1.0352 |
+
+Welch t-stat (independent − cascade, two-sided): **t = +2.009, p = 0.050**
+(df ≈ 46). This is the discriminator's own claim (one-sided in the
+pre-registration): independent-classified consensus outperforms
+cascade-classified consensus in this sample, right at conventional
+significance with a small cascade class (n=16).
+
+Per-component diagnostics (resolved events, pass vs. fail on each proxy
+alone, pooled across both classes):
+
+| component | pass n / mean pnl | fail n / mean pnl |
+|---|---|---|
+| temporal (span ≥ 24h) | 22 / +1.1157 | 67 / +0.3000 |
+| price (chase ≤ 0.05) | 67 / +0.7598 | 22 / -0.2844 |
+| co-movement (jaccard ≤ 0.20) | 84 / +0.4242 | 5 / +1.8027 |
+
+`indep_score` distribution across all 102 fired events (in-band + out-of-band):
+0 → 1 event, 1 → 22, 2 → 65, 3 → 14.
+
+The price-chase component alone shows the cleanest split of the three; the
+co-movement component's "fail" bucket is too thin (n=5) to read anything into.
+
+### Mandatory caveats — read before treating this as evidence
+
+**(a) Look-ahead / survivorship in the wallet pool.** The 126 wallets are the
+2026-06-23 leaderboard-derived snapshot — selecting *these* wallets already
+uses information (that they existed, traded, and were worth caching) from
+*after* the replayed trades. This inflates the ABSOLUTE edge for **both**
+classes. The only number this replay can honestly speak to is the
+**BETWEEN-CLASS separation** (independent vs. cascade) — and that separation
+shares the same bias, since both classes are drawn from the identical
+survivorship-affected pool. Do not read either class's absolute mean pnl as a
+forward-tradeable edge.
+
+**(b) No bid-ask spread.** Entries use the fill price of the chronologically
+last first-buyer as an ask proxy — there is no historical order book in this
+replay, so the real bid-ask spread the live ledger captures (`entry_ask` vs.
+`entry_mid`) is entirely absent here. Live entries pay the ask; this replay
+does not.
+
+**(c) Per-wallet history truncation.** Coverage is right-truncated at
+2026-06-23 and left-truncated per wallet (only 76/126 wallets reach back to
+2026-06-16, 35/126 to 2026-04-23), which limits how far back — and how densely
+— consensus events could be detected, especially before mid-2026.
+
+**(d) Exploratory evidence only.** This replay is a fast, biased read, not a
+substitute for the pre-registered forward ledger above, which remains the
+deciding test (kill criteria: >= 40 resolved positions per class, t < 1.0
+retires the discriminator). The frozen component thresholds (24h / 0.05 / 0.20,
+2-of-3 rule) were **not** retuned after seeing these numbers — they were
+frozen before this replay ran, per the pre-registration, and a retuned
+threshold would be a new experiment on a new ledger, not an edit to this one.
