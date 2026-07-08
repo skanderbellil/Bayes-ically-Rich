@@ -99,6 +99,36 @@ def test_trades_outside_window_and_wrong_side_or_asset_are_ignored():
     assert feats["price_chase"] == pytest.approx(0.0, abs=1e-6)
 
 
+def test_asof_replays_point_in_time_window():
+    """`asof` lets a caller compute the trailing window from an arbitrary
+    historical instant instead of wall-clock `now` -- the backtest replay path.
+    A trade that is well within the window relative to a historical `asof` but
+    would fall OUTSIDE the trailing window relative to real `now` must be
+    picked up when `asof` is passed, and dropped when it is omitted (default
+    live behaviour, unchanged)."""
+    historical_asof = datetime(2020, 1, 15, 12, 0, 0)  # far in the past
+    t0 = historical_asof - timedelta(days=3)  # inside a 7-day window ending at asof
+    trades_by_wallet = {
+        "w1": _trades([{"ts": t0, "side": "BUY", "price": 0.40,
+                         "asset": TOKEN, "conditionId": "cA"}]),
+        "w2": _trades([{"ts": t0 + timedelta(hours=30), "side": "BUY", "price": 0.55,
+                         "asset": TOKEN, "conditionId": "cA"}]),
+    }
+    # With asof pinned to the historical instant, both trades fall inside the
+    # trailing window and span/chase are computed exactly as hand-computed.
+    feats = independence_features(TOKEN, {"w1", "w2"}, trades_by_wallet,
+                                   window_days=7, asof=historical_asof)
+    assert feats["first_buy_span_hours"] == pytest.approx(30.0, abs=1e-6)
+    assert feats["price_chase"] == pytest.approx(0.15, abs=1e-6)
+
+    # Without asof (default -> real now), these 2020 trades are far outside
+    # any 7-day trailing window from wall-clock now, so neither buyer has an
+    # in-window first buy and both fields default to 0.0.
+    feats_live = independence_features(TOKEN, {"w1", "w2"}, trades_by_wallet, window_days=7)
+    assert feats_live["first_buy_span_hours"] == 0.0
+    assert feats_live["price_chase"] == 0.0
+
+
 def test_fewer_than_two_first_buys_defaults_to_zero():
     """Defensive path: if fewer than 2 buyers actually have an in-window first
     buy (shouldn't happen once the caller's min_buyers floor is respected),

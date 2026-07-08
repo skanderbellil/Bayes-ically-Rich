@@ -97,6 +97,7 @@ def independence_features(
     buyers: set[str],
     trades_by_wallet: dict[str, pd.DataFrame],
     window_days: int,
+    asof: datetime | None = None,
 ) -> dict:
     """Three Condorcet-independence proxies for one token's buyer set.
 
@@ -116,8 +117,20 @@ def independence_features(
 
     All fields are computed from ``trades_by_wallet``, the same per-wallet trade
     DataFrames already fetched to build the flow index -- no extra API calls.
+
+    Parameters
+    ----------
+    asof : datetime | None
+        Point-in-time reference the trailing window is measured back from.
+        Defaults to ``None``, which means "now" (``datetime.now(timezone.utc)``)
+        -- the live hourly-update call path is unchanged. Pass an explicit
+        ``asof`` to replay this feature at a historical point in time (e.g. a
+        backtest walking day by day) without duplicating this function's logic.
     """
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
+    now = asof if asof is not None else datetime.now(timezone.utc)
+    if now.tzinfo is not None:
+        now = now.astimezone(timezone.utc).replace(tzinfo=None)
+    cutoff = now - timedelta(days=window_days)
 
     # -- first buy (timestamp, price) per buyer, within the trailing window --
     first_buys: dict[str, tuple[pd.Timestamp, float]] = {}
