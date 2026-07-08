@@ -28,6 +28,10 @@ question              : market question text
 domain                : coarse topic (politics/macro/sports/...)
 entry_date            : date first logged
 n_smart_buyers        : distinct non-MM leaderboard wallets that bought it in the window
+buyers                : pipe-separated, sorted list of the buyer wallet addresses at
+                        entry (recorded once at entry, never updated -- lets later
+                        audits recompute independence features under different
+                        thresholds without re-fetching trade history)
 first_buy_span_hours  : hours between the earliest and latest buyer's FIRST buy of this
                         token in the window (wide span -> buyers arrived independently
                         over time; narrow span -> everyone piled in together)
@@ -74,7 +78,7 @@ logger = logging.getLogger(__name__)
 STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "paper_trade" / "smart_flow_indep_positions.csv"
 
 _COLS = ["token", "condition_id", "question", "domain", "end_date", "entry_date",
-         "n_smart_buyers",
+         "n_smart_buyers", "buyers",
          "first_buy_span_hours", "price_chase", "pairwise_jaccard",
          "indep_score", "indep_class",
          "bet_fraction",
@@ -208,6 +212,11 @@ def load_ledger(state_file: Path = STATE_FILE) -> pd.DataFrame:
     if not state_file.exists():
         return pd.DataFrame(columns=_COLS)
     df = pd.read_csv(state_file, dtype=str)
+    if "buyers" not in df.columns:
+        # Migrate legacy CSVs (the hourly cron may already have written rows before
+        # this column existed): buyer identity was never recorded for these rows --
+        # backfill empty rather than guessing (no data was ever fetched for them).
+        df.insert(df.columns.get_loc("n_smart_buyers") + 1, "buyers", "")
     for col in _COLS:
         if col not in df.columns:
             df[col] = ""
@@ -288,7 +297,7 @@ def update_ledger(
             "token": c["token"], "condition_id": c["condition_id"],
             "question": c["question"], "domain": c["domain"],
             "end_date": c.get("end_date", ""), "entry_date": today,
-            "n_smart_buyers": str(n),
+            "n_smart_buyers": str(n), "buyers": c.get("buyers", ""),
             "first_buy_span_hours": str(feats["first_buy_span_hours"]),
             "price_chase": str(feats["price_chase"]),
             "pairwise_jaccard": str(feats["pairwise_jaccard"]),

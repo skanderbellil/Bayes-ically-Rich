@@ -18,6 +18,9 @@ classify_independence = smartflow_independence.classify_independence
 TEMPORAL_SPAN_HOURS = smartflow_independence.TEMPORAL_SPAN_HOURS
 PRICE_CHASE_MAX = smartflow_independence.PRICE_CHASE_MAX
 JACCARD_MAX = smartflow_independence.JACCARD_MAX
+load_ledger = smartflow_independence.load_ledger
+save_ledger = smartflow_independence.save_ledger
+_COLS = smartflow_independence._COLS
 
 TOKEN = "1234567890"
 NOW = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -277,3 +280,66 @@ def test_two_of_three_rule_boundary():
     score, cls = classify_independence(one_pass)
     assert score == 1
     assert cls == "cascade"
+
+
+# ---------------------------------------------------------------------------
+# Ledger persistence: the `buyers` column (schema, migration, roundtrip)
+# ---------------------------------------------------------------------------
+
+def test_buyers_column_immediately_follows_n_smart_buyers():
+    idx = _COLS.index("n_smart_buyers")
+    assert _COLS[idx + 1] == "buyers"
+
+
+def test_load_ledger_missing_file_returns_empty_frame_with_buyers_in_schema(tmp_path):
+    df = load_ledger(tmp_path / "does_not_exist.csv")
+    assert df.empty
+    assert list(df.columns) == _COLS
+
+
+def test_load_ledger_migrates_legacy_csv_missing_buyers_column(tmp_path):
+    """A CSV written before this column existed (e.g. by an hourly cron run that
+    already fired) must load cleanly, with `buyers` backfilled empty for those
+    legacy rows and every other value preserved unchanged."""
+    legacy_cols = [c for c in _COLS if c != "buyers"]
+    rows = [
+        {c: f"r0_{c}" for c in legacy_cols},
+        {c: f"r1_{c}" for c in legacy_cols},
+    ]
+    legacy = pd.DataFrame(rows, columns=legacy_cols, dtype=str)
+    path = tmp_path / "legacy.csv"
+    legacy.to_csv(path, index=False)
+
+    loaded = load_ledger(path)
+    assert list(loaded.columns) == _COLS
+    assert len(loaded) == 2  # no rows lost
+    assert loaded["buyers"].tolist() == ["", ""]  # backfilled empty, not guessed
+    for i, prefix in enumerate(["r0_", "r1_"]):
+        for c in legacy_cols:
+            assert loaded.loc[i, c] == f"{prefix}{c}"  # every legacy value untouched
+
+
+def test_buyers_sorted_pipe_join_is_byte_stable():
+    """The serialization convention (`buyers` module docstring / update_ledger):
+    a deterministic, sorted, pipe-separated join, independent of set iteration
+    order, so re-runs over the same buyer set always produce the same bytes."""
+    wallets = {"0xCCC", "0xaaa", "0xBbB"}
+    joined_a = "|".join(sorted(wallets))
+    joined_b = "|".join(sorted(set(reversed(list(wallets)))))
+    assert joined_a == joined_b == "0xBbB|0xCCC|0xaaa"
+
+
+def test_buyers_survives_save_load_roundtrip(tmp_path):
+    path = tmp_path / "ledger.csv"
+    row = {c: f"v_{c}" for c in _COLS}
+    row["buyers"] = "0xaaa|0xbbb|0xccc"
+    ledger = pd.DataFrame([row], columns=_COLS, dtype=str)
+
+    save_ledger(ledger, path)
+    loaded = load_ledger(path)
+
+    assert list(loaded.columns) == _COLS
+    assert loaded.loc[0, "buyers"] == "0xaaa|0xbbb|0xccc"
+    pd.testing.assert_frame_equal(
+        loaded.reset_index(drop=True), ledger.reset_index(drop=True), check_dtype=False,
+    )
