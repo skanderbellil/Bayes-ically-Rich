@@ -27,6 +27,7 @@ import portfolio as pf
 import analysis as an
 import charts as ch
 import fundamentals as fund
+import long_study
 
 OUT = Path(__file__).parent / "outputs"
 OUT.mkdir(exist_ok=True)
@@ -306,8 +307,30 @@ def main(force=False):
          f"Simple, general, and it cures the one-name fragility from bullet 1.")
     emit("=" * 96)
 
+    # ---------------- LONG-WEIGHTING FALSIFICATION (iteration 3) ----------------
+    # Long-only still beats the neutral variants, so: how to weight the LONG leg,
+    # and can we FALSIFY that any weighting is genuinely better? Full study +
+    # charts land in long_study_report.txt / outputs 09-11; summary folded in here.
+    emit("\n[13] LONG-WEIGHTING FALSIFICATION (full detail -> long_study_report.txt)")
+    lres = long_study.main(dataset=d)
+    npct = lres["null_pct"]
+    inside = [k for k, v in npct.items() if 0.15 < v < 0.85]
+    dd = (lres["metrics"]["eval_return"]
+          - lres["drop_tier"]["eval_return"].reindex(lres["metrics"].index))
+    ive = lres["param"]["inv_vol_minus_equal"]
+    emit(f"     Random-weight null: {len(inside)}/{len(npct)} methods sit in the "
+         f"15-85pct band (percentiles: "
+         f"{', '.join(f'{k}={v:.0%}' for k,v in npct.items())}).")
+    emit(f"     -> No long-weighting method is distinguishable from RANDOM this window.")
+    emit(f"     Drop-Tier4 cuts every method by {dd.min():.0%}..{dd.max():.0%} of return "
+         f"-> the long edge is a TIER bet, not a weighting bet.")
+    emit(f"     Inverse-vol is CONSISTENTLY {ive.mean():+.1%} vs equal on the LONGS "
+         f"(vol was REWARDED here) — the opposite of its help on the shorts.")
+    emit("     Verdict: on the long leg, don't optimize weights (equal is unbeatable-"
+         "by-noise); the leverage is TIER SELECTION + not diluting Tier4.")
+
     (OUT / "report.txt").write_text("\n".join(_report_lines))
-    emit(f"\n[done] full report -> outputs/report.txt")
+    emit(f"\n[done] full report -> outputs/report.txt (+ long_study_report.txt)")
 
 
 if __name__ == "__main__":

@@ -149,3 +149,10 @@ dollar_neutral_riskparity    +33.01%  +39.43%      +1.52      -16.78%           
   6. FIT THE IDEA: weighting the short book by ex-ante FINANCING fragility (no lookahead, no tuning) took NBIS from equal-weight to -1.4% tilt and moved dollar-neutral YTD +27.2% -> +24.9% (-2.4%). It did NOT rescue the short leg this period — the fragile names RALLIED regardless of balance sheet, so the thesis's H1 problem was direction, not weighting. Honest result, not curve-fit.
   7. THE BETTER WEIGHTING: since the damage was RISK concentration in a few hyper-volatile names (not balance sheet), equalize RISK not dollars — inverse-volatility weighting (1/60d-vol, monthly, no lookahead, no tuning). It beats equal weight on every axis: YTD +27.2%->+33.0%, Sharpe +1.27->+1.52, maxDD -20.5%->-16.8%. Simple, general, and it cures the one-name fragility from bullet 1.
 ================================================================================================
+
+[13] LONG-WEIGHTING FALSIFICATION (full detail -> long_study_report.txt)
+     Random-weight null: 4/4 methods sit in the 15-85pct band (percentiles: equal=54%, inverse_vol=36%, tier_balanced=49%, inv_vol_within_tier=34%).
+     -> No long-weighting method is distinguishable from RANDOM this window.
+     Drop-Tier4 cuts every method by 8%..12% of return -> the long edge is a TIER bet, not a weighting bet.
+     Inverse-vol is CONSISTENTLY -2.2% vs equal on the LONGS (vol was REWARDED here) — the opposite of its help on the shorts.
+     Verdict: on the long leg, don't optimize weights (equal is unbeatable-by-noise); the leverage is TIER SELECTION + not diluting Tier4.

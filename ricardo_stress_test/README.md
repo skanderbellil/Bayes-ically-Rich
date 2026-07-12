@@ -30,10 +30,11 @@ and `report.txt` (the full printed report).
 | `config.py` | The universe (`ticker → {book, tier, note}`), window, borrow/beta params. |
 | `data.py` | Downloads **adjusted closes**, FX-normalizes to USD, cleans the panel. |
 | `fundamentals.py` | **(iter 2)** Point-in-time balance-sheet data → a rules-based financing-**fragility** score → tilted short weights. |
-| `portfolio.py` | Equal-weight books, the variants (incl. the balance-sheet-aware short), borrow haircut, rolling beta. |
+| `portfolio.py` | Equal-weight books, the variants (incl. the balance-sheet-aware short and risk-parity), borrow haircut, rolling beta. |
 | `analysis.py` | Metrics, per-name contribution, fragility index, dispersion, pairs, tiers. |
-| `charts.py` | The 8 diagnostic charts. |
-| `run.py` | Orchestrates everything and writes the report. |
+| `long_study.py` | **(iter 3)** Long-book weighting bake-off + **falsification suite** (random-weight null, subperiod, jackknife, drop-carry-tier, param sensitivity). |
+| `charts.py` | The diagnostic charts (portfolio + long-study). |
+| `run.py` | Orchestrates everything (incl. `long_study`) and writes the report. |
 
 ## Methodology & assumptions (the important part)
 
@@ -138,6 +139,33 @@ weighting leaned into them purely to balance risk, not because it predicted them
 And by capping any single name's risk share it *directly cures* the one-name
 fragility from iteration 1's bullet 1. This is the recommended default: **size by
 risk, express the thesis in what you include, not in dollar concentration.**
+
+## Iteration 3 — how to weight the LONG leg, and *falsifying* the answer
+
+Long-only (+40%) still beats every neutral variant, so the real question is the
+long weighting. `long_study.py` runs four schemes — **equal**, **inverse-vol**,
+**tier-balanced** (each of the 4 thesis tiers gets ¼ of the book), and
+**inverse-vol-within-tier** (HRP-lite) — all on one consistent, no-lookahead basis
+(weights set at a 40-day formation window, then buy-and-hold), and then *tries to
+falsify* that any of them is genuinely better:
+
+| Falsification test | Result |
+|---|---|
+| **Random-weight null** (5,000 Dirichlet draws) | All four methods land at the **34–54th percentile** — *indistinguishable from throwing darts*. |
+| **Subperiod stability** | Best method **reshuffles** between halves — no stable winner. |
+| **Leave-one-name-out jackknife** | Equal has the *highest* mean; the fancy methods' "edge" is negative and inside the noise. |
+| **Drop the carry tier (Tier4)** | Every method's return **~halves** (≈20% → ≈10%) — the edge is a *tier* bet, not a weighting bet. |
+| **Parameter sensitivity** | Inverse-vol is **consistently ~2% *worse*** than equal across formation windows. |
+
+**The falsification succeeds** — you *cannot* claim any long-weighting method beats
+random over this window. And the deepest finding is an asymmetry: inverse-vol
+*helped* the shorts but *hurts* the longs, because on the long side **volatility was
+rewarded** (the Tier4 winners were the volatile ones), whereas on the short side
+volatility was punishing. There is **no universal "risk-parity is better"** — its
+sign depends on whether vol was compensated. Practical conclusion: **don't optimize
+long weights (equal is unbeatable-by-noise here); the leverage is tier selection and
+not diluting Tier4.** Charts: `09_long_weighting_nav`, `10_long_null`,
+`11_long_falsification`; full detail in `long_study_report.txt`.
 
 ## Headline findings (this run, 2026-01-05 → 2026-07-10)
 

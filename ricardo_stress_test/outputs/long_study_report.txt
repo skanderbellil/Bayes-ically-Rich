@@ -1,0 +1,54 @@
+============================================================================================
+  LONG-BOOK WEIGHTING BAKE-OFF + FALSIFICATION
+  formation = first 40 days; eval = buy-and-hold to end; null draws = 5000
+============================================================================================
+
+[L1] METHOD METRICS (eval window, buy-and-hold)
+                    eval_return  ann_vol Sharpe_rf4 max_drawdown pct_positive_days
+equal                   +21.53%  +38.81%      +1.53      -15.12%           +60.23%
+inverse_vol             +19.33%  +36.43%      +1.46      -13.25%           +56.82%
+tier_balanced           +20.87%  +39.06%      +1.48      -14.93%           +60.23%
+inv_vol_within_tier     +19.05%  +36.92%      +1.43      -13.30%           +55.68%
+     SPY (same window): +10.78%
+
+[L2] RANDOM-WEIGHT NULL (Dirichlet α=1) — the key falsification
+     null mean +21.43%, median +21.00%, 5-95pct [+13.93%, +30.23%]
+     equal                  +21.53%  -> 54%ile  (indistinguishable from random)
+     inverse_vol            +19.33%  -> 36%ile  (indistinguishable from random)
+     tier_balanced          +20.87%  -> 49%ile  (indistinguishable from random)
+     inv_vol_within_tier    +19.05%  -> 34%ile  (indistinguishable from random)
+
+[L3] SUBPERIOD STABILITY (eval split in 2)
+     equal                  sub1=+30.8%(rank 1)  sub2=-5.7%(rank 4)
+     inverse_vol            sub1=+27.0%(rank 3)  sub2=-4.5%(rank 2)
+     tier_balanced          sub1=+28.7%(rank 2)  sub2=-4.7%(rank 3)
+     inv_vol_within_tier    sub1=+25.3%(rank 4)  sub2=-3.5%(rank 1)
+     Best method per subperiod: ['equal', 'inv_vol_within_tier']  -> RESHUFFLES (no stable winner)
+
+[L4] LEAVE-ONE-NAME-OUT JACKKNIFE (range of eval return across drops)
+     equal                  mean +21.53%  range 3.73%  edge-vs-equal +0.00%
+     inverse_vol            mean +19.33%  range 2.89%  edge-vs-equal -2.20%
+     tier_balanced          mean +20.87%  range 3.66%  edge-vs-equal -0.66%
+     inv_vol_within_tier    mean +19.06%  range 2.91%  edge-vs-equal -2.48%
+
+[L5] DROP THE CARRY TIER (Tier4 silicon removed)
+     equal                  full +21.53%  ->  ex-Tier4 +11.14%
+     inverse_vol            full +19.33%  ->  ex-Tier4 +11.22%
+     tier_balanced          full +20.87%  ->  ex-Tier4 +9.31%
+     inv_vol_within_tier    full +19.05%  ->  ex-Tier4 +8.86%
+
+[L6] INVERSE-VOL PARAMETER SENSITIVITY (formation window)
+     window  20d: inverse_vol +21.73%, equal +23.69%, edge -1.96%
+     window  40d: inverse_vol +19.33%, equal +21.53%, edge -2.21%
+     window  60d: inverse_vol +21.31%, equal +23.85%, edge -2.54%
+
+[L7] charts: 09_long_weighting_nav.png, 10_long_null.png, 11_long_falsification.png
+
+============================================================================================
+  FALSIFICATION VERDICT (long-book weighting)
+============================================================================================
+  * 4/4 methods land INSIDE the random-weight cloud (15-85pct): ['equal', 'inverse_vol', 'tier_balanced', 'inv_vol_within_tier'] -> for those, the weighting is NOT distinguishable from luck over this window.
+  * Subperiod winner is UNSTABLE (['equal', 'inv_vol_within_tier']).
+  * inverse_vol edge vs equal is CONSISTENTLY negative across formation windows (-2.0%, -2.2%, -2.5%).
+  * Removing Tier4 cuts every method by 8%..12% of return -> the long alpha is a TIER bet far more than a weighting bet.
+============================================================================================
