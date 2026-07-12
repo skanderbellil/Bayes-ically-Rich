@@ -51,6 +51,48 @@ def _target_weights(valid_mask, target):
     return t / s if s > 0 else t
 
 
+def _resolve_target(target, d, members):
+    """Normalize `target` into a Series-or-None for reset date `d`.
+
+    * None                       -> equal weight (returns None)
+    * Series (static tilt)       -> itself, restricted to members
+    * DataFrame (time-varying)   -> the most recent row with index <= d,
+                                    i.e. weights decided at the prior rebalance
+                                    (no lookahead).
+    """
+    if target is None:
+        return None
+    if isinstance(target, pd.DataFrame):
+        prior = target.index[target.index <= d]
+        if len(prior) == 0:
+            return None                      # not enough history yet -> equal
+        return target.loc[prior[-1]].reindex(members)
+    return target.reindex(members)
+
+
+def inverse_vol_targets(returns, members, window, reset_dates):
+    """Time-varying inverse-volatility target weights.
+
+    For each reset date r, weight_i proportional to 1 / (trailing `window`-day
+    vol of name i, measured on returns UP TO AND INCLUDING r). Those weights are
+    then applied to the NEXT month, so the decision uses only past data -> no
+    lookahead. Names with insufficient history fall back to equal weight.
+    Returns a DataFrame indexed by reset date.
+    """
+    members = [m for m in members if m in returns.columns]
+    R = returns[members]
+    rows = {}
+    for r in sorted(reset_dates):
+        hist = R.loc[:r].tail(window)
+        vol = hist.std(ddof=1)
+        inv = 1.0 / vol.replace(0.0, np.nan)
+        if inv.notna().sum() == 0:
+            inv = pd.Series(1.0, index=members)     # equal fallback
+        inv = inv.fillna(inv.mean())
+        rows[r] = inv / inv.sum()
+    return pd.DataFrame(rows).T
+
+
 def equal_weight_book(returns, members, rebalance="M", target=None):
     """Daily return of a monthly-rebalanced book.
 
@@ -65,13 +107,12 @@ def equal_weight_book(returns, members, rebalance="M", target=None):
     dates = R.index
     month_ends = set(pd.Timestamp(d) for d in _month_end_index(dates))
     reset_dates = {dates[0]} | month_ends
-    tgt = None if target is None else target.reindex(members)
 
     book_ret = pd.Series(0.0, index=dates)
     w = None
     for i, d in enumerate(dates):
         if w is None or d in reset_dates:
-            w = _target_weights(R.loc[d].notna(), tgt)
+            w = _target_weights(R.loc[d].notna(), _resolve_target(target, d, members))
         r_t = R.loc[d].fillna(0.0)
         book_ret.iloc[i] = float((w * r_t).sum())
         grown = w * (1.0 + r_t)
@@ -88,13 +129,12 @@ def per_name_weight_paths(returns, members, target=None):
     dates = R.index
     month_ends = set(pd.Timestamp(d) for d in _month_end_index(dates))
     reset_dates = {dates[0]} | month_ends
-    tgt = None if target is None else target.reindex(members)
 
     W = pd.DataFrame(0.0, index=dates, columns=members)
     w = None
     for d in dates:
         if w is None or d in reset_dates:
-            w = _target_weights(R.loc[d].notna(), tgt)
+            w = _target_weights(R.loc[d].notna(), _resolve_target(target, d, members))
         W.loc[d] = w
         r_t = R.loc[d].fillna(0.0)
         grown = w * (1.0 + r_t)
@@ -225,6 +265,31 @@ def build_variants(returns, long_members, short_members, spy_ret,
         diag["short_ret_frag"] = short_ret_f
         diag["borrow_frag"] = borrow_f
         diag["short_weights_frag"] = short_w_f
+
+    # ---- (e) dollar-neutral, INVERSE-VOLATILITY (risk-parity) both legs ----
+    # The lesson from (d): the book's damage came from a few HYPER-VOLATILE names
+    # sized equally by DOLLARS, not from balance sheet. Equalizing RISK instead of
+    # dollars is the simple, general, no-lookahead, no-tuning fix. Weights are
+    # proportional to 1/trailing-60d-vol, decided at each month-end and applied to
+    # the next month. Directly caps the single-name-hostage problem from iter 1.
+    dates = returns.index
+    reset_dates = {dates[0]} | set(pd.Timestamp(d) for d in _month_end_index(dates))
+    lv = inverse_vol_targets(returns, long_members, BETA_WINDOW, reset_dates)
+    sv = inverse_vol_targets(returns, short_members, BETA_WINDOW, reset_dates)
+    long_ret_rp = equal_weight_book(returns, long_members, target=lv)
+    short_ret_rp = equal_weight_book(returns, short_members, target=sv)
+    short_w_rp = per_name_weight_paths(returns, short_members, target=sv)
+    borrow_rp = pd.Series(0.0, index=returns.index)
+    if apply_borrow:
+        for d in returns.index:
+            borrow_rp.loc[d] = borrow_daily_drag(
+                [m for m in short_members if m in returns.columns],
+                short_w_rp.loc[d] if d in short_w_rp.index else None)
+    variants["dollar_neutral_riskparity"] = long_ret_rp - short_ret_rp - borrow_rp
+    diag["long_ret_rp"] = long_ret_rp
+    diag["short_ret_rp"] = short_ret_rp
+    diag["invvol_long"] = lv
+    diag["invvol_short"] = sv
 
     return variants, diag
 

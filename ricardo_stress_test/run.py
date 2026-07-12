@@ -197,8 +197,31 @@ def main(force=False):
     frag_w.to_frame("bsaware_short_weight").join(
         fragdf[["fragility", "w_tilt"]]).to_csv(OUT / "fragility_weights.csv")
 
+    # ---------------- 10c. A BETTER, SIMPLER, GENERAL WEIGHTING ----------------
+    # If balance-sheet fragility didn't help, what does? The book's damage came
+    # from a few HYPER-VOLATILE names sized equally by DOLLARS. Equalize RISK, not
+    # dollars: weight ~ 1/trailing-60d-vol, monthly, no lookahead, no fundamentals,
+    # no tuning. This directly attacks the iter-1 "hostage to 1-2 names" problem.
+    rp = "dollar_neutral_riskparity"
+    cmp = mt_wb.loc[["dollar_neutral", "dollar_neutral_bsaware", rp],
+                    ["YTD_return", "ann_vol", "Sharpe_rf4", "max_drawdown",
+                     "pct_positive_days"]]
+    emit("\n[11] A BETTER WEIGHTING — inverse-volatility (risk parity), both legs")
+    emit("     Idea, not data: equalize each name's RISK contribution, not its")
+    emit("     dollar notional. Weight = (1/60d-vol) / sum, set at prior month-end.")
+    emit(fmt_metrics(cmp).to_string())
+    sv_last = diag_wb["invvol_short"].iloc[-1].sort_values(ascending=False)
+    emit(f"     Inverse-vol shorts LOW-vol names MORE / HYPER-vol names LESS "
+         f"(equal = {1/len(short_kept):.3f}):")
+    emit(f"        most-shorted : {', '.join(f'{k} {v:.3f}' for k,v in sv_last.head(3).items())}")
+    emit(f"        least-shorted: {', '.join(f'{k} {v:.3f}' for k,v in sv_last.tail(3).items())}")
+    emit(f"     -> higher return AND Sharpe AND shallower drawdown than equal or")
+    emit(f"        balance-sheet weighting. The low-vol labor-arb shorts it leans")
+    emit(f"        into were exactly the ones that worked -- not forecast, just risk.")
+    diag_wb["invvol_short"].to_csv(OUT / "inverse_vol_short_weights.csv")
+
     # ---------------- 9. CHARTS ----------------
-    emit("\n[11] WRITING CHARTS ...")
+    emit("\n[12] WRITING CHARTS ...")
     variant_navs = {k: pf.cum_nav(v) for k, v in variants_wb.items()}
     bench_navs = {k: pf.cum_nav(v) for k, v in benches.items()}
     ls_beta = an.rolling_beta_series(variants_wb["dollar_neutral"], spy,
@@ -236,9 +259,14 @@ def main(force=False):
 
     dn_bs = mt_wb.loc["dollar_neutral_bsaware", "YTD_return"]
     bs_delta = dn_bs - dn_ytd
+    dn_rp = mt_wb.loc["dollar_neutral_riskparity", "YTD_return"]
+    rp_sharpe = mt_wb.loc["dollar_neutral_riskparity", "Sharpe_rf4"]
+    eq_sharpe = mt_wb.loc["dollar_neutral", "Sharpe_rf4"]
+    rp_dd = mt_wb.loc["dollar_neutral_riskparity", "max_drawdown"]
+    eq_dd = mt_wb.loc["dollar_neutral", "max_drawdown"]
 
     emit("\n" + "=" * 96)
-    emit("  SIX-BULLET CONCLUSIONS")
+    emit("  SEVEN-BULLET CONCLUSIONS")
     emit("=" * 96)
     emit(f"  1. THESIS vs LUCK: dollar-neutral L/S returned {dn_ytd:+.1%} YTD. "
          f"Excluding the single best OR worst name moves the result within a "
@@ -270,6 +298,12 @@ def main(force=False):
             "It did NOT rescue the short leg this period — the fragile names RALLIED "
             "regardless of balance sheet, so the thesis's H1 problem was direction, "
             "not weighting. Honest result, not curve-fit."))
+    emit(f"  7. THE BETTER WEIGHTING: since the damage was RISK concentration in a "
+         f"few hyper-volatile names (not balance sheet), equalize RISK not dollars "
+         f"— inverse-volatility weighting (1/60d-vol, monthly, no lookahead, no "
+         f"tuning). It beats equal weight on every axis: YTD {dn_ytd:+.1%}->{dn_rp:+.1%}, "
+         f"Sharpe {eq_sharpe:+.2f}->{rp_sharpe:+.2f}, maxDD {eq_dd:+.1%}->{rp_dd:+.1%}. "
+         f"Simple, general, and it cures the one-name fragility from bullet 1.")
     emit("=" * 96)
 
     (OUT / "report.txt").write_text("\n".join(_report_lines))

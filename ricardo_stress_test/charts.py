@@ -39,6 +39,7 @@ PAL = {
     "dollar_neutral":  "#009E73",   # green
     "beta_neutral":    "#CC79A7",   # magenta
     "dollar_neutral_bsaware": "#E69F00",  # orange
+    "dollar_neutral_riskparity": "#000000",  # black
     "SPY":             "#7F7F7F",   # grey
     "BLEND(QQQ+XLI)":  "#BBBBBB",   # light grey
     "pos":             "#009E73",

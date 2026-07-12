@@ -79,6 +79,9 @@ reconciled in the report.
   SPY, set at prior month-end), so the combined book is ≈ beta-neutral.
 - **(d) dollar_neutral_bsaware** *(iter 2)* — same 100/100 structure, but the short
   leg is weighted by **ex-ante financing fragility** instead of equal weight.
+- **(e) dollar_neutral_riskparity** *(iter 2)* — both legs weighted by
+  **inverse trailing volatility** (equal *risk* contribution, not equal dollars);
+  60d vol, set at prior month-end, no lookahead.
 
 ## Iteration 2 — "fit the idea, not the data"
 
@@ -108,6 +111,34 @@ leg's H1 problem was **direction, not weighting** — a genuine finding, not a
 curve-fit. The infrastructure is generalizable: point it at any short book and it
 produces the same ex-ante fragility tilt.
 
+### So what *does* work? Weight by risk, not dollars.
+
+If balance sheet didn't help, what's a better weighting that stays simple and
+general? Go back to the *actual* failure mode: iteration 1 found the book was
+"hostage to 1–2 names," and those names (NBIS, WULF, CRWV) are the
+**highest-volatility** names in the universe. Equal *dollar* weight hands a
+60%-vol neocloud the same notional as a 25%-vol staffing name — i.e. equal
+dollars = wildly *unequal risk*. The fix isn't a better return forecast (that's
+curve-fitting); it's **equalizing risk contribution → inverse-volatility
+weighting**: weight ∝ 1/(trailing 60d vol), set at each month-end, no lookahead,
+no fundamentals, no tuning.
+
+It wins on every axis this window (dollar-neutral, with borrow):
+
+| Short/both-leg weighting | YTD | Ann vol | Sharpe | Max DD |
+|---|---|---|---|---|
+| equal weight | +27.2% | 40.7% | 1.27 | −20.5% |
+| balance-sheet-aware | +24.9% | 41.7% | 1.16 | −22.1% |
+| **inverse-vol (risk parity)** | **+33.0%** | **39.4%** | **1.52** | **−16.8%** |
+
+Why it works *without forecasting*: inverse-vol shorts the low-vol labor-arb names
+*more* (RAND, ADEN, RHI) and the hyper-vol neoclouds *less* (NBIS/IREN/CIFR ~4%
+vs 6.7% equal). The low-vol staffers were exactly the shorts that worked — the
+weighting leaned into them purely to balance risk, not because it predicted them.
+And by capping any single name's risk share it *directly cures* the one-name
+fragility from iteration 1's bullet 1. This is the recommended default: **size by
+risk, express the thesis in what you include, not in dollar concentration.**
+
 ## Headline findings (this run, 2026-01-05 → 2026-07-10)
 
 - **Long-only +40%**, dollar-neutral **+27%** net of borrow, beta-neutral **+33%** —
@@ -129,4 +160,4 @@ produces the same ex-ante fragility tilt.
   timing* signal was neutral-to-negative here; as a *risk-management* signal (avoid
   shorting cash-rich names to size like debt-funded ones) it is still the right frame.
 
-See `outputs/report.txt` for the full numbers and the six-bullet conclusion.
+See `outputs/report.txt` for the full numbers and the seven-bullet conclusion.

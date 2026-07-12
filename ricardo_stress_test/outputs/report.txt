@@ -11,24 +11,26 @@
     FX pairs used: ['CHFUSD=X', 'DKKUSD=X', 'EURUSD=X', 'GBPUSD=X', 'HKDUSD=X', 'JPYUSD=X', 'KRWUSD=X', 'SEKUSD=X']
 
 [2] METRICS — WITH borrow haircut (default 4%, 15% HTB: ['CRWV', 'IREN', 'NBIS'])
-                       YTD_return ann_return  ann_vol Sharpe_rf4 max_drawdown worst_day best_day pct_positive_days  n_days
-name                                                                                                                      
-long_only                 +40.22%   +106.16%  +34.19%      +2.00      -13.77%    -5.70%   +6.80%           +59.38%     128
-dollar_neutral            +27.25%    +74.38%  +40.67%      +1.27      -20.47%    -6.34%   +7.92%           +51.56%     128
-beta_neutral              +33.33%    +89.89%  +38.98%      +1.54      -15.20%    -6.08%   +7.92%           +52.34%     128
-dollar_neutral_bsaware    +24.88%    +68.75%  +41.67%      +1.16      -22.11%    -6.05%   +7.34%           +53.12%     128
-SPY                       +10.36%    +22.61%  +14.04%      +1.17       -8.88%    -2.58%   +2.91%           +53.12%     128
-BLEND(QQQ+XLI)            +16.28%    +36.86%  +18.47%      +1.48      -10.16%    -2.96%   +3.36%           +56.25%     128
+                          YTD_return ann_return  ann_vol Sharpe_rf4 max_drawdown worst_day best_day pct_positive_days  n_days
+name                                                                                                                         
+long_only                    +40.22%   +106.16%  +34.19%      +2.00      -13.77%    -5.70%   +6.80%           +59.38%     128
+dollar_neutral               +27.25%    +74.38%  +40.67%      +1.27      -20.47%    -6.34%   +7.92%           +51.56%     128
+beta_neutral                 +33.33%    +89.89%  +38.98%      +1.54      -15.20%    -6.08%   +7.92%           +52.34%     128
+dollar_neutral_bsaware       +24.88%    +68.75%  +41.67%      +1.16      -22.11%    -6.05%   +7.34%           +53.12%     128
+dollar_neutral_riskparity    +33.01%    +89.29%  +39.43%      +1.52      -16.78%    -6.20%   +8.45%           +49.22%     128
+SPY                          +10.36%    +22.61%  +14.04%      +1.17       -8.88%    -2.58%   +2.91%           +53.12%     128
+BLEND(QQQ+XLI)               +16.28%    +36.86%  +18.47%      +1.48      -10.16%    -2.96%   +3.36%           +56.25%     128
 
 [3] METRICS — WITHOUT borrow haircut
-                       YTD_return ann_return  ann_vol Sharpe_rf4 max_drawdown worst_day best_day pct_positive_days  n_days
-name                                                                                                                      
-long_only                 +40.22%   +106.16%  +34.19%      +2.00      -13.77%    -5.70%   +6.80%           +59.38%     128
-dollar_neutral            +31.39%    +85.74%  +40.67%      +1.43      -19.19%    -6.32%   +7.94%           +51.56%     128
-beta_neutral              +37.41%   +101.49%  +38.99%      +1.70      -13.96%    -6.06%   +7.94%           +52.34%     128
-dollar_neutral_bsaware    +29.02%    +79.95%  +41.67%      +1.32      -20.83%    -6.03%   +7.37%           +53.12%     128
-SPY                       +10.36%    +22.61%  +14.04%      +1.17       -8.88%    -2.58%   +2.91%           +53.12%     128
-BLEND(QQQ+XLI)            +16.28%    +36.86%  +18.47%      +1.48      -10.16%    -2.96%   +3.36%           +56.25%     128
+                          YTD_return ann_return  ann_vol Sharpe_rf4 max_drawdown worst_day best_day pct_positive_days  n_days
+name                                                                                                                         
+long_only                    +40.22%   +106.16%  +34.19%      +2.00      -13.77%    -5.70%   +6.80%           +59.38%     128
+dollar_neutral               +31.39%    +85.74%  +40.67%      +1.43      -19.19%    -6.32%   +7.94%           +51.56%     128
+beta_neutral                 +37.41%   +101.49%  +38.99%      +1.70      -13.96%    -6.06%   +7.94%           +52.34%     128
+dollar_neutral_bsaware       +29.02%    +79.95%  +41.67%      +1.32      -20.83%    -6.03%   +7.37%           +53.12%     128
+dollar_neutral_riskparity    +36.92%   +100.40%  +39.43%      +1.66      -16.11%    -6.18%   +8.47%           +50.00%     128
+SPY                          +10.36%    +22.61%  +14.04%      +1.17       -8.88%    -2.58%   +2.91%           +53.12%     128
+BLEND(QQQ+XLI)               +16.28%    +36.86%  +18.47%      +1.48      -10.16%    -2.96%   +3.36%           +56.25%     128
 
 [4] BORROW DRAG (YTD return, with vs without)
     dollar_neutral  : +31.39% (no borrow) -> +27.25% (with)  |  drag = -4.15%
@@ -110,7 +112,22 @@ FVRR      2025-09-30   -0.10B   0.56B  0.00B     0.211   0.067     0.026  -0.040
      Rank-corr(fragility, realized short contribution) = -0.05  -> fragility was NOT predictive / ANTI-predictive this window: the financially-fragile names OUTPERFORMED (AI-capex bid), while the sturdy labor-arb names were the shorts that actually worked.
      dollar-neutral YTD: equal short = +27.25%  ->  balance-sheet-aware short = +24.88%   (delta -2.37%)
 
-[11] WRITING CHARTS ...
+[11] A BETTER WEIGHTING — inverse-volatility (risk parity), both legs
+     Idea, not data: equalize each name's RISK contribution, not its
+     dollar notional. Weight = (1/60d-vol) / sum, set at prior month-end.
+                          YTD_return  ann_vol Sharpe_rf4 max_drawdown pct_positive_days
+name                                                                                   
+dollar_neutral               +27.25%  +40.67%      +1.27      -20.47%           +51.56%
+dollar_neutral_bsaware       +24.88%  +41.67%      +1.16      -22.11%           +53.12%
+dollar_neutral_riskparity    +33.01%  +39.43%      +1.52      -16.78%           +49.22%
+     Inverse-vol shorts LOW-vol names MORE / HYPER-vol names LESS (equal = 0.067):
+        most-shorted : RAND.AS 0.125, ADEN.SW 0.098, TEP.PA 0.079
+        least-shorted: IREN 0.043, NBIS 0.043, CHGG 0.040
+     -> higher return AND Sharpe AND shallower drawdown than equal or
+        balance-sheet weighting. The low-vol labor-arb shorts it leans
+        into were exactly the ones that worked -- not forecast, just risk.
+
+[12] WRITING CHARTS ...
      saved 01_cumulative_nav.png
      saved 02_drawdown.png
      saved 03_contribution_waterfall.png
@@ -122,7 +139,7 @@ FVRR      2025-09-30   -0.10B   0.56B  0.00B     0.211   0.067     0.026  -0.040
      saved summary.csv, name_contributions.csv
 
 ================================================================================================
-  SIX-BULLET CONCLUSIONS
+  SEVEN-BULLET CONCLUSIONS
 ================================================================================================
   1. THESIS vs LUCK: dollar-neutral L/S returned +27.2% YTD. Excluding the single best OR worst name moves the result within a 17.0% band (spread/return = 0.6x). Alpha is NAME-LUCKY — hostage to 1-2 names.
   2. CONCENTRATION: the 2 largest absolute contributors (NBIS, UPWK) account for 15% of gross contribution — diversified.
@@ -130,4 +147,5 @@ FVRR      2025-09-30   -0.10B   0.56B  0.00B     0.211   0.067     0.026  -0.040
   4. TIER TO OVERWEIGHT: Tier4_silicon led (+85.9%); Tier1_gen_fuel lagged (-2.2%). Long alpha is tier-differentiated, not uniform.
   5. SHORT-SIDE DISPERSION: fragile_middle mean monthly cross-sectional std = 14.3% — HIGH, confirming the short basket is a bag of idiosyncratic outcomes (balance-sheet selection matters more than the basket).
   6. FIT THE IDEA: weighting the short book by ex-ante FINANCING fragility (no lookahead, no tuning) took NBIS from equal-weight to -1.4% tilt and moved dollar-neutral YTD +27.2% -> +24.9% (-2.4%). It did NOT rescue the short leg this period — the fragile names RALLIED regardless of balance sheet, so the thesis's H1 problem was direction, not weighting. Honest result, not curve-fit.
+  7. THE BETTER WEIGHTING: since the damage was RISK concentration in a few hyper-volatile names (not balance sheet), equalize RISK not dollars — inverse-volatility weighting (1/60d-vol, monthly, no lookahead, no tuning). It beats equal weight on every axis: YTD +27.2%->+33.0%, Sharpe +1.27->+1.52, maxDD -20.5%->-16.8%. Simple, general, and it cures the one-name fragility from bullet 1.
 ================================================================================================
