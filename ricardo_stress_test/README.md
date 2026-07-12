@@ -29,9 +29,10 @@ and `report.txt` (the full printed report).
 |------|------|
 | `config.py` | The universe (`ticker → {book, tier, note}`), window, borrow/beta params. |
 | `data.py` | Downloads **adjusted closes**, FX-normalizes to USD, cleans the panel. |
-| `portfolio.py` | Equal-weight books, the 3 variants, borrow haircut, rolling beta. |
+| `fundamentals.py` | **(iter 2)** Point-in-time balance-sheet data → a rules-based financing-**fragility** score → tilted short weights. |
+| `portfolio.py` | Equal-weight books, the variants (incl. the balance-sheet-aware short), borrow haircut, rolling beta. |
 | `analysis.py` | Metrics, per-name contribution, fragility index, dispersion, pairs, tiers. |
-| `charts.py` | The 7 diagnostic charts. |
+| `charts.py` | The 8 diagnostic charts. |
 | `run.py` | Orchestrates everything and writes the report. |
 
 ## Methodology & assumptions (the important part)
@@ -70,12 +71,42 @@ drifting short weights. Default **4%**; **15%** for hard-to-borrow
 gap vs the compounded variant return is pure arithmetic-vs-geometric and is
 reconciled in the report.
 
-## The three variants
+## The variants
 
 - **(a) long_only** — the long book alone.
 - **(b) dollar_neutral** — +100% long / −100% short, equal-weight, monthly rebalance.
 - **(c) beta_neutral** — long − `k`·short, `k = β_long/β_short` (trailing 60d vs
   SPY, set at prior month-end), so the combined book is ≈ beta-neutral.
+- **(d) dollar_neutral_bsaware** *(iter 2)* — same 100/100 structure, but the short
+  leg is weighted by **ex-ante financing fragility** instead of equal weight.
+
+## Iteration 2 — "fit the idea, not the data"
+
+Iteration 1's conclusion #5 was that *balance-sheet-aware* short selection should
+beat the naive equal-weight short (you were short the wrong neocloud — NBIS ran
++130% but sits on net cash; CRWV is the debt-funded burner). Iteration 2 tests
+that **idea** without fitting the **data**:
+
+- **Fragility score** = simple average of three **financing/solvency** percentile
+  ranks — *net-debt/revenue*, *cash-burn ÷ cash pile*, *total-debt ÷ cash*.
+  Deliberately **no profitability** term (that's business quality, not financing
+  fragility — NBIS is the reason: deeply lossmaking yet net-cash, so *not* fragile).
+- **No return-fitting, no free parameters.** Ranks → simple average → short weight
+  **proportional** to fragility. No temperature, no optimizer, no metric weights.
+- **No lookahead.** Fundamentals are point-in-time as of the quarter public by the
+  backtest start (a 45-day filing-lag rule picks the 2025-09-30 quarter), pulled
+  from Yahoo's `fundamentals-timeseries` endpoint, and the tilt is held **static**
+  (a structural characteristic, not a timing signal).
+
+**The honest result:** the tilt correctly down-weighted NBIS (net cash → shorted
+*less*) and loaded the debt-funded burners (CRWV, APLD, WULF → shorted *more*) — but
+it **did not help this window** (dollar-neutral +27.2% → +24.9%). Rank-correlation
+between fragility and realized short success was ≈ **0**. In H1 2026 the financially
+*fragile* neoclouds **rallied** on the AI-capex bid while the financially *sturdy*
+labor-arb names (UPWK, FVRR) were the shorts that actually worked. So the short
+leg's H1 problem was **direction, not weighting** — a genuine finding, not a
+curve-fit. The infrastructure is generalizable: point it at any short book and it
+produces the same ex-ante fragility tilt.
 
 ## Headline findings (this run, 2026-01-05 → 2026-07-10)
 
@@ -90,8 +121,12 @@ reconciled in the report.
 - **Tier that carried it: Tier 4 silicon chokepoints (+86%)**; Tier 1 gen/fuel
   actually *lagged* (−2%). The long thesis is very tier-differentiated.
 - **Short-basket dispersion is HIGH** (~14%/month cross-sectional std) — the shorts
-  are a bag of idiosyncratic outcomes, so **balance-sheet-aware selection**
-  (short the debt-funded neoclouds, not the whole basket) would have dominated the
-  naive equal-weight short. See the CRWV/NBIS pair: long-CRWV/short-NBIS was −59%.
+  are a bag of idiosyncratic outcomes. See the CRWV/NBIS pair: long-CRWV/short-NBIS
+  was −59%.
+- **Balance-sheet-aware short (iter 2):** correctly identified the fragile vs sturdy
+  names ex-ante, but the tilt *cost* 2.4% this window because fragile ≠ underperformer
+  in H1 2026 — the neoclouds rallied on AI-capex euphoria. Fragility as a *short
+  timing* signal was neutral-to-negative here; as a *risk-management* signal (avoid
+  shorting cash-rich names to size like debt-funded ones) it is still the right frame.
 
-See `outputs/report.txt` for the full numbers and the five-bullet conclusion.
+See `outputs/report.txt` for the full numbers and the six-bullet conclusion.

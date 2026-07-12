@@ -38,6 +38,7 @@ PAL = {
     "long_only":       "#0072B2",   # blue
     "dollar_neutral":  "#009E73",   # green
     "beta_neutral":    "#CC79A7",   # magenta
+    "dollar_neutral_bsaware": "#E69F00",  # orange
     "SPY":             "#7F7F7F",   # grey
     "BLEND(QQQ+XLI)":  "#BBBBBB",   # light grey
     "pos":             "#009E73",
@@ -156,6 +157,35 @@ def chart_pair(pair_dict, fname="06_pair_spread.png", a="CRWV", b="NBIS"):
     ax.set_title(f"Pair spread: {a} vs {b} (cumulative)")
     ax.set_ylabel("Cumulative pair return")
     ax.legend(frameon=False)
+    return _save(fig, fname)
+
+
+def chart_bsaware(frag_df, dn_equal_nav, dn_bsaware_nav,
+                  fname="08_bsaware_short.png"):
+    """Two panels: (left) how the fragility tilt redistributes short weight per
+    name; (right) the two dollar-neutral NAVs (equal-weight short vs
+    balance-sheet-aware short)."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6),
+                                   gridspec_kw={"width_ratios": [1.15, 1]})
+    d = frag_df.sort_values("w_tilt")
+    colors = ["#009E73" if v > 0 else "#D55E00" for v in d["w_tilt"]]
+    ax1.barh(range(len(d)), d["w_tilt"].values * 100, color=colors)
+    ax1.set_yticks(range(len(d)))
+    ax1.set_yticklabels(d.index, fontsize=8)
+    ax1.axvline(0, color="k", lw=0.8)
+    ax1.set_title("Short-weight tilt vs equal weight\n"
+                  "(+green = shorted MORE on fragility; −red = shorted LESS)")
+    ax1.set_xlabel("Weight change vs equal (percentage points)")
+
+    ax2.plot(dn_equal_nav.index, dn_equal_nav.values - 1.0, lw=2.2,
+             color="#009E73", label="dollar-neutral (equal short)")
+    ax2.plot(dn_bsaware_nav.index, dn_bsaware_nav.values - 1.0, lw=2.2,
+             color="#0072B2", label="dollar-neutral (bal-sheet-aware short)")
+    ax2.axhline(0, color="k", lw=0.8, alpha=0.5)
+    ax2.yaxis.set_major_formatter(_PCT)
+    ax2.set_title("Does fitting the idea help?\nequal-weight vs fragility-weighted short")
+    ax2.set_ylabel("Cumulative return")
+    ax2.legend(frameon=False, fontsize=9)
     return _save(fig, fname)
 
 

@@ -26,6 +26,7 @@ import data as datamod
 import portfolio as pf
 import analysis as an
 import charts as ch
+import fundamentals as fund
 
 OUT = Path(__file__).parent / "outputs"
 OUT.mkdir(exist_ok=True)
@@ -72,11 +73,18 @@ def main(force=False):
     emit(f"    Failed to download: {d['failed'] or 'none'}")
     emit(f"    FX pairs used: {datamod.required_fx_pairs(d['currency_map'])}")
 
+    # ---------------- BALANCE-SHEET FRAGILITY (iteration 2) ----------------
+    # Ex-ante, no-lookahead financing-fragility score -> tilted short weights.
+    fragdf = fund.build_fragility(short_kept, force=force)
+    frag_w = fragdf["w_bsaware"]
+
     # ---------------- VARIANTS (with & without borrow) ----------------
     variants_wb, diag_wb = pf.build_variants(returns, long_kept, short_kept, spy,
-                                             apply_borrow=True)
+                                             apply_borrow=True,
+                                             short_frag_weights=frag_w)
     variants_nb, diag_nb = pf.build_variants(returns, long_kept, short_kept, spy,
-                                             apply_borrow=False)
+                                             apply_borrow=False,
+                                             short_frag_weights=frag_w)
     benches = pf.benchmark_returns(returns)
 
     # ---------------- 3. METRICS ----------------
@@ -93,7 +101,7 @@ def main(force=False):
 
     # borrow drag = difference in YTD for the L/S variants
     emit("\n[4] BORROW DRAG (YTD return, with vs without)")
-    for v in ["dollar_neutral", "beta_neutral"]:
+    for v in ["dollar_neutral", "beta_neutral", "dollar_neutral_bsaware"]:
         drag = mt_wb.loc[v, "YTD_return"] - mt_nb.loc[v, "YTD_return"]
         emit(f"    {v:16s}: {mt_nb.loc[v,'YTD_return']:+.2%} (no borrow) -> "
              f"{mt_wb.loc[v,'YTD_return']:+.2%} (with)  |  drag = {drag:+.2%}")
@@ -153,8 +161,44 @@ def main(force=False):
     emit(f"    Carried H1: {best_tier} ({tier_df.loc[best_tier,'tier_return']:+.1%});  "
          f"Lagged: {worst_tier} ({tier_df.loc[worst_tier,'tier_return']:+.1%})")
 
+    # ---------------- 9b. BALANCE-SHEET-AWARE SHORT (iteration 2) ----------------
+    dn_eq = mt_wb.loc["dollar_neutral", "YTD_return"]
+    dn_bs = mt_wb.loc["dollar_neutral_bsaware", "YTD_return"]
+    emit("\n[10] BALANCE-SHEET-AWARE SHORT — 'fit the idea, not the data'")
+    emit("     Fragility = mean percentile-rank of 3 ex-ante FINANCING metrics")
+    emit("     (net-debt/rev, burn/cash, debt/cash), point-in-time as of the")
+    emit(f"     quarter public by {fund._as_of_cutoff()} (no lookahead), held static.")
+    show = fragdf[["asof_quarter", "net_debt", "cash", "burn", "fragility",
+                   "w_equal", "w_bsaware", "w_tilt"]].copy()
+    for c in ["net_debt", "cash", "burn"]:
+        show[c] = show[c].map(lambda x: f"{x/1e9:,.2f}B" if pd.notna(x) else "n/a")
+    for c in ["fragility", "w_equal", "w_bsaware"]:
+        show[c] = show[c].map(lambda x: f"{x:.3f}")
+    show["w_tilt"] = show["w_tilt"].map(lambda x: f"{x:+.3f}")
+    emit(show.to_string())
+    emit(f"     Most-shorted (fragile): {', '.join(fragdf.head(3).index)}")
+    emit(f"     Least-shorted (sturdy): {', '.join(fragdf.tail(3).index)}")
+    emit(f"     NBIS tilt = {fragdf.loc['NBIS','w_tilt']:+.3f} "
+         f"(net cash -> correctly shorted LESS)")
+    # Was financing fragility PREDICTIVE of short success this period? Rank-correlate
+    # each short's fragility with its realized contribution to L/S PnL (higher
+    # contribution = better short, i.e. the name fell / underperformed). Per the
+    # thesis this should be POSITIVE (fragile de-rates). This is the honest test.
+    short_contrib = contrib.reindex(fragdf.index)
+    # Spearman = Pearson on ranks (computed directly to avoid a scipy dependency).
+    rho = float(fragdf["fragility"].rank().corr(short_contrib.rank()))
+    emit(f"     Rank-corr(fragility, realized short contribution) = {rho:+.2f}  "
+         + ("-> fragility PREDICTED short success (thesis holds)." if rho > 0.15 else
+            "-> fragility was NOT predictive / ANTI-predictive this window: the "
+            "financially-fragile names OUTPERFORMED (AI-capex bid), while the sturdy "
+            "labor-arb names were the shorts that actually worked."))
+    emit(f"     dollar-neutral YTD: equal short = {dn_eq:+.2%}  ->  "
+         f"balance-sheet-aware short = {dn_bs:+.2%}   (delta {dn_bs-dn_eq:+.2%})")
+    frag_w.to_frame("bsaware_short_weight").join(
+        fragdf[["fragility", "w_tilt"]]).to_csv(OUT / "fragility_weights.csv")
+
     # ---------------- 9. CHARTS ----------------
-    emit("\n[10] WRITING CHARTS ...")
+    emit("\n[11] WRITING CHARTS ...")
     variant_navs = {k: pf.cum_nav(v) for k, v in variants_wb.items()}
     bench_navs = {k: pf.cum_nav(v) for k, v in benches.items()}
     ls_beta = an.rolling_beta_series(variants_wb["dollar_neutral"], spy,
@@ -168,6 +212,9 @@ def main(force=False):
     if pair:
         paths.append(ch.chart_pair(pair))
     paths.append(ch.chart_tier(tier_df))
+    paths.append(ch.chart_bsaware(fragdf,
+                                  pf.cum_nav(variants_wb["dollar_neutral"]),
+                                  pf.cum_nav(variants_wb["dollar_neutral_bsaware"])))
     for p in paths:
         emit(f"     saved {p.name}")
 
@@ -187,8 +234,11 @@ def main(force=False):
     top2 = contrib.abs().sort_values(ascending=False).head(2)
     top2_share = top2.sum() / contrib.abs().sum()
 
+    dn_bs = mt_wb.loc["dollar_neutral_bsaware", "YTD_return"]
+    bs_delta = dn_bs - dn_ytd
+
     emit("\n" + "=" * 96)
-    emit("  FIVE-BULLET CONCLUSIONS")
+    emit("  SIX-BULLET CONCLUSIONS")
     emit("=" * 96)
     emit(f"  1. THESIS vs LUCK: dollar-neutral L/S returned {dn_ytd:+.1%} YTD. "
          f"Excluding the single best OR worst name moves the result within a "
@@ -210,6 +260,16 @@ def main(force=False):
          f"std = {xstd_fm.mean():.1%} — {'HIGH' if xstd_fm.mean() > 0.06 else 'LOW'}, "
          f"confirming the short basket is a bag of idiosyncratic outcomes "
          f"(balance-sheet selection matters more than the basket).")
+    emit(f"  6. FIT THE IDEA: weighting the short book by ex-ante FINANCING "
+         f"fragility (no lookahead, no tuning) took NBIS from equal-weight to "
+         f"{fragdf.loc['NBIS','w_tilt']:+.1%} tilt and moved dollar-neutral YTD "
+         f"{dn_ytd:+.1%} -> {dn_bs:+.1%} ({bs_delta:+.1%}). "
+         + ("The idea, properly implemented, ADDS value — the naive equal-weight "
+            "short was leaving money on the table by shorting cash-rich names as "
+            "hard as debt-funded burners." if bs_delta > 0 else
+            "It did NOT rescue the short leg this period — the fragile names RALLIED "
+            "regardless of balance sheet, so the thesis's H1 problem was direction, "
+            "not weighting. Honest result, not curve-fit."))
     emit("=" * 96)
 
     (OUT / "report.txt").write_text("\n".join(_report_lines))

@@ -34,56 +34,67 @@ def _month_end_index(idx):
     return s.groupby([idx.year, idx.month]).last().values
 
 
-def equal_weight_book(returns, members, rebalance="M"):
-    """Daily return of an equal-weight, monthly-rebalanced book.
+def _target_weights(valid_mask, target):
+    """Target weights among currently-valid members. `target` is None (equal) or
+    a Series of desired relative weights; it is restricted to valid names and
+    renormalized to sum to 1."""
+    valid = valid_mask[valid_mask].index
+    if target is None:
+        n = len(valid)
+        w = pd.Series(0.0, index=valid_mask.index)
+        if n:
+            w.loc[valid] = 1.0 / n
+        return w
+    t = target.reindex(valid_mask.index).fillna(0.0).clip(lower=0.0)
+    t.loc[~valid_mask.astype(bool)] = 0.0
+    s = t.sum()
+    return t / s if s > 0 else t
 
-    Weights are reset to 1/N at each month-end (N = members with valid data that
-    day) and then DRIFT with realized returns until the next reset. This is the
-    honest "buy equal, let it run, rebalance monthly" book -- no lookahead, since
-    the reset only uses names already trading at the reset date.
 
-    Returns a Series of daily book returns aligned to `returns.index`.
+def equal_weight_book(returns, members, rebalance="M", target=None):
+    """Daily return of a monthly-rebalanced book.
+
+    Weights are reset to `target` (default: equal) at each month-end among names
+    with valid data, then DRIFT with realized returns until the next reset. Honest
+    "set weights, let it run, rebalance monthly" -- no lookahead, since the reset
+    only uses names already trading at the reset date. Passing a non-equal
+    `target` (e.g. balance-sheet fragility weights) gives a tilted book.
     """
     members = [m for m in members if m in returns.columns]
     R = returns[members].copy()
     dates = R.index
     month_ends = set(pd.Timestamp(d) for d in _month_end_index(dates))
-    # The first available day acts as the initial "set" date.
     reset_dates = {dates[0]} | month_ends
+    tgt = None if target is None else target.reindex(members)
 
     book_ret = pd.Series(0.0, index=dates)
     w = None
     for i, d in enumerate(dates):
         if w is None or d in reset_dates:
-            # Reset to equal weight among currently-valid members (prior close).
-            valid = R.loc[d].notna()
-            n = int(valid.sum())
-            w = (valid / n).astype(float) if n > 0 else valid.astype(float)
+            w = _target_weights(R.loc[d].notna(), tgt)
         r_t = R.loc[d].fillna(0.0)
         book_ret.iloc[i] = float((w * r_t).sum())
-        # Drift weights by today's returns for tomorrow (multiplicative).
         grown = w * (1.0 + r_t)
         tot = grown.sum()
         w = grown / tot if tot > 0 else w
     return book_ret
 
 
-def per_name_weight_paths(returns, members):
-    """Return a DataFrame of each member's effective weight each day (drifting,
-    monthly-reset). Used for exact per-name contribution attribution."""
+def per_name_weight_paths(returns, members, target=None):
+    """DataFrame of each member's effective weight each day (drifting, monthly
+    reset to `target`; default equal). Used for per-name contribution & borrow."""
     members = [m for m in members if m in returns.columns]
     R = returns[members].copy()
     dates = R.index
     month_ends = set(pd.Timestamp(d) for d in _month_end_index(dates))
     reset_dates = {dates[0]} | month_ends
+    tgt = None if target is None else target.reindex(members)
 
     W = pd.DataFrame(0.0, index=dates, columns=members)
     w = None
     for d in dates:
         if w is None or d in reset_dates:
-            valid = R.loc[d].notna()
-            n = int(valid.sum())
-            w = (valid / n).astype(float) if n > 0 else valid.astype(float)
+            w = _target_weights(R.loc[d].notna(), tgt)
         W.loc[d] = w
         r_t = R.loc[d].fillna(0.0)
         grown = w * (1.0 + r_t)
@@ -126,7 +137,7 @@ def rolling_beta(book_ret, mkt_ret, window):
 # The three portfolio variants
 # ---------------------------------------------------------------------------
 def build_variants(returns, long_members, short_members, spy_ret,
-                   apply_borrow=True):
+                   apply_borrow=True, short_frag_weights=None):
     """Construct daily-return series for the three portfolio variants.
 
     (a) long_only         : the long book alone.
@@ -193,6 +204,28 @@ def build_variants(returns, long_members, short_members, spy_ret,
         beta_long=beta_long, beta_short=beta_short, k=k_applied,
         short_weights=short_w,
     )
+
+    # ---- (d) dollar-neutral, BALANCE-SHEET-AWARE short ----
+    # Same 100/100 structure, but the short leg is weighted by ex-ante financing
+    # fragility (see fundamentals.py) instead of equal weight. Held as a static
+    # structural tilt (monthly reset to the same fragility target). This is the
+    # "fit the idea" test of iteration-1 conclusion #5.
+    if short_frag_weights is not None:
+        short_ret_f = equal_weight_book(returns, short_members,
+                                        target=short_frag_weights)
+        short_w_f = per_name_weight_paths(returns, short_members,
+                                          target=short_frag_weights)
+        borrow_f = pd.Series(0.0, index=returns.index)
+        if apply_borrow:
+            for d in returns.index:
+                borrow_f.loc[d] = borrow_daily_drag(
+                    [m for m in short_members if m in returns.columns],
+                    short_w_f.loc[d] if d in short_w_f.index else None)
+        variants["dollar_neutral_bsaware"] = long_ret - short_ret_f - borrow_f
+        diag["short_ret_frag"] = short_ret_f
+        diag["borrow_frag"] = borrow_f
+        diag["short_weights_frag"] = short_w_f
+
     return variants, diag
 
 
