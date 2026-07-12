@@ -1,0 +1,102 @@
+================================================================================================
+  RICARDO WITH A BLOOMBERG TERMINAL — L/S THESIS STRESS TEST
+  Long inelastic supply (power/grid/fuel/silicon chokepoints)  |  Short leveraged compute + labor arbitrage
+================================================================================================
+
+[1] DATA QUALITY
+    Window: 2026-01-05 -> 2026-07-10 (129 trading days, 128 return days)
+    Kept 47 longs, 15 shorts, benchmarks SPY/QQQ/XLI.
+    Dropped (>10% missing): ['KAP.L']
+    Failed to download: none
+    FX pairs used: ['CHFUSD=X', 'DKKUSD=X', 'EURUSD=X', 'GBPUSD=X', 'HKDUSD=X', 'JPYUSD=X', 'KRWUSD=X', 'SEKUSD=X']
+
+[2] METRICS — WITH borrow haircut (default 4%, 15% HTB: ['CRWV', 'IREN', 'NBIS'])
+               YTD_return ann_return  ann_vol Sharpe_rf4 max_drawdown worst_day best_day pct_positive_days  n_days
+name                                                                                                              
+long_only         +40.22%   +106.16%  +34.19%      +2.00      -13.77%    -5.70%   +6.80%           +59.38%     128
+dollar_neutral    +27.25%    +74.38%  +40.67%      +1.27      -20.47%    -6.34%   +7.92%           +51.56%     128
+beta_neutral      +33.33%    +89.89%  +38.98%      +1.54      -15.20%    -6.08%   +7.92%           +52.34%     128
+SPY               +10.36%    +22.61%  +14.04%      +1.17       -8.88%    -2.58%   +2.91%           +53.12%     128
+BLEND(QQQ+XLI)    +16.28%    +36.86%  +18.47%      +1.48      -10.16%    -2.96%   +3.36%           +56.25%     128
+
+[3] METRICS — WITHOUT borrow haircut
+               YTD_return ann_return  ann_vol Sharpe_rf4 max_drawdown worst_day best_day pct_positive_days  n_days
+name                                                                                                              
+long_only         +40.22%   +106.16%  +34.19%      +2.00      -13.77%    -5.70%   +6.80%           +59.38%     128
+dollar_neutral    +31.39%    +85.74%  +40.67%      +1.43      -19.19%    -6.32%   +7.94%           +51.56%     128
+beta_neutral      +37.41%   +101.49%  +38.99%      +1.70      -13.96%    -6.06%   +7.94%           +52.34%     128
+SPY               +10.36%    +22.61%  +14.04%      +1.17       -8.88%    -2.58%   +2.91%           +53.12%     128
+BLEND(QQQ+XLI)    +16.28%    +36.86%  +18.47%      +1.48      -10.16%    -2.96%   +3.36%           +56.25%     128
+
+[4] BORROW DRAG (YTD return, with vs without)
+    dollar_neutral  : +31.39% (no borrow) -> +27.25% (with)  |  drag = -4.15%
+    beta_neutral    : +37.41% (no borrow) -> +33.33% (with)  |  drag = -4.08%
+
+[5] PER-NAME CONTRIBUTION to dollar-neutral L/S PnL (sum=+28.28%; check vs sum-of-daily)
+    Top 6 positive:
+       UPWK       +4.51%   (SHORT/labor_arbitrage)
+       CNXC       +3.65%   (SHORT/labor_arbitrage)
+       FVRR       +3.32%   (SHORT/labor_arbitrage)
+       MU         +3.18%   (LONG/Tier4_silicon)
+       BE         +2.81%   (LONG/Tier3_building)
+       4062.T     +2.57%   (LONG/Tier4_silicon)
+    Top 6 negative:
+       NBIS       -8.11%   (SHORT/fragile_middle)
+       WULF       -4.50%   (SHORT/fragile_middle)
+       CRWV       -3.06%   (SHORT/fragile_middle)
+       CIFR       -2.50%   (SHORT/fragile_middle)
+       APLD       -2.15%   (SHORT/fragile_middle)
+       RHI        -1.70%   (SHORT/labor_arbitrage)
+
+[6] ONE-NAME FRAGILITY INDEX (the Nebius test)
+    full                   L/S YTD = +27.25%
+    ex_best(UPWK)          L/S YTD = +20.49%
+    ex_worst(NBIS)         L/S YTD = +37.46%
+    Best contributor : UPWK  (+4.51%)
+    Worst contributor: NBIS (-8.11%)
+    Return SPREAD across the 3 runs = 16.96%
+    -> dropping BEST costs +6.75%; dropping WORST adds +10.21%
+
+[7] WITHIN-CATEGORY DISPERSION — fragile_middle
+    Names: ['ORCL', 'CRWV', 'NBIS', 'IREN', 'APLD', 'WULF', 'CIFR']
+    Cross-sectional std of monthly returns (thesis wants this HIGH):
+       2026-01: 13.80%
+       2026-02: 16.00%
+       2026-03: 11.29%
+       2026-04: 13.16%
+       2026-05: 21.35%
+       2026-06: 19.05%
+       2026-07: 5.35%
+    Mean monthly cross-sectional std = 14.28%  (vs a tight factor basket ~2-5%)
+
+[8] PAIR SPREAD — CRWV vs NBIS
+    long_CRWV_short_NBIS   cumulative = -59.29%
+    long_NBIS_short_CRWV   cumulative = +94.90%
+
+[9] LONG-BOOK TIER ATTRIBUTION (standalone equal-weight, YTD)
+               tier_return ann_vol  n_names
+Tier1_gen_fuel      -2.20%   38.7%      9.0
+Tier2_grid         +34.33%   33.0%     15.0
+Tier3_building     +43.87%   37.4%     12.0
+Tier4_silicon      +85.86%   45.2%     11.0
+    Carried H1: Tier4_silicon (+85.9%);  Lagged: Tier1_gen_fuel (-2.2%)
+
+[10] WRITING CHARTS ...
+     saved 01_cumulative_nav.png
+     saved 02_drawdown.png
+     saved 03_contribution_waterfall.png
+     saved 04_rolling_beta.png
+     saved 05_dispersion.png
+     saved 06_pair_spread.png
+     saved 07_tier_attribution.png
+     saved summary.csv, name_contributions.csv
+
+================================================================================================
+  FIVE-BULLET CONCLUSIONS
+================================================================================================
+  1. THESIS vs LUCK: dollar-neutral L/S returned +27.2% YTD. Excluding the single best OR worst name moves the result within a 17.0% band (spread/return = 0.6x). Alpha is NAME-LUCKY — hostage to 1-2 names.
+  2. CONCENTRATION: the 2 largest absolute contributors (NBIS, UPWK) account for 15% of gross contribution — diversified.
+  3. BORROW DRAG: the HTB haircut (15% on ['CRWV', 'IREN', 'NBIS']) costs the dollar-neutral book 4.15% YTD (+31.4% gross -> +27.2% net). Real, but not thesis-breaking.
+  4. TIER TO OVERWEIGHT: Tier4_silicon led (+85.9%); Tier1_gen_fuel lagged (-2.2%). Long alpha is tier-differentiated, not uniform.
+  5. SHORT-SIDE DISPERSION: fragile_middle mean monthly cross-sectional std = 14.3% — HIGH, confirming the short basket is a bag of idiosyncratic outcomes (balance-sheet selection matters more than the basket).
+================================================================================================
