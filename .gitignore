@@ -14,46 +14,16 @@ results/
 # Regime-calibration study: panel + cached token histories (valuable; keep)
 !data/polymarket_calibration_snapshot/*.csv
 !data/polymarket_calibration_snapshot/*.png
-# Paper-trade ledgers are tracked (the forward out-of-sample record)
-!data/paper_trade/champion_positions.csv
-!data/paper_trade/macro_positions.csv
-!data/paper_trade/regime_positions.csv
-!data/paper_trade/validated_regime_positions.csv
-!data/paper_trade/smart_flow_positions.csv
-!data/paper_trade/smart_flow_roi_positions.csv
-!data/paper_trade/bankroll_summary.csv
-!data/paper_trade/insider_scorecard.csv
+# Paper-trade ledgers, studies and plots are tracked (the forward out-of-sample
+# record). Blanket un-ignore instead of enumerating files: a new strategy's
+# ledger silently never committed when it was missing from this list (the
+# hourly cron's `git add` failed on it, masked by `|| true`), so its forward
+# history was wiped every run — see docs/REPO_REVIEW_2026-07-01.md §2.7.
+!data/paper_trade/*.csv
+!data/paper_trade/*.png
 !data/paper_trade/insider_scorecard
-!data/paper_trade/wallet_sentiment_study.csv
 .DS_Store
 .claude/
-!data/paper_trade/price_deepdive.csv
-!data/paper_trade/price_deepdive_flow.csv
-!data/paper_trade/price_convergence.png
-!data/paper_trade/midprice_backtest.csv
-!data/paper_trade/midprice_backtest_summary.csv
-!data/paper_trade/midprice_backtest.png
-!data/paper_trade/midprice_full_backtest_trades.csv
-!data/paper_trade/midprice_full_backtest_yes_trades.csv
-!data/paper_trade/midprice_full_backtest_no_trades.csv
-!data/paper_trade/midprice_full_backtest_equity.csv
-!data/paper_trade/midprice_full_backtest_summary.csv
-!data/paper_trade/midprice_full_backtest.png
-!data/paper_trade/yes_weighting.csv
-!data/paper_trade/yes_weighting_summary.csv
-!data/paper_trade/yes_weighting.png
-!data/paper_trade/dynamic_yes.csv
-!data/paper_trade/dynamic_yes.png
-!data/paper_trade/horizon_grid.csv
-!data/paper_trade/horizon_grid.png
-!data/paper_trade/entry_horizon_sweep.png
-!data/paper_trade/midprice_yes_positions.csv
-!data/paper_trade/midprice_yes_benchmark.csv
-!data/paper_trade/midprice_yes_backtest_curve.png
-!data/paper_trade/midprice_yes_10_20_positions.csv
-!data/paper_trade/midprice_yes_10_30_positions.csv
-!data/paper_trade/midprice_yes_20_40_positions.csv
-!data/paper_trade/dip_confirm_positions.csv
 
 # Polymarket/PEAD runtime fetch caches (created on demand)
 data/raw/
