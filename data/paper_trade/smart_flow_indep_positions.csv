@@ -1,0 +1,1 @@
+token,condition_id,question,domain,end_date,entry_date,n_smart_buyers,buyers,first_buy_span_hours,price_chase,pairwise_jaccard,indep_score,indep_class,bet_fraction,entry_mid,entry_ask,spread,current_price,status,exit_date,outcome,pnl

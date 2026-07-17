@@ -98,7 +98,11 @@ jobs:
         run: |
           git config user.name  "paper-trade-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add \
+          # Stage per-file so one bad path (missing, or gitignored — how the
+          # smart_flow_indep ledger silently lost its history for weeks) can't
+          # be masked: everything else still commits and the failure is loud.
+          failed=""
+          for f in \
             data/paper_trade/midprice_yes_positions.csv \
             data/paper_trade/midprice_yes_10_20_positions.csv \
             data/paper_trade/midprice_yes_10_30_positions.csv \
@@ -115,7 +119,12 @@ jobs:
             data/polymarket_calibration_snapshot/validated_domains.json \
             data/paper_trade/bankroll_summary.csv \
             data/paper_trade/book_snapshots.csv.gz \
-            data/paper_trade/dashboard.html || true
+            data/paper_trade/token_intraday.csv.gz \
+            data/paper_trade/dashboard.html
+          do
+            git add "$f" || { failed="$failed $f"; echo "::warning::could not stage $f (missing or gitignored) — its history is NOT being committed"; }
+          done
+          [ -z "$failed" ] || echo "::error::unstageable ledger files:$failed"
           if ! git diff --cached --quiet; then
             git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
             git pull --rebase --autostash origin ${GITHUB_REF_NAME}
