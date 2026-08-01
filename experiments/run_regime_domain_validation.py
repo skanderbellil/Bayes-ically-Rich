@@ -201,6 +201,18 @@ def main():
         "validated_domains": validated,
         "per_domain": {r["domain"]: r for r in results},
     }
+    # Only rewrite when something OTHER than the timestamp changed — otherwise
+    # the hourly cron churns a one-line "generated" diff into every commit and
+    # a month of identical stats masquerades as a month of updates.
+    try:
+        with open(OUT) as f:
+            old = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        old = None
+    new_cmp = json.loads(json.dumps({k: v for k, v in payload.items() if k != "generated"}, default=str))
+    if old is not None and {k: v for k, v in old.items() if k != "generated"} == new_cmp:
+        print("Validation unchanged since %s — keeping %s as-is" % (old.get("generated", "?"), OUT))
+        return
     with open(OUT, "w") as f:
         json.dump(payload, f, indent=2, default=str)
     print("Wrote %s" % OUT)

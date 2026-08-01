@@ -251,6 +251,7 @@ def historical_backtest(
     haircut: float = 0.02,
     min_volume: float = 1_000.0,
     use_cache: bool = True,
+    max_cache_age_days: float | None = 7.0,
     sleep: float = 0.0,
 ) -> dict:
     """Backtest 'buy YES in [lo,hi) somewhere in the [days_min,days_max] window,
@@ -260,13 +261,37 @@ def historical_backtest(
     benchmark reflects the live strategy's behaviour (each market is entered once
     at some day within the window, ~uniformly as the cron rolls). Returns summary
     stats and caches them to BENCH_FILE. Set use_cache=False to recompute.
+
+    The cache expires after ``max_cache_age_days`` (None = never): the original
+    cache-forever behaviour left the committed benchmark frozen at its very first
+    computation while the live ledger it benchmarks kept moving. If a recompute's
+    market fetch fails, the stale cache is returned rather than raising.
     """
+    stale_row = None
     if use_cache and BENCH_FILE.exists():
         row = pd.read_csv(BENCH_FILE).iloc[0].to_dict()
-        return row
+        try:
+            computed = pd.Timestamp(row.get("computed"))
+            if computed.tzinfo is None:
+                computed = computed.tz_localize("UTC")
+            age_days = (pd.Timestamp.now(tz="UTC") - computed).total_seconds() / 86400.0
+        except (ValueError, TypeError):
+            age_days = float("inf")
+        if max_cache_age_days is None or age_days <= max_cache_age_days:
+            return row
+        logger.info("historical_backtest: cached benchmark is %.1f days old (max %s) — recomputing",
+                    age_days, max_cache_age_days)
+        stale_row = row
 
     import time
-    markets = fetch_markets(n_markets=n_markets, min_volume=min_volume, closed=True)
+    try:
+        markets = fetch_markets(n_markets=n_markets, min_volume=min_volume, closed=True)
+    except Exception as e:
+        if stale_row is not None:
+            logger.warning("historical_backtest: recompute fetch failed (%s) — keeping stale cache",
+                           type(e).__name__)
+            return stale_row
+        raise
     markets = markets[markets["outcome"].isin([0.0, 1.0])].reset_index(drop=True)
     rets = []
     for i, m in enumerate(markets.itertuples(index=False), 1):

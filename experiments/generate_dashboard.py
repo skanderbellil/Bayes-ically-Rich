@@ -503,8 +503,18 @@ def _indep_class_filter(cls: str):
     return _f
 
 
+def _in_strategy(df):
+    """Exploratory regime ledger logs both regimes for comparison — chart only
+    the rows the strategy would actually have taken."""
+    if "in_strategy" not in df.columns:
+        return pd.Series(True, index=df.index)
+    return df["in_strategy"].astype(str).str.lower().isin(("true", "1", "1.0"))
+
+
 # Derived filter views: (source file, dashboard id, label, row filter)
 DERIVED = [
+    ("regime_positions.csv", "regime_all",
+     "Regime (all-domain, exploratory)", _in_strategy),
     ("smart_flow_positions.csv", "smart_flow_combo",
      "Smart Flow ∩ band .30–.70", _combo_band),
     ("smart_flow_positions.csv", "smart_flow_combo3d",

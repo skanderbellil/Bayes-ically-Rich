@@ -60,6 +60,10 @@ COLS = ["token", "condition_id", "question", "domain", "proxy", "proxy_value", "
 
 # matched proxy daily series builders (higher = more turbulent), causal trailing regime
 _WIN, _REF = 45, 365
+# Don't open NEW positions off a proxy this far behind today — the committed
+# datasets froze on a June snapshot once (proxy_value pinned at 199.48 for five
+# weeks of entries) and the gate never noticed. Marking/resolution still runs.
+MAX_PROXY_STALE_DAYS = 14
 
 
 def _series(domain):
@@ -93,6 +97,13 @@ def regime_now(domain):
     s, name, win = _series(domain)
     if s is None:
         return None, name, None, None
+    s = s.dropna()
+    lag_days = (pd.Timestamp.now() - s.index.max()).days
+    if lag_days > MAX_PROXY_STALE_DAYS:
+        logger.error("proxy %s for %s is %d days stale (last obs %s) — refusing to gate on it; "
+                     "no new entries (run experiments/refresh_regime_proxies.py)",
+                     name, domain, lag_days, s.index.max().date())
+        return "stale", name, round(float(s.iloc[-1]), 2), 0.0
     s = s.asfreq("D").ffill().dropna()
     lvl = s.rolling(win, min_periods=max(5, win // 3)).mean()
     lvl_med = lvl.rolling(_REF, min_periods=_REF // 2).median().iloc[-1]
