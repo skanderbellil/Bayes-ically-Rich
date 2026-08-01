@@ -31,8 +31,9 @@ dfl = ["torch>=2.0", "cvxpy>=1.4", "cvxpylayers>=0.1.6"]
 data = ["gdown>=5.0"]
 # Only needed for the council --llm mode
 llm = ["anthropic>=0.40.0"]
-# Development / test tooling
-dev = ["pytest>=8.0"]
+# Development / test tooling (+ Excel readers for experiments/refresh_regime_proxies.py —
+# the GPR daily index is distributed as an Excel sheet)
+dev = ["pytest>=8.0", "xlrd>=2.0", "openpyxl>=3.1"]
 
 [tool.setuptools]
 packages = [

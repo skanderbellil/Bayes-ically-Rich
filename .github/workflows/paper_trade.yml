@@ -13,6 +13,11 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # A rate-limited Polymarket window once stretched a run to 2h04 — it blocked
+    # the next slot (cancelled) and left the one after that pinned to a stale
+    # trigger-time SHA, whose end-of-run rebase then conflicted on every ledger.
+    # Cap the run instead of letting it poison the following two.
+    timeout-minutes: 55
     permissions:
       contents: write      # needed to commit ledgers back
 
@@ -21,13 +26,28 @@ jobs:
         with:
           fetch-depth: 1
 
+      # Actions pins a run to the branch head at TRIGGER time. If this run sat
+      # queued behind a slow one, that SHA predates the previous run's ledger
+      # push — start from the real tip so we never rebase across it.
+      - name: Sync to current branch tip
+        run: |
+          git fetch origin "$GITHUB_REF_NAME"
+          git reset --hard FETCH_HEAD
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev]" 2>/dev/null || pip install pandas numpy scipy requests tabulate scikit-learn matplotlib seaborn tqdm
+        run: pip install -e ".[dev]" 2>/dev/null || pip install pandas numpy scipy requests tabulate scikit-learn matplotlib seaborn tqdm xlrd openpyxl
+
+      - name: Refresh regime proxy datasets (GPR / EPU / BTC)
+        id: proxy_refresh
+        continue-on-error: true
+        # GPR publishes with a ~5-day lag; --if-stale-days 5 makes this a ~daily
+        # refresh per source instead of hammering the hosts every hour.
+        run: python experiments/refresh_regime_proxies.py --if-stale-days 5
 
       - name: Mid-priced-YES — all bands (single scan)
         id: midprice_yes
@@ -98,43 +118,80 @@ jobs:
         run: |
           git config user.name  "paper-trade-bot"
           git config user.email "bot@users.noreply.github.com"
+          FILES="
+            data/paper_trade/midprice_yes_positions.csv
+            data/paper_trade/midprice_yes_10_20_positions.csv
+            data/paper_trade/midprice_yes_10_30_positions.csv
+            data/paper_trade/midprice_yes_20_40_positions.csv
+            data/paper_trade/midprice_yes_benchmark.csv
+            data/paper_trade/dip_confirm_positions.csv
+            data/paper_trade/smart_flow_positions.csv
+            data/paper_trade/smart_flow_roi_positions.csv
+            data/paper_trade/smart_flow_indep_positions.csv
+            data/paper_trade/macro_positions.csv
+            data/paper_trade/regime_positions.csv
+            data/paper_trade/validated_regime_positions.csv
+            data/paper_trade/champion_positions.csv
+            data/polymarket_calibration_snapshot/validated_domains.json
+            data/paper_trade/bankroll_summary.csv
+            data/paper_trade/book_snapshots.csv.gz
+            data/paper_trade/token_intraday.csv.gz
+            data/paper_trade/dashboard.html
+            datasets/gpr_daily.csv.gz
+            datasets/epu_daily.csv
+            datasets/btc_usd_daily.csv
+          "
           # Stage per-file so one bad path (missing, or gitignored — how the
           # smart_flow_indep ledger silently lost its history for weeks) can't
           # be masked: everything else still commits and the failure is loud.
-          failed=""
-          for f in \
-            data/paper_trade/midprice_yes_positions.csv \
-            data/paper_trade/midprice_yes_10_20_positions.csv \
-            data/paper_trade/midprice_yes_10_30_positions.csv \
-            data/paper_trade/midprice_yes_20_40_positions.csv \
-            data/paper_trade/midprice_yes_benchmark.csv \
-            data/paper_trade/dip_confirm_positions.csv \
-            data/paper_trade/smart_flow_positions.csv \
-            data/paper_trade/smart_flow_roi_positions.csv \
-            data/paper_trade/smart_flow_indep_positions.csv \
-            data/paper_trade/macro_positions.csv \
-            data/paper_trade/regime_positions.csv \
-            data/paper_trade/validated_regime_positions.csv \
-            data/paper_trade/champion_positions.csv \
-            data/polymarket_calibration_snapshot/validated_domains.json \
-            data/paper_trade/bankroll_summary.csv \
-            data/paper_trade/book_snapshots.csv.gz \
-            data/paper_trade/token_intraday.csv.gz \
-            data/paper_trade/dashboard.html
-          do
-            git add "$f" || { failed="$failed $f"; echo "::warning::could not stage $f (missing or gitignored) — its history is NOT being committed"; }
-          done
-          [ -z "$failed" ] || echo "::error::unstageable ledger files:$failed"
-          if ! git diff --cached --quiet; then
-            git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
-            git pull --rebase --autostash origin ${GITHUB_REF_NAME}
-            git push
-          else
+          stage() {
+            failed=""
+            for f in $FILES; do
+              git add "$f" || { failed="$failed $f"; echo "::warning::could not stage $f (missing or gitignored) — its history is NOT being committed"; }
+            done
+            [ -z "$failed" ] || echo "::error::unstageable ledger files:$failed"
+          }
+          stage
+          if git diff --cached --quiet; then
             echo "No ledger changes — nothing to commit."
+            exit 0
           fi
+          git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
+          # Push with replay-on-rejection instead of `pull --rebase`: a rebase
+          # across another run's ledger push conflicts on every CSV (and can't
+          # merge the .gz binaries at all), throwing the whole hour away. Our
+          # freshly computed ledger files are the newest marks by construction,
+          # so on rejection re-apply exactly those paths onto the moved tip —
+          # any interleaved commits (code pushes) are preserved untouched.
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            echo "push rejected (attempt $attempt) — replaying ledger commit onto the new tip"
+            tmp="$(mktemp -d)"
+            for f in $FILES; do
+              [ -f "$f" ] && { mkdir -p "$tmp/$(dirname "$f")"; cp "$f" "$tmp/$f"; }
+            done
+            git fetch origin "$GITHUB_REF_NAME"
+            git reset --hard FETCH_HEAD
+            for f in $FILES; do
+              [ -f "$tmp/$f" ] && { mkdir -p "$(dirname "$f")"; cp "$tmp/$f" "$f"; }
+            done
+            rm -rf "$tmp"
+            stage
+            if git diff --cached --quiet; then
+              echo "No diff against the new tip — remote already contains these updates."
+              exit 0
+            fi
+            git commit -m "paper-trade: update $(date -u +%Y-%m-%d_%H:%M)"
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push ledger updates after 5 attempts"
+          exit 1
 
       - name: Fail job if any strategy step failed
         if: >
+          steps.proxy_refresh.outcome == 'failure' ||
           steps.midprice_yes.outcome == 'failure' ||
           steps.dip_confirm.outcome == 'failure' ||
           steps.smart_flow.outcome == 'failure' ||
@@ -149,6 +206,7 @@ jobs:
           steps.book_snapshot.outcome == 'failure'
         run: |
           echo "One or more strategy steps failed:"
+          echo "  proxy_refresh:             ${{ steps.proxy_refresh.outcome }}"
           echo "  midprice_yes:              ${{ steps.midprice_yes.outcome }}"
           echo "  dip_confirm:               ${{ steps.dip_confirm.outcome }}"
           echo "  smart_flow:                ${{ steps.smart_flow.outcome }}"
