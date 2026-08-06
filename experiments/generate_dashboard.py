@@ -277,15 +277,23 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
     realized = peakdep = 0.0
     stakes = {}                            # idx -> {"frac": fraction used, "stake": $ at entry}
     cur_day = None
+
+    def settle(day):
+        """Close every position settling on `day` that is currently held.
+        Idempotent — a second call skips what the first already popped."""
+        nonlocal cash, realized
+        for idx in sells.get(day, []):
+            h = hold.pop(idx, None)
+            if h:
+                proc = h["shares"] * trades[idx]["outcome"]
+                cash += proc; realized += proc - h["cost"]
+
     for ts in hours:
         day = ts.strftime("%Y-%m-%d")
         if day != cur_day:
             cur_day = day
-            for idx in sells.get(day, []):
-                h = hold.pop(idx, None)
-                if h:
-                    proc = h["shares"] * trades[idx]["outcome"]
-                    cash += proc; realized += proc - h["cost"]
+            # Sell first so capital from today's settlements funds today's entries.
+            settle(day)
             for idx in buys.get(day, []):
                 eq = cash + sum(h["shares"] * mp(i, ts) for i, h in hold.items())
                 fr = (fracs.get(idx, 0.0) if fracs is not None else frac)
@@ -301,6 +309,12 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
                     maxconc = max(maxconc, len(hold))
                     if mode == "pct":
                         stakes[idx] = {"frac": fr, "stake": round(stake, 2)}
+            # Same-day round-trips: ~half of these ledgers' trades enter AND
+            # settle on one date (sports markets). The pre-buy sell pass ran
+            # before they were held, so without this second pass their capital
+            # is locked forever — six such trades pinned every sleeve's cash at
+            # $0 from 2026-07-01 and froze the whole dashboard.
+            settle(day)
         cost = sum(h["cost"] for h in hold.values())
         mv = sum(h["shares"] * mp(i, ts) for i, h in hold.items())
         peakdep = max(peakdep, cost / (cost + cash) if (cost + cash) > 0 else 0.0)
