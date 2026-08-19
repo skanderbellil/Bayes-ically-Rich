@@ -1,5 +1,5 @@
 strategy,file,capital,stake_frac,final_equity,total_return,realized,unrealized,max_dd,trades_taken,trades_skipped,still_open,edge_tstat,n_resolved
-Smart Flow,smart_flow_positions.csv,1000.0,0.1,475.36,-0.5246,-250.74,-273.9,-0.4057,23,5699,9,-0.1962,4895
+Smart Flow,smart_flow_positions.csv,1000.0,0.1,475.36,-0.5246,-250.74,-273.9,-0.4057,23,5707,9,-0.2682,4908
 Smart Flow (ROI),smart_flow_roi_positions.csv,1000.0,0.1,2516.52,1.5165,723.38,793.14,-0.27,33,270,14,-1.1839,240
 Mid-priced YES,midprice_yes_positions.csv,1000.0,0.1,1158.8,0.1588,-75.06,233.86,-0.5108,20,415,6,0.138,427
 Dip-Confirm YES,dip_confirm_positions.csv,1000.0,0.1,2045.45,1.0454,-94.68,1140.13,-0.4195,18,235,8,-1.0222,250
