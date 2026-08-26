@@ -106,6 +106,11 @@ jobs:
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
 
+      - name: Sleeve kill battery (which sleeves may claim capital)
+        id: kill_battery
+        continue-on-error: true
+        run: python experiments/run_paper_kill_battery.py
+
       - name: Generate dashboard
         run: python experiments/generate_dashboard.py
 
@@ -134,6 +139,7 @@ jobs:
             data/paper_trade/champion_positions.csv
             data/polymarket_calibration_snapshot/validated_domains.json
             data/paper_trade/bankroll_summary.csv
+            data/paper_trade/sleeve_validation.json
             data/paper_trade/book_snapshots.csv.gz
             data/paper_trade/token_intraday.csv.gz
             data/paper_trade/dashboard.html
@@ -203,6 +209,7 @@ jobs:
           steps.validated_regime_paper.outcome == 'failure' ||
           steps.bankroll_sim.outcome == 'failure' ||
           steps.champion_paper.outcome == 'failure' ||
+          steps.kill_battery.outcome == 'failure' ||
           steps.book_snapshot.outcome == 'failure'
         run: |
           echo "One or more strategy steps failed:"
@@ -217,6 +224,7 @@ jobs:
           echo "  regime_domain_validation:  ${{ steps.regime_domain_validation.outcome }}"
           echo "  validated_regime_paper:    ${{ steps.validated_regime_paper.outcome }}"
           echo "  bankroll_sim:              ${{ steps.bankroll_sim.outcome }}"
+          echo "  kill_battery:              ${{ steps.kill_battery.outcome }}"
           echo "  champion_paper:            ${{ steps.champion_paper.outcome }}"
           echo "  book_snapshot:             ${{ steps.book_snapshot.outcome }}"
           exit 1

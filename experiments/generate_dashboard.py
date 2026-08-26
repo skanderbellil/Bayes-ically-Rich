@@ -36,6 +36,11 @@ RUN_URL = f"https://github.com/{REPO}/actions/workflows/paper_trade.yml"
 CAP0 = 1000.0      # assumed starting bankroll
 STAKE_FRAC = 0.10  # 10% of equity per trade (compounding)
 FLAT = 10.0        # flat $ per trade
+# Max gross exposure (cost basis of all open positions) as a fraction of equity.
+# Kelly sizes one bet at a time; these books routinely hold a dozen positions that
+# settle on the SAME day, so per-trade Kelly stacked across them bets a multiple
+# of Kelly on a single event. See sim().
+MAX_DEPLOY = 0.30
 
 # (file, entry column, question column, label)
 REGISTRY = [
@@ -238,14 +243,22 @@ def walkforward_kelly(trades, min_hist=5, cap=0.5):
     return fracs, cur
 
 
-def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
+def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None, max_deploy=MAX_DEPLOY):
     """Realistic cash sim from $1,000 — NO LEVERAGE. A position ties up cash from
     entry to exit; new trades are sized min(target, cash) so overlapping positions
     can't be funded on margin. Buy/sell DECISIONS execute at the start of their
     recorded date (the ledger only records entry/exit at daily granularity), but
     between decisions OPEN positions are marked HOURLY to their real intraday price
     (from the marks cache) — an actually-intraday equity curve, not a daily
-    staircase. mode 'pct' = `frac` of equity (Kelly), 'flat'=$10."""
+    staircase. mode 'pct' = `frac` of equity (Kelly), 'flat'=$10.
+
+    `max_deploy` caps GROSS exposure: the cost basis of everything held at once
+    may not exceed that fraction of equity. Kelly's per-bet fraction assumes bets
+    resolve SEQUENTIALLY, so staking it on each of N positions that are open (and
+    on these books usually settling) together risks N x Kelly on what is really
+    one event — walk-forward Kelly was deploying 100% of capital and taking four
+    sleeves to $0. The cap is causal: it reads only current holdings and equity.
+    Set max_deploy=None to restore the uncapped behaviour."""
     marks = marks or {}
     if not trades:
         return dict(pts=[["", CAP0]], fin=CAP0, ret=0.0, dd=0.0, realized=0.0, unreal=0.0,
@@ -300,10 +313,15 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None):
                 target = fr * eq if mode == "pct" else FLAT
                 if target <= 1e-9:
                     continue                           # Kelly says don't bet (no edge / no history yet)
-                stake = min(target, cash)
+                # gross-exposure cap: how much room is left before max_deploy
+                if max_deploy is None:
+                    room = float("inf")
+                else:
+                    room = max(0.0, max_deploy * eq - sum(h["cost"] for h in hold.values()))
+                stake = min(target, cash, room)
                 if stake > 1e-6:
                     if stake < target - 1e-6:
-                        constrained += 1                # capital-limited (real margin constraint)
+                        constrained += 1                # capital- or exposure-limited
                     hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
                     cash -= stake; taken += 1
                     maxconc = max(maxconc, len(hold))
@@ -616,13 +634,38 @@ def _sc(v):
     return "pos" if v >= 0 else "neg"
 
 
-def kpi_card(s):
+def load_verdicts():
+    """Kill-battery verdicts, if run_paper_kill_battery.py has produced them."""
+    try:
+        v = json.loads((DATA / "sleeve_validation.json").read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}, {}
+    return v.get("per_sleeve", {}), v.get("standard", {})
+
+
+def verdict_badge(label, verdicts):
+    """Badge the card with the pre-registered verdict. KILLED means the sleeve
+    has not earned a capital allocation — it is NOT deleted and keeps trading on
+    paper, since only more forward data can ever promote it."""
+    r = verdicts.get(label)
+    if not r:
+        return ""
+    if r.get("verdict") == "VALIDATED":
+        return ' · <span class="badge ok">VALIDATED</span>'
+    why = ", ".join(r.get("reasons", [])[:2])
+    ev = r.get("events")
+    tip = f"{ev} independent events · fails: {why}" if ev else why
+    return f' · <span class="badge no" title="{tip}">NOT VALIDATED</span>'
+
+
+def kpi_card(s, verdicts=None):
     c10, cf = _sc(s["ret10"]), _sc(s["retflat"])
     derived_tag = (" · <b>filter view — not counted in COMBINED</b>"
                    if s.get("derived") else "")
+    badge = verdict_badge(s["label"], verdicts or {})
     return f"""
     <div class="card">
-      <div class="card-h">{s['label']}</div>
+      <div class="card-h">{s['label']}{badge}</div>
       <div class="card-sub">{s['n']} trades · win {s['win']*100:.0f}% · open {s['open']}{derived_tag}</div>
       <div class="kgrid">
         <div class="k"><div class="kl">Kelly {s['kelly']*100:.0f}%</div><div class="kv {c10}">{fmt_money(s['fin10'])}</div><div class="kd {c10}">{s['ret10']*100:+.1f}%</div></div>
@@ -720,7 +763,8 @@ def generate():
         f'<button class="chartbtn{" active" if sid == first_sid else ""}" data-sid="{sid}">{sd["label"]}</button>'
         for sid, sd in series.items())
     order = sorted(strategies, key=lambda s: (-(s["id"] == "validated_regime"), -s["n"]))
-    cards = "\n".join(kpi_card(s) for s in order)
+    verdicts, vstd = load_verdicts()
+    cards = "\n".join(kpi_card(s, verdicts) for s in order)
 
     # Strategy-detail tab: dropdown + per-strategy KPI card, keyed off the same
     # sids as the chart buttons (those with at least one trade or open position).
@@ -728,7 +772,7 @@ def generate():
     first_detail = detail_sids[0] if detail_sids else ""
     strat_options = "".join(
         f'<option value="{sid}">{series[sid]["label"]}</option>' for sid in detail_sids)
-    cards_map = {s["id"]: kpi_card(s) for s in strategies if s.get("id") in detail_sids}
+    cards_map = {s["id"]: kpi_card(s, verdicts) for s in strategies if s.get("id") in detail_sids}
     assess_cards = {sid: assess_card(series[sid].get("assess")) for sid in detail_sids}
     cm = combined
     cret10 = "pos" if cm["ret10"] >= 0 else "neg"
@@ -761,7 +805,10 @@ button:hover{{border-color:var(--acc)}}
 .legend i{{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:10px}}
 .card{{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}}
-.card-h{{font-weight:640}}.card-sub{{font-size:12px;color:var(--mut);margin:2px 0 8px}}
+.card-h{{font-weight:640}}
+.badge{{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:5px;vertical-align:middle}}
+.badge.ok{{background:rgba(34,197,94,.16);color:var(--pos)}}
+.badge.no{{background:rgba(148,163,184,.16);color:var(--mut);cursor:help}}.card-sub{{font-size:12px;color:var(--mut);margin:2px 0 8px}}
 .kgrid{{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
 .k{{background:#10151b;border:1px solid var(--line);border-radius:8px;padding:8px}}
 .kl{{font-size:10px;color:var(--mut);text-transform:uppercase}}.kv{{font-size:17px;font-weight:680}}

@@ -101,6 +101,37 @@ def _yf_session():
     return sess
 
 
+def _vix3m_from_cboe() -> pd.Series:
+    """VIX3M daily closes straight from CBOE, the index's publisher.
+
+    Yahoo stopped serving history for ``^VIX3M`` around 2026-08-24: the column
+    still comes back, but with a single non-NaN close out of ~2,500 rows, which
+    silently emptied the dropna-intersection and took the champion step down on
+    every hourly run. The legacy ``^VXV`` symbol is delisted there too, so the
+    repair has to come from outside Yahoo. CBOE publishes the full history
+    (2009-09-18 onward) at a stable URL and is the authoritative source Yahoo
+    itself redistributes.
+    """
+    import io
+    import requests
+
+    url = "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX3M_History.csv"
+    resp = requests.get(url, timeout=60)
+    resp.raise_for_status()
+    df = pd.read_csv(io.StringIO(resp.text))
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    if not {"DATE", "CLOSE"} <= set(df.columns):
+        raise RuntimeError(f"unexpected CBOE VIX3M columns: {list(df.columns)}")
+    idx = pd.to_datetime(df["DATE"], errors="coerce")
+    if getattr(idx.dt, "tz", None) is not None:
+        idx = idx.dt.tz_localize(None)
+    s = pd.Series(pd.to_numeric(df["CLOSE"], errors="coerce").values,
+                  index=pd.DatetimeIndex(idx)).dropna().sort_index()
+    if s.empty:
+        raise RuntimeError("CBOE VIX3M history parsed empty")
+    return s
+
+
 def _download_prices(period: str = HISTORY_PERIOD) -> pd.DataFrame:
     """
     Fresh daily history for the 7 tickers the stack needs, via yfinance.
@@ -147,17 +178,34 @@ def _download_prices(period: str = HISTORY_PERIOD) -> pd.DataFrame:
                 "UUP":      raw["UUP"]["Close"],
                 "QLD":      raw["QLD"]["Close"],
             })
+            # Yahoo can return a column that is present but essentially empty
+            # (VIX3M since 2026-08-24). That guts the dropna-intersection, so
+            # repair VIX3M from its publisher before judging completeness.
+            if price["VIX3M"].notna().sum() < min_rows:
+                try:
+                    cboe = _vix3m_from_cboe()
+                    # price.index may carry a tz from yfinance; CBOE's is naive.
+                    keys = price.index
+                    if getattr(keys, "tz", None) is not None:
+                        keys = keys.tz_localize(None)
+                    aligned = pd.Series(cboe.reindex(keys.normalize()).values, index=price.index)
+                    price["VIX3M"] = price["VIX3M"].combine_first(aligned)
+                    logger.info("VIX3M repaired from CBOE (%d of %d rows populated)",
+                                int(price["VIX3M"].notna().sum()), len(price))
+                except Exception as exc:  # noqa: BLE001 — fall through to the coverage error
+                    logger.warning("CBOE VIX3M fallback failed (%s: %s)", type(exc).__name__, exc)
+
             idx = price.dropna().index
-            if idx.empty:
-                raise RuntimeError("no dates with complete data across all 7 tickers")
             if len(idx) < min_rows:
-                # A partial download (e.g. 1 trading day back from a rate-limited
-                # or truncated response) — treat it as a failed attempt and retry
-                # rather than letting it surface downstream as a confusing
-                # "insufficient warm-up history" error from compute_current_weights.
+                # Name the offending columns — a bare "got N complete-data days"
+                # says nothing about WHICH feed broke, and that is the whole
+                # diagnosis when one ticker goes empty upstream.
+                thin = {c: int(price[c].notna().sum()) for c in price.columns
+                        if price[c].notna().sum() < min_rows}
+                detail = ", ".join(f"{c}={n}" for c, n in sorted(thin.items())) or "none individually"
                 raise RuntimeError(
-                    f"partial yfinance download: got {len(idx)} complete-data "
-                    f"trading days, need >= {min_rows} for warm-up")
+                    f"partial price download: got {len(idx)} complete-data trading days, "
+                    f"need >= {min_rows} for warm-up; under-covered columns: {detail}")
             return price.reindex(idx)
         except Exception as exc:
             if last_attempt:
