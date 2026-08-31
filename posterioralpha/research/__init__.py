@@ -29,6 +29,14 @@ from posterioralpha.research.intramonth import (
     intramonth_window_mask,
     wml_formation,
 )
+from posterioralpha.research.tsfm import (
+    TimesFMVolForecaster,
+    baseline_paths,
+    log_rv_series,
+    qlike,
+    realized_target,
+    realized_vol,
+)
 from posterioralpha.research.overlay import liquidity_vote, soft_sign
 from posterioralpha.research.breadth import (
     average_pairwise_correlation,
@@ -97,4 +105,12 @@ __all__ = [
     "fetch_gamma_snapshot",
     "gex_time_series",
     "GammaSnapshot",
+    # Realized-vol forecasting primitives + the TimesFM adapter
+    # (the foundation model itself is an optional extra: pip install -e .[tsfm])
+    "realized_vol",
+    "log_rv_series",
+    "realized_target",
+    "baseline_paths",
+    "qlike",
+    "TimesFMVolForecaster",
 ]

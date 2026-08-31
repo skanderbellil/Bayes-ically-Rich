@@ -31,6 +31,10 @@ dfl = ["torch>=2.0", "cvxpy>=1.4", "cvxpylayers>=0.1.6"]
 data = ["gdown>=5.0"]
 # Only needed for the council --llm mode
 llm = ["anthropic>=0.40.0"]
+# Only needed for the TimesFM volatility bake-off (experiments/run_timesfm_vol_bakeoff.py).
+# Pulls torch: heavy, and nothing else in the repo needs it, so it stays opt-in.
+# Pinned to TimesFM 2.5 in code — the 3.0 weights are non-commercial/non-production.
+tsfm = ["timesfm>=2.0", "torch>=2.0"]
 # Development / test tooling (+ Excel readers for experiments/refresh_regime_proxies.py —
 # the GPR daily index is distributed as an Excel sheet)
 dev = ["pytest>=8.0", "xlrd>=2.0", "openpyxl>=3.1"]
