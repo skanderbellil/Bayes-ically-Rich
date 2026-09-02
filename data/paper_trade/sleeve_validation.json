@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-02 15:43 UTC",
+  "generated": "2026-09-02 16:38 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -146,7 +146,7 @@
     },
     "Smart Flow": {
       "sleeve": "Smart Flow",
-      "trades": 7296,
+      "trades": 7298,
       "events": 76,
       "trades_per_event": 96.0,
       "edge": -0.0062,
@@ -157,10 +157,10 @@
       ],
       "mc_bar": 2.93,
       "oos_n": 23,
-      "oos_edge": -0.0125,
-      "net_cost": -0.0113,
-      "net_stress": -0.0263,
-      "boot_p": 0.7498,
+      "oos_edge": -0.0124,
+      "net_cost": -0.0112,
+      "net_stress": -0.0262,
+      "boot_p": 0.7473,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
@@ -199,21 +199,21 @@
     },
     "Smart Flow (indep exp)": {
       "sleeve": "Smart Flow (indep exp)",
-      "trades": 6334,
+      "trades": 6336,
       "events": 47,
       "trades_per_event": 134.8,
       "edge": -0.0031,
-      "t": -0.67,
+      "t": -0.66,
       "ci95": [
-        -0.0123,
+        -0.0122,
         0.006
       ],
       "mc_bar": 2.93,
       "oos_n": 15,
-      "oos_edge": -0.0109,
-      "net_cost": -0.0116,
-      "net_stress": -0.0266,
-      "boot_p": 0.7476,
+      "oos_edge": -0.0107,
+      "net_cost": -0.0115,
+      "net_stress": -0.0265,
+      "boot_p": 0.7443,
       "top1": 0.006,
       "verdict": "KILLED",
       "reasons": [
@@ -369,21 +369,21 @@
     },
     "SF cascade": {
       "sleeve": "SF cascade",
-      "trades": 1218,
+      "trades": 1220,
       "events": 46,
       "trades_per_event": 26.5,
-      "edge": -0.0315,
-      "t": -1.98,
+      "edge": -0.0313,
+      "t": -1.97,
       "ci95": [
-        -0.0626,
-        -0.0004
+        -0.0625,
+        -0.0002
       ],
       "mc_bar": 2.93,
       "oos_n": 14,
-      "oos_edge": -0.0525,
-      "net_cost": -0.028,
-      "net_stress": -0.043,
-      "boot_p": 0.981,
+      "oos_edge": -0.0519,
+      "net_cost": -0.0278,
+      "net_stress": -0.0428,
+      "boot_p": 0.9801,
       "top1": 0.019,
       "verdict": "KILLED",
       "reasons": [
