@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-04 18:38 UTC",
+  "generated": "2026-09-04 20:39 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -41,21 +41,21 @@
     },
     "YES [10\u201350%]": {
       "sleeve": "YES [10\u201350%]",
-      "trades": 498,
+      "trades": 500,
       "events": 75,
-      "trades_per_event": 6.6,
-      "edge": -0.0097,
-      "t": -0.41,
+      "trades_per_event": 6.7,
+      "edge": -0.0052,
+      "t": -0.23,
       "ci95": [
-        -0.0557,
-        0.0363
+        -0.05,
+        0.0395
       ],
       "mc_bar": 2.93,
       "oos_n": 23,
-      "oos_edge": -0.0321,
-      "net_cost": -0.0091,
-      "net_stress": -0.0241,
-      "boot_p": 0.6622,
+      "oos_edge": -0.0176,
+      "net_cost": -0.0087,
+      "net_stress": -0.0237,
+      "boot_p": 0.5939,
       "top1": 0.023,
       "verdict": "KILLED",
       "reasons": [
@@ -120,26 +120,27 @@
     },
     "YES [20\u201340%]": {
       "sleeve": "YES [20\u201340%]",
-      "trades": 259,
-      "events": 69,
-      "trades_per_event": 3.8,
-      "edge": -0.0238,
-      "t": -0.7,
+      "trades": 260,
+      "events": 70,
+      "trades_per_event": 3.7,
+      "edge": -0.0291,
+      "t": -0.86,
       "ci95": [
-        -0.0902,
-        0.0427
+        -0.0955,
+        0.0372
       ],
       "mc_bar": 2.93,
       "oos_n": 21,
-      "oos_edge": 0.0142,
-      "net_cost": -0.0165,
-      "net_stress": -0.0315,
-      "boot_p": 0.7615,
+      "oos_edge": -0.0171,
+      "net_cost": -0.018,
+      "net_stress": -0.033,
+      "boot_p": 0.8056,
       "top1": 0.022,
       "verdict": "KILLED",
       "reasons": [
         "t>=2.0",
         "t>mc_bar(2.93)",
+        "oos_edge>0",
         "net@0.005>0",
         "boot_p<=0.1"
       ]
@@ -160,7 +161,7 @@
       "oos_edge": -0.0107,
       "net_cost": -0.0112,
       "net_stress": -0.0262,
-      "boot_p": 0.7316,
+      "boot_p": 0.7358,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
@@ -199,21 +200,21 @@
     },
     "Smart Flow (indep exp)": {
       "sleeve": "Smart Flow (indep exp)",
-      "trades": 6466,
+      "trades": 6468,
       "events": 49,
       "trades_per_event": 132.0,
       "edge": -0.0029,
-      "t": -0.63,
+      "t": -0.65,
       "ci95": [
         -0.0117,
-        0.006
+        0.0059
       ],
       "mc_bar": 2.93,
       "oos_n": 15,
-      "oos_edge": -0.0077,
+      "oos_edge": -0.0079,
       "net_cost": -0.0115,
       "net_stress": -0.0265,
-      "boot_p": 0.7452,
+      "boot_p": 0.7477,
       "top1": 0.006,
       "verdict": "KILLED",
       "reasons": [
@@ -235,21 +236,21 @@
     },
     "Dip-Confirm YES": {
       "sleeve": "Dip-Confirm YES",
-      "trades": 292,
+      "trades": 293,
       "events": 68,
       "trades_per_event": 4.3,
-      "edge": -0.0407,
+      "edge": -0.041,
       "t": -1.4,
       "ci95": [
-        -0.0979,
-        0.0165
+        -0.0983,
+        0.0163
       ],
       "mc_bar": 2.93,
       "oos_n": 21,
-      "oos_edge": -0.1343,
-      "net_cost": -0.0531,
-      "net_stress": -0.0681,
-      "boot_p": 0.9196,
+      "oos_edge": -0.1353,
+      "net_cost": -0.0546,
+      "net_stress": -0.0696,
+      "boot_p": 0.9221,
       "top1": 0.049,
       "verdict": "KILLED",
       "reasons": [
@@ -276,7 +277,7 @@
       "oos_edge": 0.0446,
       "net_cost": -0.0194,
       "net_stress": -0.0344,
-      "boot_p": 0.8121,
+      "boot_p": 0.8084,
       "top1": 0.214,
       "verdict": "KILLED",
       "reasons": [
@@ -302,7 +303,7 @@
       "oos_edge": -0.0027,
       "net_cost": -0.0142,
       "net_stress": -0.0292,
-      "boot_p": 0.6255,
+      "boot_p": 0.6211,
       "top1": 0.001,
       "verdict": "KILLED",
       "reasons": [
@@ -329,7 +330,7 @@
       "oos_edge": 0.0072,
       "net_cost": -0.0222,
       "net_stress": -0.0372,
-      "boot_p": 0.6821,
+      "boot_p": 0.6773,
       "top1": 0.002,
       "verdict": "KILLED",
       "reasons": [
@@ -341,21 +342,21 @@
     },
     "SF independent": {
       "sleeve": "SF independent",
-      "trades": 5222,
+      "trades": 5224,
       "events": 49,
       "trades_per_event": 106.6,
-      "edge": 0.0037,
-      "t": 0.65,
+      "edge": 0.0035,
+      "t": 0.63,
       "ci95": [
-        -0.0074,
-        0.0148
+        -0.0075,
+        0.0145
       ],
       "mc_bar": 2.93,
       "oos_n": 15,
-      "oos_edge": 0.0043,
+      "oos_edge": 0.0036,
       "net_cost": -0.007,
       "net_stress": -0.022,
-      "boot_p": 0.2516,
+      "boot_p": 0.2594,
       "top1": 0.007,
       "verdict": "KILLED",
       "reasons": [
@@ -381,7 +382,7 @@
       "oos_edge": -0.1027,
       "net_cost": -0.0303,
       "net_stress": -0.0453,
-      "boot_p": 0.9963,
+      "boot_p": 0.9955,
       "top1": 0.019,
       "verdict": "KILLED",
       "reasons": [
