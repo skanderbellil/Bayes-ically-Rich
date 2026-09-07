@@ -406,6 +406,46 @@ outlier with t≈8,672), so standalone "follow the timers" is fragile. It mainly
 pay-up book works — informed wallets do lead moves repeatably — rather than beating it
 (`docs/polymarket/TIMING.md`).
 
+### Crypto fundamentals — go/no-go feasibility study (`notebooks/`)
+
+A **decision notebook**, not a strategy: does a value factor built on protocol
+fundamentals (price-to-fees, dilution) survive contact with the data, on free
+data sources? Five criteria fixed before the first fetch, evaluated
+criterion-by-criterion in a verdict cell at the end.
+
+```bash
+jupyter lab notebooks/crypto_fundamentals_verdict.ipynb   # re-runs offline from the cached JSON
+```
+
+Universe: 25 fee-generating protocols (DefiLlama fee adapters, full history,
+free/no key) + BTC/ETH benchmarks, priced off CoinGecko's free tier. Raw JSON is
+cached to `data/crypto_fundamentals_cache/`, so a re-run needs no network.
+
+**Verdict: NO-GO / INSUFFICIENT DATA — 2 of 5 criteria met.** The binding
+constraint is neither BTC beta nor transaction cost, both of which were the
+prior suspects:
+
+- **Price history, not fee history, is the blocker.** DefiLlama gives 3.7 years
+  of fees (median); CoinGecko's free tier hard-caps *every* historical endpoint
+  at 365 days server-side. 12 months is **12 independent 30-day periods and 4
+  independent 90-day periods** — the smallest 30-day spread the P/F test could
+  have called significant is ~5.8%, a ~70%/yr premium no real factor reaches.
+- **Not swamped by beta.** BTC explains a mean R² of only 0.27 (median 0.25),
+  with 3/25 tokens above 0.50 — there is idiosyncratic variation to work with.
+- **The one near-significant result is timing luck.** Dilution/30d prints
+  t = 2.27 (p = 0.053) at one rebalance offset; residualising on BTC takes it to
+  1.35, and shifting the rebalance calendar by a few days makes it *negative*
+  (positive at only 40% of start dates).
+- **Costs are not the problem.** The residual P/F spread clears 75bp on realised
+  turnover at 80–92% of offsets — worth retesting properly, not abandoning.
+- Data integrity gate passed 3/5, flagging a **persistent ~19% DefiLlama
+  Uniswap-V2 adapter disagreement** (0.357% implied vs 0.30% documented swap fee;
+  SushiSwap on the same method reconciles to 3.0%).
+
+Like the studies above, the design is **survivorship-biased** — the universe is
+protocols alive today. Every test is parameterised: point it at a longer price
+panel and it re-runs unchanged.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
