@@ -41,3 +41,4 @@ graphify-out/cache/
 # produces IS committed, so the notebook re-runs offline and reproduces exactly.
 data/crypto_panel/raw/
 !data/crypto_panel/universe.csv
+!data/crypto_panel/perp_listings.csv

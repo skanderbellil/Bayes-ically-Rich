@@ -1,0 +1,201 @@
+gecko_id,symbol,adapters,category,alltime_fees,price_start,price_days,ticker,okx_perp_listed,hl_perp_listed,perp_listed
+aave,AAVE,aave-v3|aave-v2,Lending,2282297314.0,2020-10-03,1843,AAVE,2020-12-10,2023-07-18,2020-12-10
+across-protocol,ACX,across,Cross Chain Bridge,18740626.0,2022-11-28,1220,ACX,,,
+adrena,ADX,adrena-protocol,Derivatives,10746539.27,2024-09-27,671,ADX,,,
+aerodrome-finance,AERO,aerodrome-slipstream|aerodrome-v1,Dexs,536025481.0,2023-09-15,883,AERO,2025-07-03,2025-11-11,2025-07-03
+aethir,ATH,aethir,Developer Tools,178831316.26999998,2024-06-13,664,ATH,2024-06-13,,2024-06-13
+ami,AMI,amnis-finance,Liquid Staking,13583951.0,2025-03-26,517,AMI,,,
+ankr,ANKR,ankr,Liquid Staking,10884422.0,2019-03-07,2494,ANKR,,,
+apex-token-2,-,apex-omni|apex-pro,Derivatives,40821152.0,2022-04-27,1342,APEX,,2025-09-27,2025-09-27
+arbitrum,,arbitrum,Chain,169301636.0,2023-03-24,1044,ARB,2023-03-23,2023-05-12,2023-03-23
+aura-finance,AURA,aura,Yield,36267573.0,2022-06-16,1380,AURA,,,
+avalanche-2,,avalanche,Chain,91677752.0,2020-09-23,1831,AVAX,2020-09-23,2023-05-12,2020-09-23
+avalon-2,AVL,avalon-usda,CDP,11194953.0,2025-02-12,503,AVL,,,
+avantis,AVNT,avantis,Derivatives,24117269.0,2025-09-09,296,AVNT,2025-09-22,2025-09-21,2025-09-21
+axie-infinity,AXS,axie-infinity,Gaming,1413391241.73,2020-11-05,1812,AXS,2021-07-28,2026-01-18,2021-07-28
+balancer,BAL,balancer-v1|balancer-v2|balancer-v3,Dexs,301492182.0,2020-06-24,2066,BAL,,,
+banana-gun,BANANA,banana-gun,Telegram Bot,87070156.0,2023-09-15,945,BANANA,,2023-09-15,2023-09-15
+bancor,BNT,bancor-v2.1,Dexs,60319284.72999999,2019-01-01,2623,BNT,,2023-10-08,2023-10-08
+bankercoin-2,BNKR,bankr,Interface,33357809.0,2024-12-10,602,BNKR,,,
+ben-pasternak,LAUNCHCOIN,launch-coin-on-believe,Launchpad,40910391.41,2025-01-24,547,BELIEVE,,,
+benqi,QI,benqi-staked-avax|benqi-lending,Liquid Staking,72544644.0,2021-08-20,1696,QI,,,
+bifrost-native-coin,BNC,bifrost-liquid-staking,Liquid Staking,16730910.0,2021-10-22,1588,BNC,,,
+binancecoin,,bsc,Chain,2061602336.0,2019-01-01,2505,BNB,2022-12-23,2023-05-12,2022-12-23
+biswap,BSW,biswap-v2,Dexs,87812160.75999999,2021-07-05,1664,BSW,,,
+bitcoin,,bitcoin,Chain,4438706130.0,2019-01-01,2524,BTC,2019-11-12,2023-05-12,2019-11-12
+bitlayer-bitvm,,bitlayer,Chain,25704916.0,2025-08-28,348,BTR,,,
+blackhole,BLACK,blackhole-clmm,Dexs,18848996.0,2025-07-16,410,BLACK,,,
+blast,,blast,Chain,13845217.289999995,2019-01-01,1768,BLAST,,2024-06-26,2024-06-26
+bluefin,BLUE,bluefin-spot|bluefin-legacy,Dexs,40134689.0,2024-12-11,593,BLUE,,,
+blur,BLUR,blur-bids,NFT Marketplace,70820755.25999999,2023-02-14,1128,BLUR,2023-02-15,2023-10-18,2023-02-15
+bone-shibaswap,BONE,shibaswap-v1,Dexs,52971643.96,2021-07-07,1715,BONE,,,
+camelot-token,GRAIL,camelot-v3|camelot-v2,Dexs,54580566.02,2022-12-08,1254,GRAIL,,,
+canton-network,,canton,Chain,615588758.0,2025-11-11,248,CC,2025-10-31,2025-10-31,2025-10-31
+cardano,,cardano,Chain,27639799.0,2019-01-01,2469,ADA,2020-02-28,2023-10-22,2020-02-28
+centrifuge-2,CFG,centrifuge-protocol,RWA,65544820.0,2025-05-21,432,CFG,,,
+cetus-protocol,CETUS,cetus-clmm,Dexs,101361333.0,2023-05-11,1054,CETUS,,,
+chainflip,FLIP,chainflip-amm,Dexs,22361588.0,2023-11-23,980,FLIP,,,
+chainlink,LINK,chainlink-staking,Services,64290054.0,2019-01-01,2481,LINK,2020-02-28,2023-05-18,2020-02-28
+chip-2,CHIP,usd-ai,RWA Lending,24480250.04,2026-04-22,121,CHIP,2026-04-21,2026-04-22,2026-04-21
+collector-crypt,CARDS,collector-crypt,Physical TCG,89801333.0,2025-08-30,360,CARDS,,,
+compound-governance-token,COMP,compound-v2|compound-v3,Lending,573632209.0,2020-06-16,1969,COMP,2020-04-21,2023-07-18,2020-04-21
+convex-finance,CVX,convex-finance,Yield,372811814.0,2021-05-18,1701,CVX,2024-06-25,,2024-06-25
+cow-protocol,COW,cowswap,DEX Aggregator,67666630.0,2022-03-29,1372,COW,,,
+crypto-com-chain,CRO,defi-swap|cronos,Dexs,31314591.0,2019-01-02,2500,CRO,2021-04-08,,2021-04-08
+curve-dao-token,CRV,curve-dex|crvusd,Dexs,718899394.0,2020-08-14,1876,CRV,2020-09-04,2023-05-15,2020-09-04
+debridge,DBR,debridge,Bridge,29030698.0,2024-10-17,609,DBR,,,
+dextools,DEXT,dextools,Coins Tracker,16509636.0,2020-06-11,2089,DEXT,,,
+dodo,DODO,dodo-amm,Dexs,62544415.0,2020-10-01,1953,DODO,,,
+dogecoin,,doge,Chain,14195654.0,2019-01-01,2457,DOGE,2020-04-21,2023-05-12,2020-04-21
+dolomite,DOLO,dolomite,Lending,18036155.0,2025-04-24,461,DOLO,,,
+doublezero,2Z,doublezero-staked-sol,Liquid Staking,60438134.52,2025-10-03,297,2Z,2025-10-02,2025-10-02,2025-10-02
+drift-protocol,DRIFT,drift-trade|drift-staked-sol,Derivatives,67000956.28,2024-05-17,719,DRIFT,,,
+dydx-chain,dYdX,dydx-v4|dydx-v3,Derivatives,98421648.0,2023-11-27,871,DYDX,2021-09-08,2023-05-12,2021-09-08
+echelon-token,ELON,echelon-market,Lending,17317472.0,2026-02-02,209,ELON,,,
+edgex,EDGE,edgex-perps|edgex-v2,Derivatives,343537318.0,2026-03-31,139,EDGE,2026-04-01,,2026-04-01
+eigenlayer,EIGEN,eigencloud,Restaking,162010182.30999997,2024-10-02,549,EIGEN,2024-10-01,2024-04-30,2024-04-30
+ethena,ENA,ethena-usde,Basis Trading,1038576011.4900004,2024-04-03,724,ENA,2025-09-17,2024-04-02,2024-04-02
+ethereum,,ethereum,Chain,20567157535.0,2019-01-01,2501,ETH,2019-11-12,2023-05-12,2019-11-12
+ethereum-name-service,ENS,ens,Domains,112621385.0,2021-11-09,1447,ENS,2021-11-11,2024-01-05,2021-11-11
+etherex,REX,etherex-cl,Dexs,13068939.23,2025-08-07,388,REX,,,
+euler,EUL,euler-v2,Lending,87735319.0,2022-06-24,1373,EUL,,,
+fantom,,fantom,Chain,36553076.63000001,2019-01-01,2495,FTM,,2023-05-25,2023-05-25
+fjord-foundry,FJO,fjord-v2,Launchpad,13723065.0,2024-04-20,825,FJO,,,
+flash-trade,FAF,flashtrade,Derivatives,15300007.0,2025-04-17,504,FAF,,,
+frax-share,FRAX,frax-ether|frax-swap,Liquid Staking,56434264.92,2020-12-21,1830,FRAX,,,
+fulcrom,FUL,fulcrom-perps,Derivatives,15800072.0,2023-04-05,1171,FUL,,,
+fxn-token,FXN,fx-protocol,Dual-Token Stablecoin,14317433.9,2023-09-30,973,FXN,,,
+gains-network,GNS,gains-network,Derivatives,61912667.0,2021-11-02,1606,GNS,,,
+gamma-strategies,GAMMA,gamma,Liquidity Manager,58076787.0,2021-12-27,1264,GAMMA,,,
+gearbox,GEAR,gearbox,Lending,22783907.0,2022-12-19,1252,GEAR,,,
+geist-finance,GEIST,geist-finance,Lending,47278805.0,2021-10-07,543,,,,
+geodnet,GEOD,geodnet,Oracle,11885713.0,2023-09-07,1018,GEOD,,,
+gmx,GMX,gmx-v1-perps|gmx-v2-perps,Derivatives,465489053.0,2021-09-14,1584,GMX,2023-02-02,2023-05-25,2023-02-02
+godl-2,GODL,godl-protocol,Gamified Mining,14055006.0,2025-12-13,266,GODL,,,
+goldfinch,GFI,goldfinch,RWA Lending,32767113.489999983,2022-01-11,1537,GFI,,,
+hash-2,,provenance,Chain,10739367.0,2025-05-30,461,HASH,,,
+havven,SNX,synthetix-v1+v2,Synthetics,81338627.0,2019-01-01,2471,SNX,2020-08-21,2023-05-25,2020-08-21
+hawksight,HAWK,hawkfi,Liquidity Manager,49257451.0,2022-04-21,1288,HAWK,,,
+hmx,HMX,hmx,Derivatives,22937567.0,2023-08-08,733,,,,
+hyperlend,HPL,hyperlend-pooled,Lending,12416731.0,2026-03-04,186,HPL,,,
+hyperliquid,HYPE,hyperliquid-perps|hyperliquid-spot-orderbook|hyperliquid-l1,Derivatives,1530648193.0,2024-11-29,503,HYPE,2025-02-21,2024-12-05,2024-12-05
+hyperswap,SWAP,hyperswap-v3,Dexs,15439079.54,2025-10-21,315,SWAP,,,
+injective-protocol,,injective,Chain,39016993.0,2020-10-22,1807,INJ,2023-11-30,2023-05-12,2023-05-12
+instadapp,FLUID,fluid-lending|fluid-dex,Lending,138962621.0,2021-06-17,1696,FLUID,,,
+internet-computer,,icp,Chain,20964296.0,2021-05-11,1628,ICP,2021-05-14,2025-11-08,2021-05-14
+inverse-finance,INV,inverse-finance-firm,CDP,12615136.0,2021-03-06,1846,INV,,,
+jito-governance-token,-,jito-mev-tips|jito-liquid-staking|jito-dao,MEV,1803928785.07,2023-12-08,808,JTO,2024-01-08,2023-12-07,2023-12-07
+jupiter-exchange-solana,JUP,jupiter-perpetual-exchange|jupiter-aggregator|jupiter-staked-sol|jupiter-lend|jupiter-dca,Derivatives,1091612559.87,2024-02-01,772,JUP,2024-01-31,2023-12-03,2023-12-03
+just,JST,justlend-v1,Lending,21346672.0,2020-05-08,2011,JST,,,
+kiloex,KILO,kiloex,Derivatives,13794862.950000005,2025-03-28,517,KILO,,,
+kinetiq,KNTQ,kinetiq-khype,Liquid Staking,26958523.0,2025-11-27,282,KNTQ,,,
+kodiak-finance,KDK,kodiak-v3,Dexs,10735973.0,2025-12-24,257,KDK,,,
+ktx-finance,KTC,ktx-perps,Derivatives,27237701.0,2023-06-05,676,,,,
+kwenta,KWENTA,kwenta,Derivatives,21771837.0,2022-11-18,1058,,,,
+kyber-network-crystal,KNC,kyberswap-aggregator|kyberswap-elastic,DEX Aggregator,45027467.0,2021-05-19,1705,KNC,,,
+lab,LAB,lab-terminal,Trading App,12367428.0,2025-10-14,268,LAB,2025-11-01,,2025-11-01
+layerzero,ZRO,layerzero-v1|layerzero-v2,Bridge,75813635.71000001,2024-06-21,637,ZRO,2024-06-20,2023-09-07,2023-09-07
+level,LVL,level-perps,Derivatives,34326504.0,2023-01-03,1201,LVL,,,
+lido-dao,LDO,lido,Liquid Staking,3322578672.0,2021-01-06,1771,LDO,2023-02-02,2023-05-16,2023-02-02
+lifinity,LFNTY,lifinity-v1,Dexs,18682927.0,2022-05-05,1384,LFNTY,,,
+lighter,LIT,lighter-perps,Derivatives,74191085.0,2025-12-30,206,LIT,2025-12-24,2025-12-22,2025-12-22
+limitless-3,LMTS,limitless-exchange,Prediction Market,13951962.0,2025-10-23,318,LMTS,,,
+liquity,LQTY,liquity-v1,CDP,84832569.84000003,2021-04-06,1723,LQTY,2024-01-12,,2024-01-12
+lista,LISTA,lista-lending|lista-liquid-staking|lista-cdp,Lending,38261076.63,2024-06-21,720,LISTA,,2024-06-28,2024-06-28
+looksrare,LOOKS,looksrare,NFT Marketplace,611431533.0,2022-01-10,1541,LOOKS,,,
+looter,LOOTER,looter,Trading App,18790383.0,2024-03-08,387,,,,
+lynex,LYNX,lynex-v2,Dexs,10085485.0,2024-02-16,899,LYNX,,,
+mantle,,mantle,Chain,10579518.0,2022-04-29,937,MNT,,2024-04-05,2024-04-05
+mcdex,MCB,mux-perps,Derivatives,33239917.31,2020-07-14,2054,MCB,,,
+metaplex,MPLX,metaplex,Launchpad,48077839.0,2022-09-20,1288,MPLX,,,
+meteora,MET,meteora-dlmm|meteora-damm-v2|meteora-damm-v1|meteora-dynamic-bonding-curve,Dexs,1468831874.0,2025-10-24,266,MET,2025-10-10,2025-10-10,2025-10-10
+meth-protocol,COOK,meth-protocol,Liquid Staking,112638783.0,2024-10-30,669,COOK,,,
+metronome,MET,metronome-synth,Synthetics,20663499.17,2019-01-01,2584,MET,2025-10-10,2025-10-10,2025-10-10
+momentum-3,MMT,momentum,Dexs,18470643.0,2025-11-04,276,MMT,2025-11-04,,2025-11-04
+moonwell-artemis,WELL,moonwell-lending,Lending,23953043.0,2022-06-24,1371,WELL,,,
+morpho,MORPHO,morpho-blue,Lending,342428819.0,2024-11-20,525,MORPHO,2024-11-25,2025-01-17,2024-11-25
+navi,NAVX,navi-lending,Lending,38391311.0,2024-02-08,915,NAVX,,,
+near,NEAR,near-intents|near,Bridge,63377415.98,2020-10-15,1839,NEAR,2020-12-21,2023-11-01,2020-12-21
+nxm,NXM,nexus-mutual,Insurance,17203039.400000002,2020-07-13,2033,NXM,,,
+ondo-finance,ONDO,ondo-yield-assets,RWA,81932601.0,2024-01-18,784,ONDO,2024-08-06,2024-01-20,2024-01-20
+opinion,OPN,opinion,Prediction Market,17486683.0,2026-03-05,154,OPN,2026-02-23,,2026-02-23
+optimism,-,superchain|op-mainnet,Services,197788529.0,2022-06-01,1297,OP,2022-06-01,2023-05-12,2022-06-01
+orca,ORCA,orca-dex,Dexs,227344533.0,2021-08-11,1594,ORCA,,,
+orderly-network,ORDER,orderly-perps,Derivatives,13976738.0,2024-08-26,662,ORDER,2025-09-30,,2025-09-30
+ore,ORE,ore-protocol,Gamified Mining,38443836.0,2024-04-09,849,ORE,,,
+osmosis,OSMO,osmosis-dex,Dexs,66250819.0,2021-06-29,1676,OSMO,,,
+paal-ai,PAAL,paal-ai,Telegram Bot,14267513.0,2023-06-24,1060,PAAL,,,
+pancakeswap-token,CAKE,pancakeswap-amm|pancakeswap-amm-v3|pancakeswap-prediction|pancakeswap-infinity,Dexs,1786946416.18,2020-09-30,1864,CAKE,,2023-12-30,2023-12-30
+pangolin,PNG,pangolin-v2,Dexs,54062867.0,2021-02-20,1841,PNG,,,
+paradex,DIME,paradex-perps,Derivatives,17804423.0,2026-03-05,183,DIME,,,
+pendle,PENDLE,pendle-v2,Yield,66512483.0,2021-04-29,1666,PENDLE,2025-09-17,2023-10-26,2023-10-26
+penpie,PNP,penpie,Yield,12524530.709999995,2023-06-23,1046,PNP,,,
+pharaoh-2,PHAR,pharaoh-cl,Dexs,16862882.390000015,2025-10-15,309,PHAR,,,
+polygon-ecosystem-token,,polygon,Chain,119257183.0,2023-10-26,863,POL,2024-09-24,2024-09-17,2024-09-17
+puffer-finance,PUFFER,puffer-stake,Liquid Restaking,36738794.02,2024-10-14,612,PUFFER,,,
+pulsex,PLSX,pulsex-v1|pulsex-v2,Dexs,40021214.0,2023-05-20,1069,PLSX,,,
+pump-fun,PUMP,pump.fun|pumpswap|terminal,Launchpad,2065606646.0,2025-07-14,326,PUMP,2025-07-14,2025-07-10,2025-07-10
+quickswap,QUICK,quickswap-dex|quickswap-v3,Dexs,225527475.0,2022-05-04,1425,QUICK,,,
+radiant-capital,RDNT,radiant-v2,Lending,29491892.77000002,2022-07-26,1332,RDNT,,2023-10-03,2023-10-03
+railgun,RAIL,railgun,Privacy,13413488.0,2021-07-04,1707,RAIL,,,
+raydium,RAY,raydium-amm|launchlab,Dexs,1441414292.0,2021-02-22,1721,RAY,2024-03-12,,2024-03-12
+renzo,REZ,renzo,Liquid Restaking,51345962.0,2024-05-01,755,REZ,,2024-04-30,2024-04-30
+reserve-rights-token,RSR,reserve-protocol,Indexes,13932835.86,2019-05-23,2372,RSR,2020-09-09,2023-12-05,2020-09-09
+resolv,RESOLV,resolv-usr,Basis Trading,36384792.0,2025-06-11,376,RESOLV,2025-06-10,2025-06-10,2025-06-10
+rocket-pool,RPL,rocket-pool,Liquid Staking,212863848.0,2019-01-01,2434,RPL,,,
+sanctum-2,CLOUD,sanctum-validator-lsts,Liquid Staking,217087757.0,2024-07-19,756,CLOUD,,,
+save,SAVE,save,Lending,22255233.0,2024-12-13,624,SAVE,,,
+scallop-2,SCA,scallop-lend,Lending,17964764.0,2024-03-08,894,SCA,,,
+scroll,,scroll,Chain,42933385.20999999,2024-10-23,587,SCR,,2024-10-09,2024-10-09
+shadow-2,SHADOW,shadow-exchange-clmm,Dexs,35175411.7,2025-01-19,564,SHADOW,,,
+sideshift-token,XAI,sideshift,Cross Chain Bridge,14626382.0,2021-05-21,1690,XAI,,2024-01-15,2024-01-15
+silo-finance-2,SILO,silo-v2,Lending,16160121.0,2025-05-10,380,SILO,,,
+solana,,solana,Chain,1588952518.0,2020-04-11,1982,SOL,2021-01-22,2023-05-12,2021-01-22
+solayer,LAYER,solayer-restaking,Restaking,10632637.04,2025-02-12,456,LAYER,2025-02-11,2025-02-11,2025-02-11
+solblaze,BLZE,blazestake,Liquid Staking,23210883.11000001,2022-12-05,1047,BLZE,,,
+soltradingbot,STBOT,soltradingbot,Telegram Bot,53844115.0,2023-11-21,762,STBOT,,,
+solv-protocol,SOLV,solvbtc,Bridge,53041504.02,2025-01-18,512,SOLV,,,
+sosovalue,SOSO,sosovalue-indexes,Indexes,45584535.0,2025-01-24,556,SOSO,,,
+spark-2,SPK,sparklend|spark-liquidity-layer,Lending,354064992.0,2025-06-17,348,SPK,2025-06-17,,2025-06-17
+spell-token,SPELL,abracadabra-spell,CDP,77757977.23999996,2021-05-28,1702,SPELL,,,
+spookyswap,BOO,spookyswap-v2,Dexs,133975705.42,2021-05-05,1741,BOO,,,
+stader,SD,stader,Liquid Staking,16548838.0,2022-03-15,1474,SD,,,
+stake-link,SDL,stake.link-liquid,Liquid Staking,13462305.0,2022-12-06,1221,SDL,,,
+stakewise,SWISE,stakewise-v3,Liquid Staking,41469955.0,2021-04-28,1618,SWISE,,,
+stargate-finance,STG,stargate-v1,Cross Chain Bridge,33277346.020000007,2022-03-18,1427,STG,,2023-10-26,2023-10-26
+starknet,,starknet,Chain,45686624.0,2024-02-20,761,STRK,2024-02-20,2024-02-14,2024-02-14
+ston-2,STON,ston.fi,Dexs,20171280.65,2023-08-12,1018,STON,,,
+stride,STRD,stride,Liquid Staking,21851665.0,2022-09-14,1290,STRD,,,
+sui,,sui,Chain,25382463.0,2023-05-03,982,SUI,2023-05-05,2023-05-12,2023-05-05
+suilend,SEND,suilend,Lending,43114587.0,2024-12-13,624,SEND,,,
+sun-token,SUN,sunswap-v3|sunswap-v2,Dexs,57699431.0,2020-09-12,1878,SUN,,,
+sushi,SUSHI,sushiswap|sushiswap-v3|sushiswap-agg,Dexs,711716633.42,2020-08-29,1905,SUSHI,2020-09-02,2023-11-17,2020-09-02
+swell-network,SWELL,swell-liquid-staking,Liquid Staking,24460912.0,2024-09-30,612,SWELL,,,
+synapse-2,SYN,synapse-cross-chain-bridge,Cross Chain Bridge,31781855.60000002,2021-08-30,1615,SYN,,,
+synfutures,F,synfutures-v3,Derivatives,61168273.0,2024-12-06,577,F,2025-10-25,,2025-10-25
+syrup,SYRUP,maple,Lending,194075988.96000004,2024-11-14,558,SYRUP,2025-07-03,2025-06-26,2025-06-26
+tezos,,tezos,Chain,15889718.0,2019-01-01,2505,XTZ,2020-04-21,,2020-04-21
+the-open-network,,ton,Chain,17387379.0,2021-08-27,1539,GRAM,2026-06-17,2026-07-02,2026-06-17
+thena,THE,thena-fusion,Dexs,24500976.0,2023-01-30,1119,THE,,,
+thorchain,RUNE,thorchain-dex,Dexs,170685349.0,2019-07-20,2274,RUNE,,2023-08-15,2023-08-15
+tokenlon,LON,tokenlon-amm,Dexs,72411281.0,2020-12-24,1923,LON,,,
+tron,,tron,Chain,2118173395.0,2019-01-01,2465,TRX,2019-11-12,2023-08-06,2019-11-12
+trust-wallet-token,TWT,trust-wallet-wallet,Wallets,35021221.0,2020-04-29,2040,TWT,,,
+unibot,UNIBOT,unibot,Telegram Bot,29278050.48,2023-05-21,1108,UNIBOT,,2023-08-02,2023-08-02
+unicrypt-2,UNCX,uncx-network-v2,Token Locker,14397282.760000007,2020-10-21,1814,UNCX,,,
+uniswap,UNI,uniswap-v3|uniswap-v2|uniswap-v4,Dexs,5873802841.0,2020-09-17,1856,UNI,2020-09-17,2023-08-11,2020-09-17
+usdx-money-usdx,USDX,stables-labs-usdx,Basis Trading,14475709.0,2024-09-27,623,USDX,,,
+usual,USUAL,usual-usd0,RWA,75131354.0,2024-11-18,537,USUAL,,2024-12-18,2024-12-18
+vault-2,V,the-vault-liquid-staking,Liquid Staking,22210354.19,2025-11-25,219,V,,,
+velodrome-finance,VELO,velodrome-v2|velodrome-v3,Dexs,45099985.89,2022-06-03,1335,VELO,,,
+velora,VLR,velora,DEX Aggregator,19554448.0,2025-09-16,339,VLR,,,
+vertex-protocol,VRTX,vertex-perps,Derivatives,30421960.0,2023-11-22,731,,,,
+virtual-protocol,VIRTUAL,virtuals-protocol,AI Agents,73869044.0,2023-12-28,805,VIRTUAL,2024-12-11,2024-12-16,2024-12-11
+vvs-finance,VVS,vvs-standard,Dexs,17875831.0,2021-11-16,1566,VVS,,,
+wigoswap,WIGO,wigoswap,Dexs,20859732.190000024,2022-03-01,1175,,,,
+world-liberty-financial,WLFI,world-liberty-financial,Lending,141402450.0,2025-09-01,286,WLFI,2025-08-23,2025-08-23,2025-08-23
+yearn-finance,YFI,yearn-finance,Yield Aggregator,148208999.0,2020-07-19,1946,YFI,2020-09-02,,2020-09-02
+yei-finance,CLO,yeilend,Lending,13076327.0,2025-10-14,299,CLO,,,
+yolo-games,YOLO,yolo-games,Gaming,22530591.69,2024-06-15,488,YOLO,,,
+zksync,,zksync-era,Chain,86183933.0,2024-06-18,651,ZK,2024-06-18,2024-06-12,2024-06-12
+zora,ZORA,zora-coins,Launchpad,10430062.0,2025-04-23,397,ZORA,2025-10-10,2025-04-23,2025-04-23
