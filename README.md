@@ -497,6 +497,51 @@ Ruled out by this notebook: "not enough data" (7.7y, 200 tokens, 146k eligible
 token-days), "it's all BTC beta" (weekly R² averages 0.15), and "costs kill it"
 (break-even is 8-11x the assumption).
 
+### Crypto tradability — can the fee-growth signal actually be traded? (`notebooks/`)
+
+The third notebook closes the sequence by answering the question notebook 2 left
+open — does the short leg exist? — and then trying to optimise the signal into a
+tradeable strategy. **The sample is split before any tuning:** design period
+2021-06 to 2025-02, holdout 2025-03 to 2026-09, looked at once.
+
+```bash
+python experiments/fetch_perp_listings.py                 # OKX listTime + Hyperliquid first-funding date
+jupyter lab notebooks/crypto_tradability_verdict.ipynb
+```
+
+**The short leg exists.** 86 of 200 tokens have a live perp on OKX or
+Hyperliquid, **34 of the 40 biggest fee earners** do, and ~44% of the eligible
+cross-section is shortable on a given day — applied point-in-time from listing
+dates, so 2021 uses 2021's venue coverage. Restricting shorts to perp-listed
+names did **not** damage the design-period result (value_gap t 2.43 -> 2.56).
+The hypothesis that killed notebook 2 was wrong.
+
+**But optimisation found nothing that generalised.** 108 configurations (signal
+lookback, bucket count, weighting, beta-neutralisation, rebalance frequency),
+all defensible a priori: design-period median t **+1.45**, best +2.57, 12% above
+t=2. The same configurations on the holdout: median t **−0.57**, and **not one of
+81 reaches t=2**. Rank correlation between design and holdout t is +0.20
+(p=0.07). The pre-committed configuration went **+9.01%/30d (t=1.98) in design
+and +0.02%/30d (t=0.01) in the holdout — 0% of the edge retained.**
+
+**It is not a regime excuse.** Cross-sectional dispersion nearly *tripled* into
+the holdout (6.6% → 16.9% daily) and breadth doubled (58 → 112 names). There was
+more raw material for a long-short factor, not less.
+
+**The signal is real — and it lives only where you cannot trade it.** Sorting
+within perp-listed names gives t **+0.04** (design) and **−0.19** (holdout);
+sorting within non-perp names gives **+1.22** and **+1.92**, the only thing that
+survived out of sample. Fee growth is not a mispricing arbitrage missed; it is a
+**liquidity premium**, priced away exactly where a venue judged a name liquid
+enough to list a perp. Long-only does not rescue it: holdout excess +1.45%/30d
+(t=1.04) earned against a benchmark falling 3.5%/30d — the book still lost money
+outright.
+
+**Verdict: NO. Do not deploy capital.** The alpha and the tradability are
+mutually exclusive by construction. The one experiment that could still overturn
+this is a liquidity and impact study on the non-perp names (the flat 100bp cost
+assumption is the weakest link) — not another backtest on this data.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
