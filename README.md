@@ -446,6 +446,57 @@ Like the studies above, the design is **survivorship-biased** — the universe i
 protocols alive today. Every test is parameterised: point it at a longer price
 panel and it re-runs unchanged.
 
+### Crypto strategies — can we invest in this asset class at all? (`notebooks/`)
+
+The follow-on to the fundamentals study above, after fixing its data problem.
+`coins.llama.fi` serves free daily prices back to 2019 in 500-point pages **and
+prices dead tokens**, which turns a 12-month survivor-only panel into a
+**7.7-year, 200-token, survivorship-free** one (2019-01 to 2026-09). The universe
+is rebuilt point-in-time on every rebalance from trailing-90d protocol fees
+(>= $1M) rather than market cap, because DefiLlama's fee history is complete and
+point-in-time while free market-cap history is not available at any length.
+
+```bash
+python experiments/build_crypto_panel.py                  # rebuild the panel (~15 min, ~1,800 requests)
+jupyter lab notebooks/crypto_strategy_verdict.ipynb       # runs offline off the committed panel
+```
+
+Three questions, three answers.
+
+**1. Can we hold crypto? No.** Over the 5.1 years BTC/ETH/the token basket/SPY/GLD
+all share: BTC **+5.7%/yr at Sharpe 0.10** with a 77% drawdown, the equal-weight
+basket of *fee-generating* tokens **-6.1%/yr**, underwater 1,672 of 1,869 days —
+against SPY +15.0% (Sharpe 0.89) and GLD +18.5% (1.04). BTC's 60.7%/yr
+full-history record is 2016-17 and 2020; since 2021 it is a coin flip.
+
+**2. Does trend-following fix the beta? Partly — as risk control.** An SMA filter
+beats buy & hold at **100% of 29 lookbacks** over 11.7 years (Sharpe 0.86 -> 1.0-1.5,
+worst drawdown -84% -> -51%), so it is not one lucky parameter. But in 2021-2026
+the lookback still swings CAGR from 9% to 36%. Dependable for drawdowns,
+undependable as a return engine.
+
+**3. Is there cross-sectional alpha? One real signal — and it still fails.**
+Twenty tests across momentum, reversal, low-vol, low-beta, size and fundamentals.
+**Fee growth** is the only survivor: protocols whose 90d fees grew fastest beat
+those whose fees shrank by ~8.8%/30d gross, with the payoff spread across
+quintiles (rank corr +0.90). Its mirror `value_gap` is the same trade (-0.80
+correlated), so it is one discovery, not two. It survives a **1,000-shuffle
+permutation null over the whole battery** (family-wise p = 0.037), all 30
+rebalance offsets, dropping any single token from 199, 100bp costs (break-even
+825-1,109bp), and BTC residualisation (80% retained).
+
+**Verdict: NO-GO for deploying capital — 4 of 5 criteria.** Not because the signal
+is fake, but because it never clears |t| = 3 (3.08 gross, 2.71 net, 2.81 after
+pricing out its +0.56 BTC beta), it decayed 72% between halves, it earns +13.8%/30d
+when BTC rises vs +0.9% when it falls, and **the implementable half does not work**
+— long-only versus the basket is +3.6%/30d at **t = 1.56**. The alpha lives in a
+short leg made of tokens with little or no borrow. The next experiment is one API
+pull — perp listings and funding rates — to find out whether that leg exists.
+
+Ruled out by this notebook: "not enough data" (7.7y, 200 tokens, 146k eligible
+token-days), "it's all BTC beta" (weekly R² averages 0.15), and "costs kill it"
+(break-even is 8-11x the assumption).
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi

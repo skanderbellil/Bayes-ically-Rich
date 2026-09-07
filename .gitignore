@@ -34,3 +34,10 @@ graphify-out/cache/
 # Mid-price × smart-flow combo study snapshot (committed for reproducibility)
 !data/polymarket_combo_snapshot/*.csv
 !data/polymarket_combo_snapshot/*.png
+
+# Crypto strategy panel (notebooks/crypto_strategy_verdict.ipynb).
+# The raw per-request JSON fetch cache is large (~21MB) and fully rebuildable by
+# experiments/build_crypto_panel.py, so it stays local. The consolidated panel it
+# produces IS committed, so the notebook re-runs offline and reproduces exactly.
+data/crypto_panel/raw/
+!data/crypto_panel/universe.csv
