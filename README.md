@@ -542,6 +542,57 @@ mutually exclusive by construction. The one experiment that could still overturn
 this is a liquidity and impact study on the non-perp names (the flat 100bp cost
 assumption is the weakest link) — not another backtest on this data.
 
+### Crypto capacity — how much money does the signal hold? (`notebooks/`)
+
+The fourth notebook replaces the weakest assumption in the sequence. Notebooks
+2-3 charged a **flat 100bp round trip**; for tokens with no perp listing that was
+never defensible. This measures the real thing.
+
+```bash
+python experiments/fetch_liquidity.py                     # CoinGecko /tickers?depth=true
+jupyter lab notebooks/crypto_capacity_verdict.ipynb
+```
+
+**Data.** Order-book depth (`cost_to_move_up/down_usd` — the USD notional that
+moves the price 2%), bid-ask spread and volume, per venue, for all 117 tokens the
+non-perp book holds; 100 return usable depth. Note that CoinGecko's `trust_score`
+is **null on every venue row** on the free tier, so venue quality is filtered only
+on `is_anomaly`/`is_stale`. Depth is summed across all quoting venues, which
+assumes a trader can sweep them simultaneously — every capacity number is
+therefore an upper bound.
+
+**Reported volume is not liquidity.** Median 2% depth is **$94k** against $676k of
+reported daily volume — depth is a median of just **19%** of volume, and under 7%
+at the 25th percentile. Sizing off volume would overstate capacity by one to two
+orders of magnitude.
+
+**Capacity is roughly $250k.** Impact modelled as `spread/2 + 2% x sqrt(Q/D)`,
+anchored so `Q = D` returns exactly the measured 2% move. Against a holdout gross
+edge of **+4.51%/30d**:
+
+| AUM | cost | net/30d | t |
+|---|---|---|---|
+| $25k | 185bp | +2.66% | 1.36 |
+| $100k | 307bp | +1.44% | 0.73 |
+| $250k | 449bp | +0.02% | 0.01 |
+| $1M | 835bp | −3.84% | −1.76 |
+
+The flat 100bp used in notebooks 2-3 corresponds to about **$25k** of capital.
+The conclusion survives both sensitivities run: what is assumed for the 25 held
+names with no depth quote (13% of trading), and a linear rather than square-root
+impact law.
+
+**And the edge is confined to the illiquid band by construction.** Requiring a
+minimum depth and re-sorting: the holdout edge holds up to ~$50k of depth
+(+5.3%, t=1.31), fades by $100k (+1.6%, t=0.68) and is gone at $250k (+0.1%,
+t=0.04) — meeting notebook 3's perp-listed result of t=−0.19. The effect stops
+almost exactly where a name becomes worth an arbitrageur's attention.
+
+**Verdict: NO.** The alpha exists *because* these names are too illiquid to
+arbitrage — the illiquidity is the source of the premium, not an obstacle in
+front of it. Any size large enough to matter is large enough to destroy it. A
+real finding about how this market works; not a strategy.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi

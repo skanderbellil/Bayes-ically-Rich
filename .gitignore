@@ -42,3 +42,4 @@ graphify-out/cache/
 data/crypto_panel/raw/
 !data/crypto_panel/universe.csv
 !data/crypto_panel/perp_listings.csv
+!data/crypto_panel/liquidity.csv
