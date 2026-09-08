@@ -694,6 +694,62 @@ CEX-only execution (~40% of the alpha names are DEX-only, where €100 clips fac
 money in the holdout window was one liquid asset behind a trend filter — risk
 management, ~5 trades a year, not edge.
 
+### Crypto frequency/cost frontier — does trading faster ever pay? (`notebooks/`)
+
+The seventh notebook tests *how often* to trade rather than *what*. The
+Crypto.com MCP connector returns only 50 candles per request with no paging (50
+minutes of 1m history), so it cannot support a backtest — but its live order book
+answered a different question usefully: **a one-cent spread on BTC** with enough
+top-of-book size to fill €1,000 outright. At retail size slippage and impact are
+~zero; the entire cost of trading is the exchange fee.
+
+Data comes instead from **Binance's public archives** (`data.binance.vision`),
+which serve complete 1-minute OHLCV back to 2017. (The Binance REST API is
+geo-blocked from this host; the static archives are not.)
+
+```bash
+python experiments/fetch_intraday_klines.py BTCUSDT ETHUSDT   # ~209MB, gitignored
+jupyter lab notebooks/crypto_frequency_verdict.ipynb
+```
+
+**4,754,719 one-minute bars per symbol, 2017-08 to 2026-09 (9.1 years), 35 gaps.**
+
+**The arithmetic frontier, before any signal.** If you hold `h` minutes and flip
+each time, annual drag = `(525,600/h) x cost`. At a 30bp round trip:
+
+| Hold | 1m | 1h | 1d | 3d | 1w |
+|---|---|---|---|---|---|
+| Cost drag | **157,680%/yr** | 2,628%/yr | 110%/yr | 37%/yr | 15.6%/yr |
+
+Anything faster than daily is excluded by arithmetic, not evidence.
+
+**The sweep** (10 holding periods x 5 lookbacks x momentum/reversal, phase-averaged):
+only **10 of 100 combinations are net-positive, and every one holds 1 day or
+longer** — all momentum. Median across all 100 is −704%/yr.
+
+| # | Criterion | Result |
+|---|---|---|
+| F1 | Something net-positive in design | **PASS** — 10/100, all >= 1 day |
+| F2 | Beats the bootstrap null | **FAIL** — p = 0.30 |
+| F3 | Survives the holdout | **FAIL** — best design rule → −1.5%/yr |
+| F4 | Beats holding BTC | **FAIL** — Sharpe 0.25 vs 0.49 |
+| F5 | Executable by hand at €1,000 | PASS — ~36 trades/yr |
+
+**1 of 5.** The best rule (+52.3%/yr, 3-day momentum) sits inside the null:
+shuffling BTC's own minute returns and re-running the same sweep gives a median
+best of +41.2%/yr and a 95th percentile of +83.1%/yr.
+
+**One honest split, not averaged away:** the same design-selected rule returned
+−1.5%/yr on BTC but **+52.6%/yr on ETH** (vs ETH buy-and-hold's +3.7%). ETH went
+nowhere in that window and BTC went up — the trend rule beat the disappointing
+asset and lost to the good one. That is notebook 5's conclusion arriving again:
+**trend is insurance, not alpha.**
+
+**Verdict: intraday adds nothing.** The profitable region begins exactly where the
+earlier daily-frequency work was already operating. Practical takeaway: every
+trade costs ~0.3% and buys nothing in expectation, so the correct trading
+frequency at €1,000 is close to zero.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi

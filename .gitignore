@@ -44,3 +44,8 @@ data/crypto_panel/raw/
 !data/crypto_panel/perp_listings.csv
 !data/crypto_panel/liquidity.csv
 !data/crypto_panel/venues.csv
+
+# Binance 1-minute klines (notebooks/crypto_frequency_verdict.ipynb).
+# ~209MB of parquet, fully rebuildable in a few minutes by
+# experiments/fetch_intraday_klines.py, so it stays local like the other caches.
+data/crypto_intraday/
