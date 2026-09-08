@@ -24,9 +24,15 @@ for f in sorted(glob.glob(f"{PANEL}/raw/tickers_*.json.gz")):
     venues = {t["market"]["name"].lower() for t in ok}
     t1 = [t for t in ok if t["market"]["name"].lower() in TIER1
           and t.get("bid_ask_spread_percentage") is not None]
+    # 2% order-book depth summed across every quoting venue, for the whole
+    # universe rather than only the subset liquidity.csv covers.
+    q = [t for t in ok if t.get("cost_to_move_up_usd") or t.get("cost_to_move_down_usd")]
+    depth = float(sum(np.nanmean([t.get("cost_to_move_up_usd") or np.nan,
+                                  t.get("cost_to_move_down_usd") or np.nan]) for t in q)) if q else np.nan
     rows.append({"gecko_id": gid, "tier1": bool(venues & TIER1),
                  "retail": bool(venues & RETAIL),
                  "n_tier1_venues": len(venues & TIER1),
+                 "depth_2pct_usd": depth,
                  "spread_pct": float(np.median([t["bid_ask_spread_percentage"] for t in t1]))
                                if t1 else np.nan})
 V = pd.DataFrame(rows)

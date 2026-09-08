@@ -640,6 +640,60 @@ in the whole sequence and still not fundable. The honest split: *"trend predicts
 crypto returns"* is not supported since 2021; *"trend controls crypto drawdowns"*
 is supported in every era. That is risk management, not alpha.
 
+### Crypto at retail scale — what €1,000 can actually do (`notebooks/`)
+
+The sixth notebook re-runs the question under the constraint that matters most:
+**€1,000, European retail access.** That changes which constraints bind.
+
+```bash
+python experiments/build_venue_table.py                   # venue availability from cached /tickers
+jupyter lab notebooks/crypto_retail_verdict.ipynb
+```
+
+**The structural finding, before any backtest.** Splitting the 200-token universe
+by whether a European retail account can buy it on a tier-1 venue
+(Binance/Coinbase/Kraken/Bitstamp/Bitvavo/Bitpanda):
+
+| | median 2% depth | share above $250k |
+|---|---|---|
+| Retail-buyable (125 tokens) | **$2,366,728** | **78%** |
+| Not retail-buyable (75) | **$4,971** | **2%** |
+
+Notebook 4 found the edge is gone above ~$250k of depth. So the retail-accessible
+universe is close to the **exact complement** of where the signal lives — a 476x
+gap in median depth.
+
+**Capacity stops mattering and it doesn't help.** At €1,000 impact is nil (clips
+of €100), and cost falls to ~30bp per rebalance. Irrelevant: the alpha was never
+in the long leg. It sits in names with no perpetual future — exactly what retail
+cannot short at any size, with no borrow and MiCA restricting EU access to
+offshore perp venues.
+
+**The executable version (long-only, 10 names, tier-1 venues, 0.25% taker):**
+design excess over the equal-weight basket +0.92%/30d (t = 0.60); **holdout
+−0.23%/30d (t = −0.16)**. Insignificant in both, negative out of sample, at every
+book size tested (5/8/10/15 names). Fee tier doesn't rescue it — Binance's 0.10%
+gives −0.11% in the holdout.
+
+**What €1,000 became:**
+
+| | design (3.7y) | holdout (1.5y) |
+|---|---|---|
+| Fundamentals tilt | €1,362 | **€469** |
+| Equal-weight retail basket | €868 | €482 |
+| BTC buy & hold | €2,154 | €952 |
+| BTC 200d trend filter | €1,307 | **€1,197** |
+| SPY buy & hold | €1,494 | €1,285 |
+
+The tilt did not even beat holding the whole universe equal-weighted, and cost
+**99 taxable disposals and ~15 hours a year** to run — **−€28/yr, −€1.9/hour**.
+
+**Verdict: NO.** At this size the binding constraints are the inability to short,
+CEX-only execution (~40% of the alpha names are DEX-only, where €100 clips face
+2–30% gas per trade), and tax bookkeeping. The only crypto approach that made
+money in the holdout window was one liquid asset behind a trend filter — risk
+management, ~5 trades a year, not edge.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
