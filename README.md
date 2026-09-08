@@ -593,6 +593,53 @@ arbitrage — the illiquidity is the source of the premium, not an obstacle in
 front of it. Any size large enough to matter is large enough to destroy it. A
 real finding about how this market works; not a strategy.
 
+### Crypto trend-following — the last survivor, through the same gauntlet (`notebooks/`)
+
+Notebook 2 found that a moving-average filter on BTC beat buy-and-hold at 100% of
+29 lookbacks over 11.7 years, then notebooks 3-4 spent all their effort on the
+cross-sectional signal and never came back to it. This closes that gap. Design
+period 2015-01 to 2022-12, holdout 2023-01 to 2026-09, criteria fixed first.
+
+```bash
+jupyter lab notebooks/crypto_trend_verdict.ipynb
+```
+
+**The danger trend has that factors don't:** BTC compounded at ~60%/yr, so *any*
+rule that is long most of the time looks good, and cutting exposure flatters
+Sharpe even when the timing is noise. So the central test is a **bootstrap null** —
+the same 29-rule grid run on 1,000 synthetic paths built from BTC's own returns.
+
+| # | Criterion | Result |
+|---|---|---|
+| T1 | Beats buy & hold, design period | **PASS** — higher Sharpe at 100% of lookbacks (1.40 vs 1.10) |
+| T2 | Beats the bootstrap null | **PASS** — but see below |
+| T3 | Survives walk-forward | **FAIL** |
+| T4 | Generalises across assets | **PASS** on full history |
+| T5 | Survives costs | **PASS** comfortably |
+
+**T2 is the interesting one.** Against an **iid** null (drift, vol and fat tails
+preserved, all serial structure destroyed) trend is overwhelming: median Sharpe
+gain +0.30 where noise gives −0.32, p=0.002. Against a stricter **block
+bootstrap** that preserves volatility clustering, the grid-wide median gain still
+passes (p=0.029) but the **best single rule does not** (p=0.159). So the rule
+family is genuinely lifted, a good part of the effect is vol clustering rather
+than price momentum, and picking a specific lookback buys nothing.
+
+**T3 is the failure.** Lookback chosen on 2015-2022, applied to 2023-2026: only
+**7% of the grid beat buy-and-hold** out of sample, and design-period rank barely
+predicts holdout rank (+0.16). Trend made +30%/yr against buy-and-hold's +67%.
+By era the Sharpe gain runs +0.15 → +0.71 → −0.41 → −0.36: the entire return
+edge is 2018-2020, and it has been negative in both eras since.
+
+**But the risk control never failed.** In every era tested, including both where
+trend lost on return, it cut the worst drawdown — −84% to −63% over the full
+sample, −52% to −32% in the holdout.
+
+**Verdict: 4 of 5, failing the walk-forward.** Trend is the best-evidenced result
+in the whole sequence and still not fundable. The honest split: *"trend predicts
+crypto returns"* is not supported since 2021; *"trend controls crypto drawdowns"*
+is supported in every era. That is risk management, not alpha.
+
 ## Methodology notes
 
 - **No lookahead bias.** Regime filters use forward-filtered posteriors only (no Viterbi
