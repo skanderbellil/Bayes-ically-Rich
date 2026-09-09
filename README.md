@@ -747,8 +747,70 @@ asset and lost to the good one. That is notebook 5's conclusion arriving again:
 
 **Verdict: intraday adds nothing.** The profitable region begins exactly where the
 earlier daily-frequency work was already operating. Practical takeaway: every
-trade costs ~0.3% and buys nothing in expectation, so the correct trading
-frequency at €1,000 is close to zero.
+trade costs ~0.3% and buys nothing *that these tests could detect*, so the
+correct trading frequency at €1,000 is close to zero. (The hedge matters: with
+18-month holdouts these tests could only have detected an edge above ~+34%/yr.
+Notebook 8 was written specifically to attack that limitation.)
+
+### 8. Is there an edge at all? — `crypto_execution_timing_verdict.ipynb`
+
+Seven notebooks of "no" invited a fair challenge: how much of that was *failure
+to detect* rather than *evidence of absence*? A power analysis said: most of it.
+So the method changed rather than the conclusion — **start from a mechanism**,
+**maximise power** (3.3M hourly returns instead of 18 monthly periods), and look
+for something that needs **zero extra trades**, since notebook 7 showed cost
+scales directly with turnover.
+
+```bash
+jupyter lab notebooks/crypto_execution_timing_verdict.ipynb   # runs off the 1m archives
+```
+
+**The finding: crypto drifts up into the US equity close.** 21:00–23:00 UTC,
++2.7bp/hr on BTC and +3.8bp/hr on ETH — **on weekdays only.**
+
+| # | Criterion | Result |
+|---|---|---|
+| E1 | Statistically present | **PASS** — ANOVA p = 0.008 (BTC), 0.003 (ETH) |
+| E2 | Not a microstructure artifact | **PASS** — strengthens on VWAP (t = 3.7, 4.0) |
+| E3 | Mechanism-consistent | **PASS** — weekend effect +0.04 / +0.25bp (p = 0.98, 0.89) |
+| E4 | Holds out of sample | **PASS** — 5/6 unseen assets positive, paired weekday-vs-weekend t = +3.1 |
+| E5 | Usable after costs | **PASS** — but worth **€0.48 per €1,000** |
+
+**5 of 5 — and the honest headline is the last column.** The weekend test is what
+makes this more than a calendar curve: same hour, same 24/7 market, no US
+session, no effect. The window also carries the day's *tightest* spreads
+(Corwin–Schultz 0.28bp vs 0.46bp in the European morning), so it is not an
+illiquidity illusion, and it survives on VWAP, so it is not bid-ask bounce.
+
+**How the number shrank, which is the useful part:**
+
+| Estimate | Value | What was wrong with it |
+|---|---|---|
+| Best hour vs worst hour | up to 419bp | max of 24 noisy means — biased |
+| Pre-specified windows, weekly DCA | 31bp | bought on a Monday 472 times out of 473 |
+| Phase-averaged final portfolio value | 12–26bp | units = €1,000/price, so 2017-18 trades dominate |
+| **Phase-averaged, paired, drift removed** | **4.8bp** | what is actually there |
+
+Each correction cost roughly an order of magnitude. Half of what survived the
+first three was BTC's own upward drift over the 13.5-hour gap between windows —
+real euros in a bull market, negative in a falling one, and not an edge. Strip
+it and 4.8bp remains, which independently matches the drift-removed hourly
+profile's 6.7bp computed with no backtest at all.
+
+**The rule, and its ceiling:** *do not buy between 21:00 and 00:00 UTC on a
+weekday.* It costs nothing to obey, so it is worth doing at any size — and it is
+worth about **€6/year on a €1,000 monthly DCA**, roughly a fifth of one side of a
+Kraken retail fee. It is not a strategy: capturing it directly needs a round trip
+every weekday, ~10bp of gross effect against ~30bp of cost, −51%/yr net.
+
+**What it changes about notebooks 1–7:** the "nothing works" framing was too
+broad. Real, mechanism-backed structure does exist in this market. It is simply
+smaller than the cost of acting on it — which was the finding all along, now with
+a concrete example on the right side of that line, and only because acting on it
+is free. Two caveats stated in the notebook and not buried: the daylight-saving
+test (the sharpest available confirmation) came back **inconclusive**, and the
+six out-of-sample assets co-move with BTC, so they are a weak replication of one
+market-wide effect rather than six independent ones.
 
 ## Methodology notes
 
