@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-11 06:49 UTC",
+  "generated": "2026-09-11 09:42 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -147,21 +147,21 @@
     },
     "Smart Flow": {
       "sleeve": "Smart Flow",
-      "trades": 8067,
+      "trades": 8069,
       "events": 85,
       "trades_per_event": 94.9,
       "edge": -0.0074,
       "t": -0.89,
       "ci95": [
-        -0.0238,
+        -0.0237,
         0.0089
       ],
       "mc_bar": 2.93,
       "oos_n": 26,
-      "oos_edge": -0.0156,
+      "oos_edge": -0.0155,
       "net_cost": -0.0126,
       "net_stress": -0.0276,
-      "boot_p": 0.8125,
+      "boot_p": 0.8111,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
@@ -200,21 +200,21 @@
     },
     "Smart Flow (indep exp)": {
       "sleeve": "Smart Flow (indep exp)",
-      "trades": 7109,
+      "trades": 7110,
       "events": 56,
-      "trades_per_event": 126.9,
+      "trades_per_event": 127.0,
       "edge": -0.0064,
-      "t": -1.52,
+      "t": -1.53,
       "ci95": [
-        -0.0146,
-        0.0019
+        -0.0147,
+        0.0018
       ],
       "mc_bar": 2.93,
       "oos_n": 17,
-      "oos_edge": -0.0182,
+      "oos_edge": -0.0184,
       "net_cost": -0.0135,
       "net_stress": -0.0285,
-      "boot_p": 0.9355,
+      "boot_p": 0.9373,
       "top1": 0.006,
       "verdict": "KILLED",
       "reasons": [
@@ -343,21 +343,21 @@
     },
     "SF independent": {
       "sleeve": "SF independent",
-      "trades": 5780,
+      "trades": 5781,
       "events": 56,
       "trades_per_event": 103.2,
-      "edge": -0.001,
-      "t": -0.2,
+      "edge": -0.0011,
+      "t": -0.22,
       "ci95": [
-        -0.011,
-        0.0089
+        -0.0111,
+        0.0088
       ],
       "mc_bar": 2.93,
       "oos_n": 17,
-      "oos_edge": -0.0109,
+      "oos_edge": -0.0112,
       "net_cost": -0.0099,
       "net_stress": -0.0249,
-      "boot_p": 0.5828,
+      "boot_p": 0.5894,
       "top1": 0.007,
       "verdict": "KILLED",
       "reasons": [
