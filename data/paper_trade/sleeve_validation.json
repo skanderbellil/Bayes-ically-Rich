@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-12 12:40 UTC",
+  "generated": "2026-09-12 13:34 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -147,21 +147,21 @@
     },
     "Smart Flow": {
       "sleeve": "Smart Flow",
-      "trades": 8132,
+      "trades": 8133,
       "events": 86,
       "trades_per_event": 94.6,
-      "edge": -0.0067,
-      "t": -0.82,
+      "edge": -0.0068,
+      "t": -0.83,
       "ci95": [
-        -0.0229,
+        -0.023,
         0.0094
       ],
       "mc_bar": 2.93,
       "oos_n": 26,
-      "oos_edge": -0.0125,
+      "oos_edge": -0.0128,
       "net_cost": -0.0126,
       "net_stress": -0.0276,
-      "boot_p": 0.7936,
+      "boot_p": 0.7954,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
