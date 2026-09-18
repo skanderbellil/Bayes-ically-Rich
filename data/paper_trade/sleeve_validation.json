@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-18 08:45 UTC",
+  "generated": "2026-09-18 09:38 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -146,21 +146,21 @@
     },
     "Smart Flow": {
       "sleeve": "Smart Flow",
-      "trades": 8653,
+      "trades": 8654,
       "events": 92,
       "trades_per_event": 94.1,
-      "edge": -0.0078,
-      "t": -1.01,
+      "edge": -0.0077,
+      "t": -1.0,
       "ci95": [
         -0.0229,
-        0.0073
+        0.0074
       ],
       "mc_bar": 2.93,
       "oos_n": 28,
-      "oos_edge": -0.0162,
+      "oos_edge": -0.0161,
       "net_cost": -0.0129,
       "net_stress": -0.0279,
-      "boot_p": 0.8524,
+      "boot_p": 0.8514,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
@@ -200,21 +200,21 @@
     },
     "Smart Flow (indep exp)": {
       "sleeve": "Smart Flow (indep exp)",
-      "trades": 7703,
+      "trades": 7704,
       "events": 63,
       "trades_per_event": 122.3,
-      "edge": -0.0075,
-      "t": -1.95,
+      "edge": -0.0074,
+      "t": -1.94,
       "ci95": [
-        -0.015,
-        0.0
+        -0.0149,
+        0.0001
       ],
       "mc_bar": 2.93,
       "oos_n": 19,
-      "oos_edge": -0.0208,
+      "oos_edge": -0.0207,
       "net_cost": -0.0142,
       "net_stress": -0.0292,
-      "boot_p": 0.9743,
+      "boot_p": 0.9738,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
@@ -344,21 +344,21 @@
     },
     "SF independent": {
       "sleeve": "SF independent",
-      "trades": 6300,
+      "trades": 6301,
       "events": 63,
       "trades_per_event": 100.0,
       "edge": -0.0041,
-      "t": -0.86,
+      "t": -0.85,
       "ci95": [
-        -0.0136,
-        0.0053
+        -0.0135,
+        0.0054
       ],
       "mc_bar": 2.93,
       "oos_n": 19,
-      "oos_edge": -0.0223,
+      "oos_edge": -0.0222,
       "net_cost": -0.0117,
       "net_stress": -0.0267,
-      "boot_p": 0.8043,
+      "boot_p": 0.8026,
       "top1": 0.006,
       "verdict": "KILLED",
       "reasons": [
