@@ -3,6 +3,11 @@
 Polymarket — independence-classified smart-flow consensus (hourly update)
 ===========================================================================
 
+RETIRED 2026-09-19 — both pre-registered kill criteria fired. This still runs hourly,
+but only to mark, resolve and consensus-exit the positions already open: it opens
+nothing new (``smartflow_independence.ENTRIES_FROZEN``). The successor experiment is
+``run_smart_flow_passive_update.py``.
+
 Pre-registered forward experiment (see ``docs/polymarket/SMART_FLOW_INDEPENDENCE.md``):
 does splitting smart-flow consensus into "independent discovery" vs. "information
 cascade" (Condorcet independence, `docs/knowledge/epistemology/README.md` Lesson 2)
@@ -31,9 +36,13 @@ import pandas as pd
 from tabulate import tabulate
 
 from posterioralpha.polymarket.smartflow_independence import (
+    ENTRIES_FROZEN,
+    KILL_MIN_RESOLVED_PER_CLASS,
+    KILL_T_MIN,
     STATE_FILE,
     classify_independence,
     independence_features,
+    kill_check,
     update_ledger,
 )
 from posterioralpha.polymarket.smartflow_papertrade import (
@@ -163,6 +172,19 @@ def main() -> None:
         print(tabulate(summary,
                         headers=["class", "n", "open", "resolved", "win rate", "mean pnl"],
                         tablefmt="rounded_grid"))
+
+    print(f"\n{'='*82}")
+    print("  PRE-REGISTERED KILL CRITERIA  (recomputed from the ledger every run)")
+    print(f"{'='*82}")
+    k = kill_check(ledger)
+    print(tabulate([
+        ["resolved per class", f"independent {k['n_independent']} / cascade {k['n_cascade']}"
+                               f"  (need {KILL_MIN_RESOLVED_PER_CLASS} each)"],
+        ["primary: t(indep − cascade)", f"{k['t']:+.2f}  (needs ≥ {KILL_T_MIN:.1f})"],
+        ["secondary: independent mean PnL", f"{k['mean_independent']:+.4f}  (needs > 0)"],
+        ["verdict", k["verdict"]],
+        ["entries", "FROZEN — resolving open positions only" if ENTRIES_FROZEN else "open"],
+    ], headers=["criterion", "value"], tablefmt="rounded_grid"))
 
     print(f"\n  Ledger -> {STATE_FILE}  ({len(ledger)} rows)")
     print("✓  Update complete.")

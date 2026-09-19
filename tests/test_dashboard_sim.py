@@ -9,6 +9,7 @@ round-trip was therefore "sold" before it was ever held, so its stake stayed in
 """
 from __future__ import annotations
 
+import random
 import sys
 from pathlib import Path
 
@@ -116,6 +117,43 @@ def test_exposure_cap_is_causal():
             f"trade {idx} was sized differently once later trades existed")
 
 
+def test_capped_day_is_invariant_to_ledger_row_order():
+    """The headline bug this pro-rata allocation exists for.
+
+    When a day's candidates want more than the exposure cap allows, funding them
+    in list order lets whichever rows the CSV happens to list first take the whole
+    budget at full size. `smart_flow_indep` enters ~120 positions a day against a
+    30%-of-equity cap, so ~4 in 5 were dropped by file order alone: the dashboard
+    read +39% in CSV order versus a median of -18% over 60 random shuffles of the
+    same trades. Sizing must not depend on row order at all.
+    """
+    # 20 same-day entries, half winners half losers, each wanting 20% of equity
+    # against a 30% cap — the budget covers only ~1.5 of them at full size.
+    trades = [_trade("2026-06-01", "2026-06-15", 0.50, 1.0 if i % 2 else 0.0, token=f"t{i}")
+              for i in range(20)]
+    fracs = {i: 0.20 for i in range(len(trades))}
+    base = gd.sim(trades, "pct", {}, fracs=fracs, max_deploy=0.30)
+    assert base["taken"] == len(trades), "pro-rata funds every candidate, just smaller"
+
+    order = list(range(len(trades)))
+    random.Random(7).shuffle(order)
+    shuffled = [trades[i] for i in order]
+    r = gd.sim(shuffled, "pct", {}, fracs={n: 0.20 for n in range(len(trades))},
+               max_deploy=0.30)
+    assert r["fin"] == pytest.approx(base["fin"]), "row order changed the outcome"
+    assert r["peakdep"] == pytest.approx(base["peakdep"])
+
+
+def test_pro_rata_respects_the_exposure_cap_exactly():
+    """Scaling must spend the budget, not overshoot it — cash may never go negative."""
+    trades = [_trade("2026-06-01", "2026-07-01", 0.50, 1.0, token=f"t{i}") for i in range(50)]
+    fracs = {i: 0.50 for i in range(len(trades))}
+    r = gd.sim(trades, "pct", {}, fracs=fracs, max_deploy=0.30)
+    # 50 candidates at 50% each want 25x the bankroll; the cap holds them to 30%
+    assert r["peakdep"] == pytest.approx(0.30, abs=0.02)
+    assert r["constrained"] == len(trades), "every candidate was scaled down"
+
+
 def test_prior_day_settlement_funds_the_same_days_entries():
     """Sells still precede buys, so today's proceeds can fund today's entries."""
     trades = [_trade("2026-06-01", "2026-06-10", 0.50, 1.0),
@@ -127,3 +165,21 @@ def test_prior_day_settlement_funds_the_same_days_entries():
     # only be entered that same day if the sell pass ran first
     assert r["taken"] == 2
     assert r["fin"] == pytest.approx(4 * CAP0)
+
+
+def test_passive_ledger_working_and_unfilled_rows_are_not_positions(tmp_path):
+    """Cross-module contract with `smartflow_passive`: a resting order we never
+    got filled on is not a position. If the loader ever started counting
+    `working`/`unfilled` rows, the passive sleeve would book PnL on trades it
+    never made — the exact failure the experiment exists to avoid."""
+    csv = tmp_path / "smart_flow_passive_positions.csv"
+    csv.write_text(
+        "token,question,entry_date,fill_px,current_price,status,exit_date,outcome,pnl\n"
+        "a,working order,,,0.41,working,,,\n"
+        "b,expired order,,,0.20,unfilled,2026-09-18,,\n"
+        "c,filled open,2026-09-19,0.30,0.34,open,,,\n"
+        "d,filled won,2026-09-17,0.55,1.0,won,2026-09-18,1.0,0.0818\n"
+    )
+    trades = gd.load_ledger(csv, "fill_px", "question")
+    assert [t["q"] for t in trades] == ["filled open", "filled won"]
+    assert sum(t["resolved"] for t in trades) == 1

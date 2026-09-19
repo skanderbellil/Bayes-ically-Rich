@@ -396,6 +396,24 @@ execution-bound — is captured, not assumed. Hold-to-resolution, idempotent CSV
 test of whether consensus buys actually resolve right and whether the gross edge clears real
 execution cost (`docs/polymarket/SMART_FLOW_PAPER.md`).
 
+**The consensus signal is execution-bound, not wrong** — the clearest result the forward ledgers
+have produced. The independence experiment (`docs/polymarket/SMART_FLOW_INDEPENDENCE.md`) was
+retired in Sep-2026 when both its pre-registered kill criteria fired: splitting consensus into
+"independent discovery" vs "information cascade" simply did not discriminate (Welch **t = 0.31**
+against a 1.0 bar, at 160× the required sample), because its temporal proxy passed **2%** of live
+rows against 25% in the cache it was calibrated on — leaving a classifier that labelled 82% of the
+book one way. But taking that ledger apart on *execution price* rather than class is decisive: over
+the same 7,788 resolved positions, edge/$1 is **−0.0073 at the ask** (event-clustered t = −1.93) and
+**+0.0086 at the mid** (t = +2.36), against a mean half-spread of 0.0173. Those reconcile exactly.
+**The loss is the spread**, and it is the one pattern here that is stable out-of-sample — edge at mid
+is flat across spread buckets while edge at the ask collapses monotonically as the spread widens
+(the >5¢ bucket loses ~12% per trade at the ask in both halves of the sample, ~0.7% at the mid).
+`run_smart_flow_passive_update.py` is the pre-registered successor: same consensus gate, 2¢
+half-spread cap, a resting limit at the mid instead of crossing, and `unfilled` recorded as a
+first-class outcome — because a passive bid is adversely selected in a way a crossed order is not,
+and the mid-edge itself does **not** survive that ledger's own IS/OOS split (IS t = +2.95, OOS
+t = −0.32). Worth testing; not a sure thing (`docs/polymarket/SMART_FLOW_PASSIVE.md`).
+
 **Pre-resolution timing** (`run_polymarket_timing.py`) asks the question that decides whether
 "some wallets buy before jumps" is exploitable: does timing skill *persist*? A strict split-half
 test (score each wallet's lead = mean forward drift in the first vs second half of its fills,

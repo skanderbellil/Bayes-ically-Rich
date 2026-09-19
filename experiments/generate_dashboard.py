@@ -52,6 +52,10 @@ REGISTRY = [
     ("smart_flow_positions.csv",        "entry_ask",   "question",        "Smart Flow"),
     ("smart_flow_roi_positions.csv",    "entry_ask",   "question",        "Smart Flow (ROI)"),
     ("smart_flow_indep_positions.csv",  "entry_ask",   "question",        "Smart Flow (indep exp)"),
+    # Passive entry logs the price we were actually FILLED at, not the ask we
+    # declined to pay — `working`/`unfilled` rows are neither resolved nor open,
+    # so load_ledger skips them: an order we never got is not a position.
+    ("smart_flow_passive_positions.csv", "fill_px",    "question",        "Smart Flow (passive)"),
     ("macro_positions.csv",             "entry_price", "leader_question", "Macro (Fed cuts)"),
     ("dip_confirm_positions.csv",       "entry_ask",   "question",        "Dip-Confirm YES"),
 ]
@@ -307,20 +311,41 @@ def sim(trades, mode, marks=None, frac=STAKE_FRAC, fracs=None, max_deploy=MAX_DE
             cur_day = day
             # Sell first so capital from today's settlements funds today's entries.
             settle(day)
-            for idx in buys.get(day, []):
+            # PRO-RATA allocation across everything entering today. Sizing each
+            # candidate in turn against the remaining budget instead would make
+            # the result depend on the ledger's ROW ORDER: once the cap binds,
+            # the rows that happen to come first get funded at full size and the
+            # rest are silently dropped. That is not a neutral tie-break — for
+            # smart_flow_indep (~120 entries/day against a 30%-of-equity cap,
+            # so ~4 in 5 candidates dropped) CSV order returned +39% while 60
+            # random shuffles of the SAME trades returned a median of -18% and
+            # never once reached +39%. The dashboard was reporting the best case
+            # of an arbitrary ordering as if it were the strategy's result.
+            # Scaling every candidate by one common factor is both order-
+            # invariant and a fairer reading of the signal, which said to buy
+            # all of them, not to buy whichever the file listed first.
+            ids = buys.get(day, [])
+            if ids:
                 eq = cash + sum(h["shares"] * mp(i, ts) for i, h in hold.items())
-                fr = (fracs.get(idx, 0.0) if fracs is not None else frac)
-                target = fr * eq if mode == "pct" else FLAT
-                if target <= 1e-9:
-                    continue                           # Kelly says don't bet (no edge / no history yet)
                 # gross-exposure cap: how much room is left before max_deploy
                 if max_deploy is None:
                     room = float("inf")
                 else:
                     room = max(0.0, max_deploy * eq - sum(h["cost"] for h in hold.values()))
-                stake = min(target, cash, room)
-                if stake > 1e-6:
-                    if stake < target - 1e-6:
+                budget = min(cash, room)
+                targets = {}
+                for idx in ids:
+                    fr = (fracs.get(idx, 0.0) if fracs is not None else frac)
+                    tgt = fr * eq if mode == "pct" else FLAT
+                    if tgt > 1e-9:                     # else Kelly says don't bet
+                        targets[idx] = (fr, tgt)
+                want = sum(t for _, t in targets.values())
+                scale = 1.0 if want <= budget else (budget / want if want > 0 else 0.0)
+                for idx, (fr, tgt) in targets.items():
+                    stake = tgt * scale
+                    if stake <= 1e-6:
+                        continue
+                    if scale < 1.0 - 1e-9:
                         constrained += 1                # capital- or exposure-limited
                     hold[idx] = {"shares": stake / trades[idx]["entry"], "cost": stake}
                     cash -= stake; taken += 1
@@ -548,13 +573,20 @@ def _in_strategy(df):
 # and DERIVED directly and validates all of them, retired or not — a sleeve
 # that starts winning forward should be able to re-qualify). This set is only
 # a display filter in build(): sleeves not listed here are computed but left
-# out of the dashboard's cards/chart/COMBINED. Everything excluded here is a
-# realized paper-trading loser; see docs/knowledge/retired-strategies.md for
-# the loss figures and rationale for each.
+# out of the dashboard's cards/chart/COMBINED.
+#
+# NOTE — this is an explicitly CHOSEN shortlist, not a ranking. It is NOT "the
+# sleeves that are making money": under the order-invariant sim (see the
+# pro-rata note in sim()), every sleeve in this book is mark-to-market NEGATIVE.
+# The three originally kept here looked positive only because the old
+# first-come-first-served allocation reported the best case of an arbitrary
+# ledger row order. docs/knowledge/retired-strategies.md carries the corrected
+# figures for all of them, kept and retired alike.
 DASHBOARD_SIDS = {
-    "smart_flow_indep",                # Smart Flow (indep exp)
+    "smart_flow_indep",                # Smart Flow (indep exp) — RETIRED, resolving out
     "smart_flow_indep_independent",    # SF independent (derived)
     "midprice_yes_20_40",              # YES [20-40%]
+    "smart_flow_passive",              # Smart Flow (passive) — the live successor experiment
 }
 
 # Derived filter views: (source file, dashboard id, label, row filter)
