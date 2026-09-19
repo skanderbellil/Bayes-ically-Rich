@@ -343,3 +343,114 @@ def test_buyers_survives_save_load_roundtrip(tmp_path):
     pd.testing.assert_frame_equal(
         loaded.reset_index(drop=True), ledger.reset_index(drop=True), check_dtype=False,
     )
+
+
+# ---------------------------------------------------------------------------
+# Pre-registered kill criteria (SMART_FLOW_INDEPENDENCE.md)
+# ---------------------------------------------------------------------------
+
+kill_check = smartflow_independence.kill_check
+KILL_MIN_RESOLVED_PER_CLASS = smartflow_independence.KILL_MIN_RESOLVED_PER_CLASS
+KILL_T_MIN = smartflow_independence.KILL_T_MIN
+
+
+def _ledger(rows: list[tuple[str, float]]) -> pd.DataFrame:
+    """Minimal resolved ledger: (indep_class, pnl) pairs, alternating won/lost."""
+    recs = []
+    for cls, pnl in rows:
+        r = {c: "" for c in _COLS}
+        r.update(indep_class=cls, pnl=str(pnl), status="won" if pnl > 0 else "lost")
+        recs.append(r)
+    return pd.DataFrame(recs, columns=_COLS, dtype=str)
+
+
+def test_kill_check_is_not_armed_below_the_pre_registered_sample_floor():
+    """The criteria must not be evaluated before both classes reach 40 resolved."""
+    n = KILL_MIN_RESOLVED_PER_CLASS - 1
+    r = kill_check(_ledger([("independent", -0.05)] * n + [("cascade", -0.05)] * n))
+    assert r["armed"] is False
+    assert r["verdict"] == "insufficient data"
+    assert r["primary_failed"] is False and r["secondary_failed"] is False
+
+
+def test_kill_check_fires_primary_when_the_classes_do_not_separate():
+    """Identical distributions -> t ~ 0 -> the discriminator is retired."""
+    n = KILL_MIN_RESOLVED_PER_CLASS
+    rows = [("independent", 0.1 if i % 2 else -0.1) for i in range(n)]
+    rows += [("cascade", 0.1 if i % 2 else -0.1) for i in range(n)]
+    r = kill_check(_ledger(rows))
+    assert r["armed"] is True
+    assert r["t"] == pytest.approx(0.0, abs=1e-9)
+    assert r["primary_failed"] is True
+    assert r["verdict"] == "RETIRED"
+
+
+def test_kill_check_fires_secondary_when_independent_is_unprofitable():
+    """Beating cascade is not enough -- the independent class must itself pay."""
+    n = KILL_MIN_RESOLVED_PER_CLASS
+    # independent mean -0.01, cascade mean -0.50: a huge gap, but still a loser
+    rows = [("independent", -0.02 if i % 2 else 0.0) for i in range(n)]
+    rows += [("cascade", -0.60 if i % 2 else -0.40) for i in range(n)]
+    r = kill_check(_ledger(rows))
+    assert r["armed"] is True
+    assert r["t"] > KILL_T_MIN, "the between-class gap alone would have passed"
+    assert r["primary_failed"] is False
+    assert r["secondary_failed"] is True
+    assert r["verdict"] == "RETIRED"
+
+
+def test_kill_check_leaves_a_genuinely_separating_profitable_split_alive():
+    n = KILL_MIN_RESOLVED_PER_CLASS
+    rows = [("independent", 0.30 if i % 2 else 0.10) for i in range(n)]
+    rows += [("cascade", -0.30 if i % 2 else -0.10) for i in range(n)]
+    r = kill_check(_ledger(rows))
+    assert r["armed"] is True and r["verdict"] == "alive"
+    assert r["primary_failed"] is False and r["secondary_failed"] is False
+
+
+def test_kill_check_ignores_open_and_flipped_rows():
+    """Only won/lost count as resolved -- open marks are not evidence."""
+    n = KILL_MIN_RESOLVED_PER_CLASS
+    base = [("independent", -0.05)] * n + [("cascade", -0.05)] * n
+    led = _ledger(base)
+    extra = _ledger([("independent", 9.0)] * 50)
+    extra["status"] = "open"
+    r = kill_check(pd.concat([led, extra], ignore_index=True))
+    assert r["n_independent"] == n, "open rows leaked into the resolved count"
+    assert r["mean_independent"] == pytest.approx(-0.05)
+
+
+def test_entries_are_frozen_after_the_kill_fired():
+    """The live ledger's own numbers must still justify the freeze constant."""
+    assert smartflow_independence.ENTRIES_FROZEN is True
+
+
+def test_frozen_update_ledger_opens_nothing_but_still_resolves(tmp_path, monkeypatch):
+    """The pre-registration says: stop opening, keep resolving. Both halves matter --
+    a freeze that also stopped marking would quietly truncate the forward record."""
+    path = tmp_path / "ledger.csv"
+    row = {c: "" for c in _COLS}
+    row.update(token="tok1", condition_id="cond1", question="q", entry_date="2026-01-01",
+               bet_fraction="0.1", entry_mid="0.50", entry_ask="0.50", spread="0.0",
+               current_price="0.50", status="open", indep_class="independent")
+    save_ledger(pd.DataFrame([row], columns=_COLS, dtype=str), path)
+
+    monkeypatch.setattr(smartflow_independence, "smart_pool", lambda *a, **k: [])
+    monkeypatch.setattr(smartflow_independence, "_fetch_pool_trades", lambda *a, **k: {})
+    monkeypatch.setattr(smartflow_independence, "_flow_index_from", lambda *a, **k: {})
+
+    def _boom(*a, **k):
+        raise AssertionError("scanned for new entries while ENTRIES_FROZEN")
+    monkeypatch.setattr(smartflow_independence, "scan_smart_flow_entries", _boom)
+
+    # the open position still resolves: market closed, our token won
+    monkeypatch.setattr(smartflow_independence, "fetch_market_resolution",
+                        lambda cid: {"closed": True,
+                                     "tokens": {"tok1": {"winner": True, "price": 1.0}}})
+    monkeypatch.setattr(smartflow_independence, "_price", lambda tok: (1.0, 1.0))
+
+    out = smartflow_independence.update_ledger(state_file=path)
+
+    assert len(out) == 1, "a new position was opened despite the freeze"
+    assert out.loc[0, "status"] == "won"
+    assert float(out.loc[0, "pnl"]) == pytest.approx((1.0 / 0.50 - 1.0) * 0.1)

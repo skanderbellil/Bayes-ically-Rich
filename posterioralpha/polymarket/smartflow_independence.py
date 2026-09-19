@@ -1,5 +1,11 @@
 """Forward paper-trade tracker for *independence-classified* smart-flow consensus.
 
+RETIRED 2026-09-19 -- both pre-registered kill criteria fired (t(independent - cascade)
+= 0.31 against a 1.0 bar, and the independent class itself was unprofitable). Entries
+are frozen; see ``ENTRIES_FROZEN`` below for the full verdict and post-mortem, and
+``smartflow_passive`` for the successor experiment. This module still runs hourly so
+open positions mark, resolve and exit into the record -- it just opens nothing new.
+
 A pre-registered discriminator experiment, not a new signal. The incumbent
 ``smartflow_papertrade`` consensus rule (`>= N distinct smart wallets bought this
 token recently`) is forward-losing (-52% MTM, edge t~0.09 over 822 markets seen —
@@ -90,6 +96,36 @@ _COLS = ["token", "condition_id", "question", "domain", "end_date", "entry_date"
 TEMPORAL_SPAN_HOURS = 24.0   # first-buy span must be >= this to "pass" temporal
 PRICE_CHASE_MAX = 0.05       # last-first-buyer must not have paid up more than this
 JACCARD_MAX = 0.20           # mean pairwise history overlap must not exceed this
+
+# Pre-registered kill criteria (SMART_FLOW_INDEPENDENCE.md, "Kill criteria (frozen)").
+KILL_MIN_RESOLVED_PER_CLASS = 40   # both classes must reach this before the rule binds
+KILL_T_MIN = 1.0                   # one-sided Welch t, independent minus cascade
+
+# ENTRIES ARE FROZEN. Both pre-registered kill criteria fired on 2026-09-19 at ~160x
+# the sample size they required (run ``kill_check()`` to recompute from the ledger):
+#
+#   primary   t(independent - cascade) = 0.31  (needs >= 1.0; n = 6366 / 1422)
+#   secondary independent-class mean PnL = -0.0021  (needs > 0)
+#
+# That secondary figure is the ledger's own `pnl` column, which is already
+# scaled by bet_fraction (0.10); per unit staked it is -0.0209.
+#
+# The pre-registration says exactly what to do here: "retire it and freeze this
+# ledger (stop opening new positions; let existing ones resolve for the record,
+# but do not restart the experiment on the same file)." So update_ledger() still
+# marks, resolves and consensus-exits everything already open -- the forward
+# record stays honest and complete -- but opens nothing new.
+#
+# Mechanically the discriminator failed because the TEMPORAL component does not
+# fire live: `first_buy_span_hours >= 24` passed 2% of live rows (147/7788)
+# against 25% in the 2026-06-23 replay it was calibrated on. That left
+# indep_score = price_pass + jaccard_pass, both of which pass ~90% of the time,
+# so 6262 of 7788 rows scored exactly 2 and 82% of the ledger was labelled
+# "independent" -- a classifier that is very nearly a constant cannot separate
+# anything. Do NOT fix this by retuning the thresholds in place; that is a new
+# experiment on a new ledger. See docs/polymarket/SMART_FLOW_PASSIVE.md for the
+# successor experiment this diagnosis led to.
+ENTRIES_FROZEN = True
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +241,57 @@ def classify_independence(features: dict) -> tuple[int, str]:
 
 
 # ---------------------------------------------------------------------------
+# Pre-registered kill check
+# ---------------------------------------------------------------------------
+
+def kill_check(ledger: pd.DataFrame) -> dict:
+    """Recompute the two frozen kill criteria from a ledger. No thresholds here
+    are new -- they are read from the pre-registered constants above, so this
+    reports a verdict rather than asserting one.
+
+    Primary: one-sided Welch two-sample t of per-position PnL, independent minus
+    cascade, once BOTH classes have >= KILL_MIN_RESOLVED_PER_CLASS resolved
+    positions. ``t < KILL_T_MIN`` retires the discriminator.
+    Secondary: the independent class is not tradeable if its own mean PnL <= 0
+    at that same sample size, whatever the between-class gap says.
+
+    Returns a dict with the counts, means, ``t``, the two booleans, and
+    ``armed`` (False while either class is still below the sample floor -- the
+    criteria are deliberately not evaluated before then).
+    """
+    resolved = ledger[ledger["status"].isin(["won", "lost"])] if not ledger.empty else ledger
+    out = {"n_independent": 0, "n_cascade": 0, "mean_independent": float("nan"),
+           "mean_cascade": float("nan"), "t": float("nan"), "armed": False,
+           "primary_failed": False, "secondary_failed": False, "verdict": "insufficient data"}
+    if resolved.empty:
+        return out
+
+    pnl = pd.to_numeric(resolved["pnl"], errors="coerce")
+    a = pnl[resolved["indep_class"] == "independent"].dropna()
+    b = pnl[resolved["indep_class"] == "cascade"].dropna()
+    out["n_independent"], out["n_cascade"] = len(a), len(b)
+    if len(a):
+        out["mean_independent"] = float(a.mean())
+    if len(b):
+        out["mean_cascade"] = float(b.mean())
+    if len(a) < 2 or len(b) < 2:
+        return out
+
+    # Welch (unequal-variance) two-sample t, independent minus cascade.
+    se = ((a.var(ddof=1) / len(a)) + (b.var(ddof=1) / len(b))) ** 0.5
+    out["t"] = float((a.mean() - b.mean()) / se) if se > 0 else float("nan")
+
+    floor = KILL_MIN_RESOLVED_PER_CLASS
+    out["armed"] = len(a) >= floor and len(b) >= floor
+    if not out["armed"]:
+        return out
+    out["primary_failed"] = out["t"] < KILL_T_MIN
+    out["secondary_failed"] = out["mean_independent"] <= 0.0
+    out["verdict"] = "RETIRED" if (out["primary_failed"] or out["secondary_failed"]) else "alive"
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Ledger I/O
 # ---------------------------------------------------------------------------
 
@@ -282,9 +369,21 @@ def update_ledger(
     flow_index = _flow_index_from(trades_by_wallet, window_days)
 
     # -- 2. new consensus entries, classified independent vs. cascade --
+    #    ...unless the pre-registered kill has fired, in which case this ledger
+    #    is frozen: no new entries, but everything below still runs so open
+    #    positions mark, resolve and exit into the record as they always did.
     new_rows = []
-    for c in scan_smart_flow_entries(window_days=window_days, min_buyers=min_buyers,
-                                     _flow_index=flow_index):
+    scanned = [] if ENTRIES_FROZEN else scan_smart_flow_entries(
+        window_days=window_days, min_buyers=min_buyers, _flow_index=flow_index)
+    if ENTRIES_FROZEN:
+        k = kill_check(ledger)
+        logger.info(
+            "ENTRIES FROZEN (pre-registered kill fired): t=%.2f (needs >=%.1f), "
+            "independent mean pnl=%+.4f (needs >0), n=%d/%d -- refreshing and "
+            "resolving %d open positions only",
+            k["t"], KILL_T_MIN, k["mean_independent"], k["n_independent"],
+            k["n_cascade"], (ledger["status"] == "open").sum() if not ledger.empty else 0)
+    for c in scanned:
         if c["token"] in held:
             continue
         buyers = flow_index.get(c["token"], {}).get("buyers", set())

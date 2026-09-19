@@ -69,10 +69,15 @@ jobs:
         continue-on-error: true
         run: python experiments/run_smart_flow_paper_update.py --fraction 0.10 --selector roi_topn --top-n 10 --min-buyers 2 --consensus-exit --flip-threshold 1
 
-      - name: Smart-flow independence (pre-registered forward test)
+      - name: Smart-flow independence (RETIRED — resolves open positions only)
         id: smart_flow_indep
         continue-on-error: true
         run: python experiments/run_smart_flow_indep_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
+
+      - name: Smart-flow passive entry (pre-registered forward test)
+        id: smart_flow_passive
+        continue-on-error: true
+        run: python experiments/run_smart_flow_passive_update.py --fraction 0.10 --min-buyers 3 --consensus-exit --flip-threshold 1
 
       - name: Macro
         id: macro
@@ -133,6 +138,7 @@ jobs:
             data/paper_trade/smart_flow_positions.csv
             data/paper_trade/smart_flow_roi_positions.csv
             data/paper_trade/smart_flow_indep_positions.csv
+            data/paper_trade/smart_flow_passive_positions.csv
             data/paper_trade/macro_positions.csv
             data/paper_trade/regime_positions.csv
             data/paper_trade/validated_regime_positions.csv
@@ -203,6 +209,7 @@ jobs:
           steps.smart_flow.outcome == 'failure' ||
           steps.smart_flow_roi.outcome == 'failure' ||
           steps.smart_flow_indep.outcome == 'failure' ||
+          steps.smart_flow_passive.outcome == 'failure' ||
           steps.macro.outcome == 'failure' ||
           steps.regime_paper.outcome == 'failure' ||
           steps.regime_domain_validation.outcome == 'failure' ||
@@ -219,6 +226,7 @@ jobs:
           echo "  smart_flow:                ${{ steps.smart_flow.outcome }}"
           echo "  smart_flow_roi:            ${{ steps.smart_flow_roi.outcome }}"
           echo "  smart_flow_indep:          ${{ steps.smart_flow_indep.outcome }}"
+          echo "  smart_flow_passive:        ${{ steps.smart_flow_passive.outcome }}"
           echo "  macro:                     ${{ steps.macro.outcome }}"
           echo "  regime_paper:              ${{ steps.regime_paper.outcome }}"
           echo "  regime_domain_validation:  ${{ steps.regime_domain_validation.outcome }}"

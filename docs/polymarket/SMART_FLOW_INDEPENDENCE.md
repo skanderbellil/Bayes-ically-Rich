@@ -1,5 +1,25 @@
 # Independence-classified smart-flow consensus — pre-registered forward experiment
 
+> ## ⚰️ RETIRED 2026-09-19 — both kill criteria fired
+>
+> Entries are frozen (`smartflow_independence.ENTRIES_FROZEN`). The hourly cron
+> still marks, resolves and consensus-exits the open positions so the forward
+> record finishes honestly, but opens nothing new. Recompute the verdict any
+> time with `smartflow_independence.kill_check(load_ledger())`.
+>
+> | criterion | threshold | at kill |
+> |---|---|---|
+> | primary — Welch t(independent − cascade) | ≥ 1.0 once 40 resolved per class | **t = 0.31** (n = 6,366 / 1,422) |
+> | secondary — independent-class mean PnL | > 0 | **−0.0021** (−0.0209 per $1 staked) |
+>
+> Both fired at roughly 160× the sample size they required, so this is not a
+> marginal call. **Why it failed** and **what replaced it**: see
+> [§ Post-mortem](#post-mortem-why-the-discriminator-failed) below and the
+> successor experiment, [`SMART_FLOW_PASSIVE.md`](SMART_FLOW_PASSIVE.md).
+>
+> Per the pre-registration, the frozen thresholds below were **not** retuned in
+> response to any of this. They stand as registered.
+
 **Registered:** 2026-07-08, before the first data point. Everything in the
 "Frozen thresholds" and "Kill criteria" sections below is fixed *before* this
 ledger sees a single resolved position. Any retuning after data arrives is a
@@ -205,3 +225,80 @@ retires the discriminator). The frozen component thresholds (24h / 0.05 / 0.20,
 2-of-3 rule) were **not** retuned after seeing these numbers — they were
 frozen before this replay ran, per the pre-registration, and a retuned
 threshold would be a new experiment on a new ledger, not an edit to this one.
+
+## Post-mortem — why the discriminator failed
+
+**Run 2026-09-19**, on 7,788 resolved positions.
+
+### The classifier was very nearly a constant
+
+The temporal component does not fire live. It passed **2% of live rows**
+(147/7,788) against **25%** in the 2026-06-23 replay it was calibrated on:
+
+| component | live pass rate | mean ret (pass) | mean ret (fail) |
+|---|---|---|---|
+| temporal — `first_buy_span_hours ≥ 24` | **2%** | −0.0394 | −0.0222 |
+| price — `price_chase ≤ 0.05` | 87% | −0.0226 | −0.0215 |
+| co-movement — `pairwise_jaccard ≤ 0.20` | 93% | −0.0202 | **−0.0541** |
+
+With temporal effectively always failing, `indep_score` collapsed to
+`price_pass + jaccard_pass`, both of which pass ~90% of the time. So **6,262 of
+7,788 rows scored exactly 2**, and 82% of the ledger was labelled
+`independent`. A classifier that puts four-fifths of its sample in one bucket
+cannot separate anything, which is exactly what t = 0.31 says.
+
+The one component that *does* discriminate live is **co-movement** — its fail
+bucket runs −0.0541 against −0.0202 for the pass bucket. That is the component
+the replay had the least evidence on (its fail bucket there was n = 5), so the
+replay could not have told us this. Chalk one up for the forward ledger.
+
+### What the replay got wrong, and why that was foreseeable
+
+Caveat (a) of the retrospective replay below warned that the 126-wallet pool was
+selected using post-hoc information and that **only the between-class separation**
+should be read from it. That warning was correct and insufficient: the *calibration*
+of the thresholds was also done against that pool's density of wallet histories.
+A 24-hour first-buy span is common when you have deep history for every wallet
+and rare when the live flow index sees each wallet only through a trailing
+7-day window. The threshold was frozen honestly; it was frozen against the
+wrong distribution.
+
+### The finding that survived
+
+Splitting the same 7,788 positions by *execution price* rather than by class:
+
+| | edge/$1 | event-clustered t |
+|---|---|---|
+| at the **ask** (what this ledger paid) | −0.00730 | −1.93 |
+| at the **mid** (same trades, no crossing) | +0.00862 | +2.36 |
+
+against a mean recorded half-spread of 0.01731. The consensus signal is worth
+roughly 0.9¢/$1 at mid; the sleeve paid ~1.7¢/$1 to cross for it. **The loss was
+the spread, not the signal** — and that reading, unlike the class split, is
+stable out-of-sample when bucketed by spread width.
+
+That finding is what `SMART_FLOW_PASSIVE.md` was registered to test. It carries
+its own honest caveat: the mid-edge itself does not survive this ledger's
+in-sample/out-of-sample split (IS t = +2.95 over 44 settlement days, OOS
+t = −0.32 over 20), and a resting bid is adversely selected in a way a crossed
+order is not.
+
+### Two things that do *not* work, tested here so nobody re-tries them
+
+- **Entry-price band filters.** Bucketed by entry price, the sign of the edge
+  flips between the in-sample and out-of-sample halves in 6 of 9 buckets. Noise.
+- **Per-wallet quality weighting.** Scoring each position by the walk-forward
+  mean past return of its own buyer wallets (coverage 7,647/7,788) gives
+  quintile mean returns of +0.033 / −0.046 / −0.006 / −0.051 / −0.037 —
+  non-monotonic. "Which wallets are smart" carried no forward information in
+  this ledger.
+
+### A dashboard caveat that applies to reading any of this
+
+Until 2026-09-19 `generate_dashboard.py` funded a day's entries in **ledger row
+order** until its exposure cap filled. This sleeve enters ~120 positions a day
+against a 30%-of-equity cap, so ~4 in 5 candidates were dropped by file order
+alone — and the dashboard read **+39%** where 60 random shuffles of the same
+trades gave a median of **−18%** and never once reached +39%. `sim()` now
+allocates pro-rata and is order-invariant. Any figure quoted for this sleeve
+from before that fix is unreliable.
