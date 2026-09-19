@@ -543,6 +543,20 @@ def _in_strategy(df):
     return df["in_strategy"].astype(str).str.lower().isin(("true", "1", "1.0"))
 
 
+# Dashboard visibility: every REGISTRY/DERIVED sleeve still runs through
+# load_ledger/sim/kpis_for below (run_paper_kill_battery.py imports REGISTRY
+# and DERIVED directly and validates all of them, retired or not — a sleeve
+# that starts winning forward should be able to re-qualify). This set is only
+# a display filter in build(): sleeves not listed here are computed but left
+# out of the dashboard's cards/chart/COMBINED. Everything excluded here is a
+# realized paper-trading loser; see docs/knowledge/retired-strategies.md for
+# the loss figures and rationale for each.
+DASHBOARD_SIDS = {
+    "smart_flow_indep",                # Smart Flow (indep exp)
+    "smart_flow_indep_independent",    # SF independent (derived)
+    "midprice_yes_20_40",              # YES [20-40%]
+}
+
 # Derived filter views: (source file, dashboard id, label, row filter)
 DERIVED = [
     ("regime_positions.csv", "regime_all",
@@ -581,6 +595,8 @@ def build(fetch_marks=True):
     strategies, series, active_ser = [], {}, []
     for fname, label, trades in per_ledger:
         sid = fname.replace("_positions.csv", "")
+        if sid not in DASHBOARD_SIDS:
+            continue                   # retired (realized loss) — kept out of the dashboard
         k, ser = kpis_for(trades, label, sid, marks)
         k["derived"] = sid in derived_ids
         strategies.append(k)
