@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-28 14:48 UTC",
+  "generated": "2026-09-28 15:42 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -147,14 +147,14 @@
     },
     "Smart Flow": {
       "sleeve": "Smart Flow",
-      "trades": 9945,
+      "trades": 9946,
       "events": 102,
       "trades_per_event": 97.5,
       "edge": -0.0072,
       "t": -1.02,
       "ci95": [
         -0.0209,
-        0.0065
+        0.0066
       ],
       "mc_bar": 2.93,
       "oos_n": 31,
