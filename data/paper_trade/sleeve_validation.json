@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11 08:45 UTC",
+  "generated": "2026-10-11 10:40 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -41,21 +41,21 @@
     },
     "YES [10\u201350%]": {
       "sleeve": "YES [10\u201350%]",
-      "trades": 645,
+      "trades": 646,
       "events": 109,
       "trades_per_event": 5.9,
-      "edge": 0.0026,
-      "t": 0.13,
+      "edge": 0.0039,
+      "t": 0.2,
       "ci95": [
-        -0.0367,
-        0.0419
+        -0.0349,
+        0.0428
       ],
       "mc_bar": 2.93,
       "oos_n": 33,
-      "oos_edge": 0.0193,
-      "net_cost": -0.0062,
-      "net_stress": -0.0212,
-      "boot_p": 0.447,
+      "oos_edge": 0.0237,
+      "net_cost": -0.0065,
+      "net_stress": -0.0215,
+      "boot_p": 0.4205,
       "top1": 0.018,
       "verdict": "KILLED",
       "reasons": [
@@ -67,21 +67,21 @@
     },
     "YES [10\u201320%]": {
       "sleeve": "YES [10\u201320%]",
-      "trades": 255,
+      "trades": 256,
       "events": 96,
       "trades_per_event": 2.7,
-      "edge": -0.0254,
-      "t": -1.02,
+      "edge": -0.0251,
+      "t": -1.01,
       "ci95": [
-        -0.0741,
-        0.0233
+        -0.0738,
+        0.0235
       ],
       "mc_bar": 2.93,
       "oos_n": 29,
-      "oos_edge": -0.088,
-      "net_cost": -0.0262,
-      "net_stress": -0.0412,
-      "boot_p": 0.8469,
+      "oos_edge": -0.0871,
+      "net_cost": -0.0267,
+      "net_stress": -0.0417,
+      "boot_p": 0.8452,
       "top1": 0.043,
       "verdict": "KILLED",
       "reasons": [
@@ -94,21 +94,21 @@
     },
     "YES [10\u201330%]": {
       "sleeve": "YES [10\u201330%]",
-      "trades": 382,
+      "trades": 383,
       "events": 102,
-      "trades_per_event": 3.7,
-      "edge": -0.0013,
-      "t": -0.05,
+      "trades_per_event": 3.8,
+      "edge": -0.001,
+      "t": -0.04,
       "ci95": [
-        -0.0496,
-        0.0471
+        -0.0493,
+        0.0473
       ],
       "mc_bar": 2.93,
       "oos_n": 31,
-      "oos_edge": -0.0174,
-      "net_cost": -0.0151,
-      "net_stress": -0.0301,
-      "boot_p": 0.5263,
+      "oos_edge": -0.0166,
+      "net_cost": -0.0155,
+      "net_stress": -0.0305,
+      "boot_p": 0.5216,
       "top1": 0.029,
       "verdict": "KILLED",
       "reasons": [
