@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-21 18:39 UTC",
+  "generated": "2026-10-21 20:37 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -14,21 +14,21 @@
   "per_sleeve": {
     "Regime (geo-calm)": {
       "sleeve": "Regime (geo-calm)",
-      "trades": 84,
-      "events": 55,
+      "trades": 85,
+      "events": 56,
       "trades_per_event": 1.5,
-      "edge": -0.0504,
-      "t": -1.8,
+      "edge": -0.0505,
+      "t": -1.84,
       "ci95": [
-        -0.1052,
-        0.0045
+        -0.1044,
+        0.0033
       ],
       "mc_bar": 2.93,
       "oos_n": 17,
-      "oos_edge": -0.0357,
-      "net_cost": -0.0197,
-      "net_stress": -0.0347,
-      "boot_p": 0.9586,
+      "oos_edge": -0.0377,
+      "net_cost": -0.0202,
+      "net_stress": -0.0352,
+      "boot_p": 0.9628,
       "top1": 0.215,
       "verdict": "KILLED",
       "reasons": [
@@ -55,7 +55,7 @@
       "oos_edge": 0.0511,
       "net_cost": -0.0036,
       "net_stress": -0.0186,
-      "boot_p": 0.2854,
+      "boot_p": 0.2817,
       "top1": 0.017,
       "verdict": "KILLED",
       "reasons": [
@@ -81,7 +81,7 @@
       "oos_edge": -0.0277,
       "net_cost": -0.024,
       "net_stress": -0.039,
-      "boot_p": 0.7311,
+      "boot_p": 0.7353,
       "top1": 0.042,
       "verdict": "KILLED",
       "reasons": [
@@ -108,7 +108,7 @@
       "oos_edge": -0.0026,
       "net_cost": -0.0156,
       "net_stress": -0.0306,
-      "boot_p": 0.5127,
+      "boot_p": 0.5106,
       "top1": 0.027,
       "verdict": "KILLED",
       "reasons": [
@@ -135,7 +135,7 @@
       "oos_edge": 0.0686,
       "net_cost": -0.0076,
       "net_stress": -0.0226,
-      "boot_p": 0.4729,
+      "boot_p": 0.4813,
       "top1": 0.016,
       "verdict": "KILLED",
       "reasons": [
@@ -161,7 +161,7 @@
       "oos_edge": -0.002,
       "net_cost": -0.0127,
       "net_stress": -0.0277,
-      "boot_p": 0.8356,
+      "boot_p": 0.8357,
       "top1": 0.004,
       "verdict": "KILLED",
       "reasons": [
@@ -188,7 +188,7 @@
       "oos_edge": -0.1668,
       "net_cost": -0.0498,
       "net_stress": -0.0648,
-      "boot_p": 0.9898,
+      "boot_p": 0.9904,
       "top1": 0.051,
       "verdict": "KILLED",
       "reasons": [
@@ -215,7 +215,7 @@
       "oos_edge": 0.0003,
       "net_cost": -0.0143,
       "net_stress": -0.0293,
-      "boot_p": 0.9521,
+      "boot_p": 0.9537,
       "top1": 0.004,
       "verdict": "KILLED",
       "reasons": [
@@ -250,7 +250,7 @@
       "oos_edge": 0.0966,
       "net_cost": -0.0399,
       "net_stress": -0.0549,
-      "boot_p": 0.4501,
+      "boot_p": 0.4459,
       "top1": 0.033,
       "verdict": "KILLED",
       "reasons": [
@@ -262,21 +262,21 @@
     },
     "Regime (all-domain, exploratory)": {
       "sleeve": "Regime (all-domain, exploratory)",
-      "trades": 245,
-      "events": 82,
+      "trades": 246,
+      "events": 83,
       "trades_per_event": 3.0,
-      "edge": -0.0228,
-      "t": -1.18,
+      "edge": -0.0232,
+      "t": -1.22,
       "ci95": [
         -0.0604,
-        0.0149
+        0.014
       ],
       "mc_bar": 2.93,
       "oos_n": 25,
-      "oos_edge": -0.0085,
-      "net_cost": -0.009,
-      "net_stress": -0.024,
-      "boot_p": 0.8831,
+      "oos_edge": -0.0096,
+      "net_cost": -0.0092,
+      "net_stress": -0.0242,
+      "boot_p": 0.8832,
       "top1": 0.145,
       "verdict": "KILLED",
       "reasons": [
@@ -303,7 +303,7 @@
       "oos_edge": -0.0086,
       "net_cost": -0.0154,
       "net_stress": -0.0304,
-      "boot_p": 0.8083,
+      "boot_p": 0.8104,
       "top1": 0.001,
       "verdict": "KILLED",
       "reasons": [
@@ -357,7 +357,7 @@
       "oos_edge": -0.0036,
       "net_cost": -0.0138,
       "net_stress": -0.0288,
-      "boot_p": 0.8891,
+      "boot_p": 0.8936,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
@@ -384,7 +384,7 @@
       "oos_edge": 0.0377,
       "net_cost": -0.017,
       "net_stress": -0.032,
-      "boot_p": 0.6571,
+      "boot_p": 0.656,
       "top1": 0.013,
       "verdict": "KILLED",
       "reasons": [
