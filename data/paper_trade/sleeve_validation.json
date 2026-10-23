@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-23 13:37 UTC",
+  "generated": "2026-10-23 15:42 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -234,21 +234,21 @@
     },
     "Dip-Confirm YES": {
       "sleeve": "Dip-Confirm YES",
-      "trades": 408,
+      "trades": 409,
       "events": 111,
       "trades_per_event": 3.7,
-      "edge": 0.0069,
-      "t": 0.24,
+      "edge": 0.0036,
+      "t": 0.13,
       "ci95": [
-        -0.0493,
-        0.063
+        -0.0518,
+        0.059
       ],
       "mc_bar": 2.93,
       "oos_n": 34,
-      "oos_edge": 0.1126,
-      "net_cost": -0.0388,
-      "net_stress": -0.0538,
-      "boot_p": 0.4055,
+      "oos_edge": 0.102,
+      "net_cost": -0.0391,
+      "net_stress": -0.0541,
+      "boot_p": 0.4522,
       "top1": 0.033,
       "verdict": "KILLED",
       "reasons": [
