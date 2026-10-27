@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-27 02:45 UTC",
+  "generated": "2026-10-27 03:45 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -262,21 +262,21 @@
     },
     "Regime (all-domain, exploratory)": {
       "sleeve": "Regime (all-domain, exploratory)",
-      "trades": 262,
+      "trades": 263,
       "events": 88,
       "trades_per_event": 3.0,
-      "edge": -0.0205,
-      "t": -1.12,
+      "edge": -0.0202,
+      "t": -1.11,
       "ci95": [
-        -0.0562,
-        0.0153
+        -0.0558,
+        0.0155
       ],
       "mc_bar": 2.93,
       "oos_n": 27,
-      "oos_edge": -0.0032,
-      "net_cost": -0.0061,
-      "net_stress": -0.0211,
-      "boot_p": 0.8652,
+      "oos_edge": -0.0022,
+      "net_cost": -0.0064,
+      "net_stress": -0.0214,
+      "boot_p": 0.8633,
       "top1": 0.136,
       "verdict": "KILLED",
       "reasons": [
