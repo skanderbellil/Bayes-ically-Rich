@@ -98,5 +98,5 @@ for ax, liq in zip(axes, ("Q1-2", "Q3-5")):
         ax.spines[sp].set_visible(False)
 axes[0].set_ylabel("mean per trade, % (net 0.10%, 95% CI clustered by date)", fontsize=8)
 axes[0].legend(frameon=False, fontsize=8)
-fig.suptitle(f"US NYSE/NYSE American, official-auction gap signals, {START[:7]} → 2026-10 (5-min entries pending)", fontsize=9, x=0.01, ha="left")
+fig.suptitle(f"US NYSE/NYSE American, official-auction gap signals, {START[:7]} → 2026-10 (09:35–VWAP30 entries: last ~60 sessions only)", fontsize=9, x=0.01, ha="left")
 fig.tight_layout(); fig.savefig(DOCS_DIR / f"intraday_entries_{START[:4]}.png"); print("chart written")
