@@ -17,8 +17,16 @@ import pandas as pd
 from posterioralpha.dipbuy import yahoo
 from posterioralpha.dipbuy.paths import RAW_DIR
 
-P = pd.read_parquet(RAW_DIR / "panel.parquet", columns=["sym", "date", "Q", "prev_close"])
-syms = sorted(P[(P.date >= "2023-12-01") & P.Q.notna() & (P.prev_close >= 5)].sym.unique())
+from posterioralpha.dipbuy.panel import COMMON_RE
+from posterioralpha.dipbuy.paths import CTS_DAY_DIR
+# symbol list straight from the daily CTA files (so this can run before the panel is rebuilt)
+files = [f for f in sorted(CTS_DAY_DIR.glob("*.parquet")) if f.stem >= "20231201"]
+syms = set()
+for f in files[::5]:
+    d = pd.read_parquet(f, columns=["sym", "prim", "p_last"])
+    d = d[d.prim.isin(["NYSE", "AMEX"]) & (d.p_last >= 4)]
+    syms |= {s for s in d.sym.astype(str) if COMMON_RE.match(s)}
+syms = sorted(syms)
 syms = sorted(set(syms) | {"SPY"})
 print(len(syms), "symbols", flush=True)
 

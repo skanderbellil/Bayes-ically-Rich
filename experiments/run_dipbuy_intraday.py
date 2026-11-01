@@ -13,13 +13,18 @@ import pandas as pd
 from posterioralpha.dipbuy import backtest as bt, stats
 from posterioralpha.dipbuy.paths import DOCS_DIR, RAW_DIR
 
+import sys
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 pd.set_option("display.width", 250); pd.set_option("display.max_columns", 30)
+START = sys.argv[1] if len(sys.argv) > 1 else "2023-12-01"   # e.g. 2025-01-01
 P = pd.read_parquet(RAW_DIR / "panel.parquet")
 H = pd.read_parquet(RAW_DIR / "intraday_60m.parquet")
 F = pd.read_parquet(RAW_DIR / "intraday_5m.parquet")
 spyH = H[H.sym == "SPY"].set_index("date")
 spyF = F[F.sym == "SPY"].set_index("date")
-P = P[P.date >= H.date.min()].merge(H[H.sym != "SPY"], on=["sym", "date"], how="inner")
+P = P[P.date >= max(pd.Timestamp(START), H.date.min())].merge(H[H.sym != "SPY"], on=["sym", "date"], how="inner")
 P = P.merge(F[F.sym != "SPY"], on=["sym", "date"], how="left")
 # guard against ticker reuse / bad bars: Yahoo first trade within 15% of the official open
 P = P[(P.y_open / P.open - 1).abs() < 0.15]
@@ -39,7 +44,7 @@ entries = {"official open (E1)": "open", "Yahoo first trade": "y_open", "09:35":
 for side in ("down", "up"):
     S = P[el & ((P.agap <= -thr) if side == "down" else (P.agap >= thr))]
     sgn = 1 if side == "down" else -1
-    for win, sub in (("60m window 2023-12..2026-10", S), ("5m window (last ~60 sessions)", S[S.vwap5.notna()])):
+    for win, sub in ((f"60m window {START[:7]}..2026-10", S), ("5m window (last ~60 sessions)", S[S.vwap5.notna()])):
         for lab, col in entries.items():
             if sub[col].isna().all():
                 continue
@@ -66,3 +71,31 @@ for liq, m in (("Q1-2", P.Q <= 2), ("Q3-5", P.Q >= 3), ("all", P.Q > 0)):
                  **{f"auction signal NOT seen pre-market: {k}": v for k, v in stats.clustered_mean(e1[rr & ~pp], P.date[rr & ~pp]).items() if k in ("N", "mean", "t")}}
 PR = pd.DataFrame(rows)
 print(PR.to_string(float_format=lambda x: f"{x:.4f}")); PR.to_csv(DOCS_DIR / "premarket_signal.csv")
+
+# ---------------------------------------------------------------- chart
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.4), dpi=140, sharey=True)
+order = ["official open (E1)", "Yahoo first trade", "09:35", "09:45", "VWAP 5m", "VWAP 15m", "VWAP 30m", "~10:30", "1st-hour VWAP proxy"]
+for ax, liq in zip(axes, ("Q1-2", "Q3-5")):
+    for k, (side, col, lab) in enumerate((("down", "#2a78d6", "gap-down: buy, sell at close"), ("up", "#eb6834", "gap-up: short, cover at close"))):
+        x = R[(R.side == side) & (R.liq == liq)].copy()
+        x["key"] = np.where(x.window.str.startswith("5m") & ~x.entry.str.startswith("VWAP") & ~x.entry.isin(["09:35", "09:45"]), None, x.entry)
+        x = x[x.key.notna()]
+        x = x[(x.window.str.startswith("60m") & ~x.entry.isin(["09:35", "09:45", "VWAP 5m", "VWAP 15m", "VWAP 30m"])) |
+              (x.window.str.startswith("5m") & x.entry.isin(["09:35", "09:45", "VWAP 5m", "VWAP 15m", "VWAP 30m"]))]
+        x = x.set_index("entry").reindex(order)
+        pos = np.arange(len(order)) + (k - 0.5) * 0.38
+        ax.bar(pos, x["mean"] * 100, 0.36, color=col, label=lab)
+        ax.errorbar(pos, x["mean"] * 100, yerr=1.96 * x["se"].astype(float) * 100, fmt="none", ecolor="#52514e", lw=0.8)
+        for p_, n_ in zip(pos, x["N"]):
+            if n_ == n_:
+                ax.text(p_, ax.get_ylim()[0] if False else 0, f"{int(n_)}", ha="center", va="top", fontsize=6, color="#52514e", rotation=90)
+    ax.axhline(0, color="#52514e", lw=0.8)
+    ax.axvline(6.5, color="#c3c2b7", lw=0.8, ls=":"); ax.axvline(1.5, color="#c3c2b7", lw=0.8, ls=":")
+    ax.set_xticks(range(len(order))); ax.set_xticklabels(order, rotation=35, ha="right", fontsize=8)
+    ax.set_title(f"{liq}: net return to the official close by ENTRY time", fontsize=10, loc="left")
+    for sp in ("top", "right"):
+        ax.spines[sp].set_visible(False)
+axes[0].set_ylabel("mean per trade, % (net 0.10%, 95% CI clustered by date)", fontsize=8)
+axes[0].legend(frameon=False, fontsize=8)
+fig.suptitle(f"US NYSE/NYSE American, official-auction gap signals, {START[:7]} → 2026-10 (09:35–VWAP30: last ~60 sessions only)", fontsize=9, x=0.01, ha="left")
+fig.tight_layout(); fig.savefig(DOCS_DIR / f"intraday_entries_{START[:4]}.png"); print("chart written")
