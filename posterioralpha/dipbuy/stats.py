@@ -30,6 +30,8 @@ def table(df: pd.DataFrame, val: str, by, cluster="date") -> pd.DataFrame:
     for k, g in df.groupby(by, observed=True):
         rows[k] = clustered_mean(g[val], g[cluster])
     out = pd.DataFrame(rows).T
+    if out.empty:
+        return pd.DataFrame(columns=["N", "days", "mean", "se", "t", "median", "win"])
     if isinstance(by, (list, tuple)) and len(by) > 1:
         out.index = pd.MultiIndex.from_tuples(out.index, names=by)
     else:

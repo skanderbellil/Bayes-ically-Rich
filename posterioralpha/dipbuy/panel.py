@@ -95,6 +95,7 @@ def build(raw: pd.DataFrame, spy: pd.DataFrame) -> pd.DataFrame:
     g = p.groupby("sym", sort=False)
     p["sd60"] = g.ar.transform(lambda x: x.shift(1).rolling(60, min_periods=50).std())
     p["vm60"] = g.cons_vol.transform(lambda x: x.shift(1).rolling(60, min_periods=50).median())
+    p["pvm60"] = g.p_vol.transform(lambda x: x.shift(1).rolling(60, min_periods=20).median())   # listing-venue volume
     p["dvol"] = p.cons_vol * p.close
     p["year"] = p.date.dt.year
 
