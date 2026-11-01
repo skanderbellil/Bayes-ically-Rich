@@ -7,7 +7,8 @@ Message types used:
         cond3 'T' = extended-hours trade; cond4 'I' = odd lot, 'Q' = official open, 'M' = official close
   105 Imbalance            : pre-auction indicative data (published from 07:00/08:00 to the open)
         [5] reference price, [6] paired qty, [7] total imbalance qty, [9] auction time, [10] auction type
-        ('M' core open, 'C' close, ...), [11] side, [12] continuous-book clearing price, [15] indicative match price
+        ('M' core open, 'C' close, ...), [11] side, [12] continuous-book clearing price (the indicative open
+        actually published pre-open on NYSE), [15] indicative match price (0 pre-open on NYSE)
 Only a handful of sample days are public: trades 2023-10-02/03 (NYSE, NYSE American), imbalances
 2020-09-09 (NYSE) and 2026-07-01/02 (NYSE, NYSE American).
 """
@@ -79,7 +80,10 @@ def read_imbalances(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def indicative_open(I: pd.DataFrame, cutoffs=("09:00", "09:15", "09:25", "09:28", "09:29:30")) -> pd.DataFrame:
     """Last indicative match price (and paired qty) published before each cutoff for the core open auction."""
-    I = I[I.auc_type == "M"].sort_values("time")
+    I = I[I.auc_type == "M"].sort_values("time").copy()
+    # NYSE leaves the indicative-match field at 0 pre-open; the continuous-book clearing price is the
+    # published indicative opening price. Use it when the match price is absent.
+    I["ind_px"] = I.ind_px.fillna(I.book_px)
     out = []
     for c in cutoffs:
         w = I[(I.time < (c if len(c) > 5 else c + ":00")) & I.ind_px.notna()]
