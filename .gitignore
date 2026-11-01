@@ -34,3 +34,7 @@ graphify-out/cache/
 # Mid-price × smart-flow combo study snapshot (committed for reproducibility)
 !data/polymarket_combo_snapshot/*.csv
 !data/polymarket_combo_snapshot/*.png
+
+# Dip-buy study: committed report tables + charts
+!docs/dipbuy/*.csv
+!docs/dipbuy/*.png
