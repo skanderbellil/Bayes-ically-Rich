@@ -37,8 +37,8 @@ thr = np.maximum(bt.THR_FLOOR, bt.THR_SD * P.sd60)
 el = bt.eligible(P)
 out = []
 
-print("Yahoo first regular trade == official auction open:", np.isclose(P.y_open, P.open, rtol=1e-6, atol=1e-4).groupby(P.Q).mean().round(3).to_dict())
-eqo = np.isclose(P.y_open, P.open, rtol=1e-6, atol=1e-4).groupby(P.Q).mean().rename("yahoo_open_equals_auction")
+eqo = pd.Series(np.isclose(P.y_open, P.open, rtol=1e-6, atol=1e-4), index=P.index).groupby(P.Q).mean().rename("yahoo_open_equals_auction")
+print("Yahoo first regular trade == official auction open:", eqo.round(3).to_dict())
 eqo.to_csv(DOCS_DIR / "yahoo_open_vs_auction.csv")
 
 entries = {"official open (E1)": "open", "Yahoo first trade": "y_open", "09:35": "px0935", "09:45": "px0945",
@@ -76,7 +76,8 @@ print(PR.to_string(float_format=lambda x: f"{x:.4f}")); PR.to_csv(DOCS_DIR / "pr
 
 # ---------------------------------------------------------------- chart
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.4), dpi=140, sharey=True)
-order = ["official open (E1)", "Yahoo first trade", "09:35", "09:45", "VWAP 5m", "VWAP 15m", "VWAP 30m", "~10:30", "1st-hour VWAP proxy"]
+order = [e for e in ["official open (E1)", "Yahoo first trade", "09:35", "09:45", "VWAP 5m", "VWAP 15m", "VWAP 30m", "~10:30", "1st-hour VWAP proxy"]
+         if e in set(R.entry)]
 for ax, liq in zip(axes, ("Q1-2", "Q3-5")):
     for k, (side, col, lab) in enumerate((("down", "#2a78d6", "gap-down: buy, sell at close"), ("up", "#eb6834", "gap-up: short, cover at close"))):
         x = R[(R.side == side) & (R.liq == liq)].copy()
@@ -88,16 +89,14 @@ for ax, liq in zip(axes, ("Q1-2", "Q3-5")):
         pos = np.arange(len(order)) + (k - 0.5) * 0.38
         ax.bar(pos, x["mean"] * 100, 0.36, color=col, label=lab)
         ax.errorbar(pos, x["mean"] * 100, yerr=1.96 * x["se"].astype(float) * 100, fmt="none", ecolor="#52514e", lw=0.8)
-        for p_, n_ in zip(pos, x["N"]):
-            if n_ == n_:
-                ax.text(p_, ax.get_ylim()[0] if False else 0, f"{int(n_)}", ha="center", va="top", fontsize=6, color="#52514e", rotation=90)
     ax.axhline(0, color="#52514e", lw=0.8)
-    ax.axvline(6.5, color="#c3c2b7", lw=0.8, ls=":"); ax.axvline(1.5, color="#c3c2b7", lw=0.8, ls=":")
+    ax.axvline(1.5, color="#c3c2b7", lw=0.8, ls=":")
     ax.set_xticks(range(len(order))); ax.set_xticklabels(order, rotation=35, ha="right", fontsize=8)
-    ax.set_title(f"{liq}: net return to the official close by ENTRY time", fontsize=10, loc="left")
+    n_dn = int(R[(R.side == "down") & (R.liq == liq)].N.max()); n_up = int(R[(R.side == "up") & (R.liq == liq)].N.max())
+    ax.set_title(f"{liq}: net return to the official close by entry ({n_dn} dips, {n_up} gap-ups)", fontsize=10, loc="left")
     for sp in ("top", "right"):
         ax.spines[sp].set_visible(False)
 axes[0].set_ylabel("mean per trade, % (net 0.10%, 95% CI clustered by date)", fontsize=8)
 axes[0].legend(frameon=False, fontsize=8)
-fig.suptitle(f"US NYSE/NYSE American, official-auction gap signals, {START[:7]} → 2026-10 (09:35–VWAP30: last ~60 sessions only)", fontsize=9, x=0.01, ha="left")
+fig.suptitle(f"US NYSE/NYSE American, official-auction gap signals, {START[:7]} → 2026-10 (5-min entries pending)", fontsize=9, x=0.01, ha="left")
 fig.tight_layout(); fig.savefig(DOCS_DIR / f"intraday_entries_{START[:4]}.png"); print("chart written")
