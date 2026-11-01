@@ -16,15 +16,21 @@ from posterioralpha.dipbuy import cts
 from posterioralpha.dipbuy.paths import CTS_DAY_DIR, PANEL_PATH, ensure_dirs
 
 
+OUT_DIR = CTS_DAY_DIR
+KEEP_ALL = False
+
+
 def work(args):
-    name, date = args
-    out = CTS_DAY_DIR / f"{date:%Y%m%d}.parquet"
+    name, date, out_dir, keep_all = args
+    out = out_dir / f"{date:%Y%m%d}.parquet"
     if out.exists():
         return date, "skip", 0.0
     t = time.time()
     for attempt in range(4):
         try:
-            df = cts.parse_eod(cts.fetch(name))
+            df = cts.parse_eod(cts.fetch(name), keep_all=keep_all)
+            if keep_all:   # ETF study: keep only Arca / Cboe / NYSE American listings (NYSE/AMEX stocks are in the main dir)
+                df = df[df.prim.isin(["ARCA", "BZX", "AMEX", "AMEX?"])]
             df.insert(0, "date", date)
             df.to_parquet(out, index=False)
             return date, "ok", time.time() - t
@@ -47,16 +53,19 @@ if __name__ == "__main__":
     ap.add_argument("--workers", type=int, default=10)
     ap.add_argument("--start", default="2014-01-01")
     ap.add_argument("--stack", action="store_true")
+    ap.add_argument("--etf", action="store_true", help="keep Arca/Cboe listings -> data/raw/dipbuy/cts_days_etf/")
     a = ap.parse_args()
     ensure_dirs()
     if a.stack:
         stack(); sys.exit()
+    out_dir = CTS_DAY_DIR.parent / "cts_days_etf" if a.etf else CTS_DAY_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
     lst = cts.list_eod_files()
     lst = lst[lst.date >= a.start]
     print(f"{len(lst)} files {lst.date.min():%Y-%m-%d}..{lst.date.max():%Y-%m-%d}, {lst['size'].sum()/1e9:.1f} GB", flush=True)
     n = 0
     with Pool(a.workers) as p:
-        for date, st, dt in p.imap_unordered(work, list(zip(lst.name, lst.date))):
+        for date, st, dt in p.imap_unordered(work, [(n, d, out_dir, a.etf) for n, d in zip(lst.name, lst.date)]):
             n += 1
             if st != "skip" and (n % 25 == 0 or st.startswith("FAIL")):
                 print(f"[{n}/{len(lst)}] {date:%Y-%m-%d} {st} {dt:.0f}s", flush=True)
