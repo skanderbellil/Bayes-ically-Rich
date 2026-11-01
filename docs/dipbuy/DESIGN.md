@@ -58,3 +58,14 @@ Any further variant run later is added below with a timestamp.
 
 ## 6. Addenda
 (none yet)
+
+### Addendum 1 (added after the main results were seen; exploratory, all variants reported)
+* Common-stock filter: drop securities typed ETF / closed-end fund / notes / preferred / units / warrants / rights
+  in NYSE's XDP symbol maps (2020, 2023, 2026) and current NYSE symbol files; untyped (pre-2020 delisted) kept.
+* Idle capital in SPY: <=10% per dip, all other capital in SPY every day.
+* Volatility targeting (one setting, not swept): exposure = min(1.5, 15% / SPY 20-day realised vol, lagged 1 day);
+  no financing cost on the >1x part.
+* Auction-relative sizing (one setting): ticket = min(10% of equity, 10% of the expected opening-auction $),
+  expected auction = (auction share of listing-venue volume, from XDP samples: NYSE 2.7%, NYSE American 10.9%)
+  x prior-60-day median listing-venue volume x prior close. Account starts at $100k (also $1M).
+* Impact variant: entry worse by k x sd60 x sqrt(ticket / expected auction), k = 1.
