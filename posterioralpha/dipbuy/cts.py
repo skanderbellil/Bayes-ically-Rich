@@ -130,6 +130,8 @@ def parse_eod(raw: bytes | str, keep_all: bool = False) -> pd.DataFrame:
             if len(r) < 12:
                 continue
             mt = r[0].strip()
+            if mt.startswith("Fractional"):      # 2026-02-23 onward: fractional-share volumes, same layout
+                mt = mt[len("Fractional"):]
             sym = r[3].strip()
             t = r[1]
             traded = r[6].strip() in ("", "_")

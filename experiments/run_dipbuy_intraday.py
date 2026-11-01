@@ -21,7 +21,9 @@ pd.set_option("display.width", 250); pd.set_option("display.max_columns", 30)
 START = sys.argv[1] if len(sys.argv) > 1 else "2023-12-01"   # e.g. 2025-01-01
 P = pd.read_parquet(RAW_DIR / "panel.parquet")
 H = pd.read_parquet(RAW_DIR / "intraday_60m.parquet")
-F = pd.read_parquet(RAW_DIR / "intraday_5m.parquet")
+_f5 = RAW_DIR / "intraday_5m.parquet"
+F = pd.read_parquet(_f5) if _f5.exists() else pd.DataFrame(columns=["sym", "date", "pre5_last", "y5_open", "vwap5", "vwap15", "vwap30", "px0935", "px0945"])
+F["date"] = pd.to_datetime(F.date)
 spyH = H[H.sym == "SPY"].set_index("date")
 spyF = F[F.sym == "SPY"].set_index("date")
 P = P[P.date >= max(pd.Timestamp(START), H.date.min())].merge(H[H.sym != "SPY"], on=["sym", "date"], how="inner")

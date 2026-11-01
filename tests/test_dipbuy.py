@@ -55,3 +55,21 @@ def test_clustered_se_inflates_with_clustering():
     iid_se = x.std(ddof=1) / np.sqrt(len(x))
     assert c["se"] > 1.8 * iid_se                    # ~sqrt(1 + 9*0.5) = 2.3x
     assert c["days"] == 200
+
+
+def test_parse_fractional_labels_2026():
+    txt = PILLAR.replace("ConsolidatedEODSummary", "FractionalConsolidatedEODSummary").replace("ParticipantEODSummary", "FractionalParticipantEODSummary")
+    d = cts.parse_eod(txt).set_index("sym")
+    assert d.loc["NG", "prim"] == "AMEX" and abs(d.loc["NG", "p_open"] - 3.82) < 1e-4
+
+
+def test_no_silent_empty_parse():
+    """Every real trading-day file must yield NYSE rows; guards against future label changes."""
+    import pytest
+    from posterioralpha.dipbuy.paths import CTS_DAY_DIR
+    files = sorted(CTS_DAY_DIR.glob("*.parquet"))
+    if not files:
+        pytest.skip("no parsed days on disk")
+    import pandas as pd
+    empty = [f.stem for f in files if len(pd.read_parquet(f, columns=["sym"])) == 0]
+    assert not empty, f"{len(empty)} empty parsed days, first {empty[:3]}"
