@@ -13,6 +13,11 @@ spy = yahoo.spy_daily()
 spy.to_parquet(RAW_DIR / "spy.parquet")
 P = panel.build(raw, spy)
 P["exdiv_any"] = P.exdiv          # Yahoo ex-dividend dates are merged in by build_dipbuy_yahoo_events.py
+from posterioralpha.dipbuy import sectype                       # noqa: E402
+from posterioralpha.dipbuy.paths import XDP_DIR                  # noqa: E402
+ST = sectype.build(XDP_DIR)
+P["stypes"] = P.sym.map(ST.stypes)
+P["equity_ok"] = P.sym.map(ST.equity).fillna(True).astype(bool)   # unknown (pre-2020 delisted) kept
 P.to_parquet(RAW_DIR / "panel.parquet", index=False)
 print(f"panel: {len(P):,} rows, {P.sym.nunique():,} symbols; by listing: {P.prim.value_counts().to_dict()}")
 print("splits flagged:", int(P.split.sum()), " legacy ex-div rows:", int(P.exdiv.sum()))

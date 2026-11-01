@@ -14,7 +14,7 @@ IS_END, OOS_START = "2021-12-31", "2022-01-01"
 
 def eligible(p: pd.DataFrame) -> pd.Series:
     return (p.year >= 2015) & p.Q.notna() & (p.prev_close >= 5) & p.sd60.notna() & p.open.notna() & p.close.notna() \
-        & (p.gap.abs() < 0.5) & ~p.split & ~p.exdiv_any
+        & (p.gap.abs() < 0.5) & ~p.split & ~p.exdiv_any & p.get("equity_ok", True)
 
 
 def signals(p: pd.DataFrame, side: str = "down", gap_col: str = "agap") -> pd.Series:
