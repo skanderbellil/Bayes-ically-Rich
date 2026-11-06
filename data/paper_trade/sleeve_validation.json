@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-06 16:27 UTC",
+  "generated": "2026-11-06 17:27 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -41,21 +41,21 @@
     },
     "YES [10\u201350%]": {
       "sleeve": "YES [10\u201350%]",
-      "trades": 754,
+      "trades": 755,
       "events": 132,
       "trades_per_event": 5.7,
-      "edge": 0.0074,
-      "t": 0.42,
+      "edge": 0.0067,
+      "t": 0.38,
       "ci95": [
-        -0.0273,
-        0.0421
+        -0.0281,
+        0.0416
       ],
       "mc_bar": 2.93,
       "oos_n": 40,
-      "oos_edge": 0.0328,
-      "net_cost": -0.0056,
-      "net_stress": -0.0206,
-      "boot_p": 0.3417,
+      "oos_edge": 0.0305,
+      "net_cost": -0.0062,
+      "net_stress": -0.0212,
+      "boot_p": 0.3589,
       "top1": 0.016,
       "verdict": "KILLED",
       "reasons": [
