@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-10 20:26 UTC",
+  "generated": "2026-11-10 21:25 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -148,21 +148,21 @@
     },
     "Smart Flow": {
       "sleeve": "Smart Flow",
-      "trades": 11550,
+      "trades": 11555,
       "events": 145,
       "trades_per_event": 79.7,
-      "edge": -0.0121,
-      "t": -1.6,
+      "edge": -0.0119,
+      "t": -1.58,
       "ci95": [
-        -0.0269,
-        0.0027
+        -0.0266,
+        0.0029
       ],
       "mc_bar": 2.93,
       "oos_n": 44,
-      "oos_edge": -0.0229,
+      "oos_edge": -0.0222,
       "net_cost": -0.0129,
       "net_stress": -0.0279,
-      "boot_p": 0.9506,
+      "boot_p": 0.9483,
       "top1": 0.003,
       "verdict": "KILLED",
       "reasons": [
@@ -202,21 +202,21 @@
     },
     "Smart Flow (indep exp)": {
       "sleeve": "Smart Flow (indep exp)",
-      "trades": 10610,
+      "trades": 10617,
       "events": 116,
       "trades_per_event": 91.5,
-      "edge": -0.0113,
-      "t": -1.43,
+      "edge": -0.0106,
+      "t": -1.34,
       "ci95": [
-        -0.0268,
-        0.0042
+        -0.026,
+        0.0049
       ],
       "mc_bar": 2.93,
       "oos_n": 35,
-      "oos_edge": -0.0259,
+      "oos_edge": -0.0233,
       "net_cost": -0.0145,
       "net_stress": -0.0295,
-      "boot_p": 0.9306,
+      "boot_p": 0.9152,
       "top1": 0.004,
       "verdict": "KILLED",
       "reasons": [
@@ -345,21 +345,21 @@
     },
     "SF independent": {
       "sleeve": "SF independent",
-      "trades": 8750,
+      "trades": 8757,
       "events": 116,
-      "trades_per_event": 75.4,
-      "edge": -0.0034,
-      "t": -0.37,
+      "trades_per_event": 75.5,
+      "edge": -0.0027,
+      "t": -0.29,
       "ci95": [
-        -0.0217,
-        0.0148
+        -0.0209,
+        0.0155
       ],
       "mc_bar": 2.93,
       "oos_n": 35,
-      "oos_edge": -0.0034,
+      "oos_edge": -0.0009,
       "net_cost": -0.0133,
       "net_stress": -0.0283,
-      "boot_p": 0.6434,
+      "boot_p": 0.6144,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
