@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-18 02:29 UTC",
+  "generated": "2026-11-18 07:29 UTC",
   "standard": {
     "min_events": 30,
     "t_min": 2.0,
@@ -148,21 +148,21 @@
     },
     "Smart Flow": {
       "sleeve": "Smart Flow",
-      "trades": 11609,
+      "trades": 11611,
       "events": 153,
       "trades_per_event": 75.9,
-      "edge": -0.0116,
-      "t": -1.58,
+      "edge": -0.0105,
+      "t": -1.44,
       "ci95": [
-        -0.0259,
-        0.0028
+        -0.0247,
+        0.0038
       ],
       "mc_bar": 2.93,
       "oos_n": 46,
-      "oos_edge": -0.0273,
-      "net_cost": -0.013,
-      "net_stress": -0.028,
-      "boot_p": 0.9456,
+      "oos_edge": -0.0237,
+      "net_cost": -0.0129,
+      "net_stress": -0.0279,
+      "boot_p": 0.9283,
       "top1": 0.003,
       "verdict": "KILLED",
       "reasons": [
@@ -202,21 +202,21 @@
     },
     "Smart Flow (indep exp)": {
       "sleeve": "Smart Flow (indep exp)",
-      "trades": 10673,
+      "trades": 10675,
       "events": 124,
       "trades_per_event": 86.1,
-      "edge": -0.0111,
-      "t": -1.45,
+      "edge": -0.0097,
+      "t": -1.28,
       "ci95": [
-        -0.0261,
-        0.0039
+        -0.0244,
+        0.0051
       ],
       "mc_bar": 2.93,
       "oos_n": 38,
-      "oos_edge": -0.026,
+      "oos_edge": -0.0213,
       "net_cost": -0.0144,
       "net_stress": -0.0294,
-      "boot_p": 0.9317,
+      "boot_p": 0.9044,
       "top1": 0.004,
       "verdict": "KILLED",
       "reasons": [
@@ -344,27 +344,26 @@
     },
     "SF independent": {
       "sleeve": "SF independent",
-      "trades": 8807,
+      "trades": 8809,
       "events": 124,
       "trades_per_event": 71.0,
-      "edge": -0.0026,
-      "t": -0.28,
+      "edge": -0.0012,
+      "t": -0.13,
       "ci95": [
-        -0.0209,
-        0.0156
+        -0.0193,
+        0.0169
       ],
       "mc_bar": 2.93,
       "oos_n": 38,
-      "oos_edge": -0.0035,
+      "oos_edge": 0.0012,
       "net_cost": -0.0132,
       "net_stress": -0.0282,
-      "boot_p": 0.6203,
+      "boot_p": 0.5587,
       "top1": 0.005,
       "verdict": "KILLED",
       "reasons": [
         "t>=2.0",
         "t>mc_bar(2.93)",
-        "oos_edge>0",
         "net@0.005>0",
         "boot_p<=0.1"
       ]
