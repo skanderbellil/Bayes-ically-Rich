@@ -3,5 +3,5 @@ Smart Flow,smart_flow_positions.csv,1000.0,0.1,475.36,-0.5246,-250.74,-273.9,-0.
 Smart Flow (ROI),smart_flow_roi_positions.csv,1000.0,0.1,2352.14,1.3521,562.11,790.03,-0.27,34,671,13,-2.0194,447
 Mid-priced YES,midprice_yes_positions.csv,1000.0,0.1,1158.8,0.1588,-75.06,233.86,-0.5108,20,778,6,-0.1658,787
 Dip-Confirm YES,dip_confirm_positions.csv,1000.0,0.1,2045.45,1.0454,-94.68,1140.13,-0.4195,18,452,8,-2.1682,466
-Macro (Fed cuts),macro_positions.csv,1000.0,0.1,1045.33,0.0453,0.0,45.33,0.0,2,0,2,,0
-GLOBAL (equal-weight),,5000.0,0.1,7077.09,0.4154,141.64,1935.45,,,,,,
+Macro (Fed cuts),macro_positions.csv,1000.0,0.1,1043.92,0.0439,0.0,43.92,0.0,2,0,2,,0
+GLOBAL (equal-weight),,5000.0,0.1,7075.67,0.4151,141.64,1934.04,,,,,,
